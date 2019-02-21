@@ -424,12 +424,12 @@ class TrezorPlugin(HW_PluginBase):
             txoutputtype.amount = amount
             if _type == TYPE_SCRIPT:
                 script = address.to_script()
-                # We only support OP_RETURN with one constant push
-                if (script[0] == 0x6a and amount == 0 and
-                    script[1] == len(script) - 2 and
-                    script[1] <= 75):
+                # Support OP_RETURN with any number of data pushes
+                if (script[0] == 0x6a and amount == 0): # and
+                    #script[1] == len(script) - 2 and
+                    #script[1] <= 75):
                     txoutputtype.script_type = OutputScriptType.PAYTOOPRETURN
-                    txoutputtype.op_return_data = script[2:]
+                    txoutputtype.op_return_data = script #[2:]
                 else:
                     raise Exception(_("Unsupported output script."))
             elif _type == TYPE_ADDRESS:
