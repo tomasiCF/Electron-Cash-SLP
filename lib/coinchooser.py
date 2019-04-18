@@ -166,7 +166,7 @@ class CoinChooserBase(PrintError):
         return change, dust
 
     def make_tx(self, coins, outputs, change_addrs, fee_estimator,
-                dust_threshold, *, is_slp=False):
+                dust_threshold, *, mandatory_coins=[]):
         '''Select unspent coins to spend to pay outputs.  If the change is
         greater than dust_threshold (after adding the change output to
         the transaction) it is kept, otherwise none is sent and it is
@@ -180,7 +180,7 @@ class CoinChooserBase(PrintError):
         tx = Transaction.from_io([], outputs)
         # Size of the transaction with no inputs and no change
         base_size = tx.estimated_size()
-        spent_amount = tx.output_value()
+        spent_amount = tx.output_value() - sum(x['value'] for x in mandatory_coins)
 
         def sufficient_funds(buckets):
             '''Given a list of buckets, return True if it has enough
@@ -191,14 +191,11 @@ class CoinChooserBase(PrintError):
 
         # Collect the coins into buckets, choose a subset of the buckets
         buckets = self.bucketize_coins(coins)
-        if is_slp:
-            pass
-        else: 
-            buckets = self.choose_buckets(buckets, sufficient_funds,
-                                      self.penalty_func(tx))
+        buckets = self.choose_buckets(buckets, sufficient_funds, self.penalty_func(tx))
 
         tx.add_inputs([coin for b in buckets for coin in b.coins])
-        tx_size = base_size + sum(bucket.size for bucket in buckets)
+        tx.add_inputs(mandatory_coins)
+        tx_size = base_size + sum(bucket.size for bucket in buckets) + sum(bucket.size for bucket in self.bucketize_coins(mandatory_coins))
 
         # This takes a count of change outputs and returns a tx fee;
         # each pay-to-bitcoin-address output serializes as 34 bytes
