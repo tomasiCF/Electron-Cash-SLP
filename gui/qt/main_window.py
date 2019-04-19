@@ -1862,9 +1862,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 slp_coins =  sorted(self.get_slp_coins(), key=lambda k: k['token_value']) 
                 total_amt_added = 0
                 for coin in slp_coins:
-                    if total_amt_added < amt:
+                    if coin['token_value'] > amt:
                         selected_slp_coins.append(coin)
                         total_amt_added+=coin['token_value']
+                        break
+                if total_amt_added < amt:
+                    for coin in slp_coins:
+                        if total_amt_added < amt:
+                            selected_slp_coins.append(coin)
+                            total_amt_added+=coin['token_value']
                 token_outputs_amts.append(amt)
                 token_change = total_amt_added - amt
                 if token_change > 0:
