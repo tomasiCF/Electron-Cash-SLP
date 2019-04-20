@@ -172,6 +172,12 @@ class CoinChooserBase(PrintError):
         the transaction) it is kept, otherwise none is sent and it is
         added to the transaction fee.'''
 
+        # Remove mandatory_coin items from coin chooser's list
+        for c in mandatory_coins:
+            for coin in coins.copy(): 
+                if coin['prevout_hash'] == c['prevout_hash'] and coin['prevout_n'] == c['prevout_n']:
+                    coins.remove(coin)
+
         # Deterministic randomness from coins
         utxos = [c['prevout_hash'] + str(c['prevout_n']) for c in coins]
         self.p = PRNG(''.join(sorted(utxos)))
