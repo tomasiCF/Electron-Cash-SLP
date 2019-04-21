@@ -398,14 +398,58 @@ class ElectrumGui(QObject, PrintError):
             return True
         return False
 
-    def warning(self, title, message, icon = QMessageBox.Warning, parent = None):
+    def warn_if_no_secp(self, parent=None, message=None, icon=QMessageBox.Warning, startup=False):
+        ''' Returns True if it DID warn: ie if there's no secp and ecc operations
+        are slow, otherwise returns False if we have secp.
+
+        Pass message (rich text) to provide a custom message.
+
+        Note that the URL link to the HOWTO will always be appended to the custom message.'''
+        from electroncash import ecc_fast
+        has_secp = ecc_fast.is_using_fast_ecc()
+        if has_secp:
+            return False
+
+        # When relaxwarn is set return True without showing the warning
+        from electroncash import get_config
+        if startup and get_config().cmdline_options["relaxwarn"]:
+            return True
+
+        # else..
+        howto_url='https://github.com/Electron-Cash/Electron-Cash/blob/master/contrib/secp_HOWTO.md#libsecp256k1-0-for-electron-cash'
+        template = '''
+        <html><body>
+            <p>
+            {message}
+            <p>
+            {url_blurb}
+            </p>
+            <p><a href="{url}">Electron Cash Secp Mini-HOWTO</a></p>
+        </body></html>
+        '''
+        msg = template.format(
+            message = message or _("Electron Cash was unable to find the secp256k1 library on this system. Elliptic curve cryptography operations will be performed in slow Python-only mode."),
+            url=howto_url,
+            url_blurb = _("Please visit this page for instructions on how to correct the situation:")
+        )
+        self.warning(parent=parent, title=_("Missing libsecp256k1"),
+                     message=msg, rich_text=True)
+        return True
+
+    def warning(self, title, message, icon = QMessageBox.Warning, parent = None, rich_text=False):
         if not isinstance(icon, QMessageBox.Icon):
             icon = QMessageBox.Warning
         if isinstance(parent, MessageBoxMixin):
-            parent.msg_box(title=title, text=message, icon=icon, parent=None)
+            parent.msg_box(title=title, text=message, icon=icon, parent=None, rich_text=rich_text)
         else:
             parent = parent if isinstance(parent, QWidget) else None
             d = QMessageBoxMixin(icon, title, message, QMessageBox.Ok, parent)
+            if not rich_text:
+                d.setTextFormat(Qt.PlainText)
+                d.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            else:
+                d.setTextFormat(Qt.AutoText)
+                d.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.LinksAccessibleByMouse)
             d.setWindowModality(Qt.WindowModal if parent else Qt.ApplicationModal)
             d.exec_()
             d.setParent(None)
