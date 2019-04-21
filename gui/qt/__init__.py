@@ -398,7 +398,7 @@ class ElectrumGui(QObject, PrintError):
             return True
         return False
 
-    def warn_if_no_secp(self, parent=None, message=None, icon=QMessageBox.Warning, startup=False):
+    def warn_if_no_secp(self, parent=None, message=None, icon=QMessageBox.Warning, relaxed=False):
         ''' Returns True if it DID warn: ie if there's no secp and ecc operations
         are slow, otherwise returns False if we have secp.
 
@@ -412,7 +412,7 @@ class ElectrumGui(QObject, PrintError):
 
         # When relaxwarn is set return True without showing the warning
         from electroncash import get_config
-        if startup and get_config().cmdline_options["relaxwarn"]:
+        if relaxed and get_config().cmdline_options["relaxwarn"]:
             return True
 
         # else..
