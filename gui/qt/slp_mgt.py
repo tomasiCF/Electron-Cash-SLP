@@ -39,6 +39,7 @@ from electroncash.util import format_satoshis_nofloat
 from .slp_add_token_dialog import SlpAddTokenDialog
 from .slp_create_token_genesis_dialog import SlpCreateTokenGenesisDialog
 from .slp_create_token_mint_dialog import SlpCreateTokenMintDialog
+from .slp_burn_token_dialog import SlpBurnTokenDialog
 
 from electroncash.slp import SlpNoMintingBatonFound
 
@@ -97,6 +98,7 @@ class SlpMgt(MyTreeWidget):
             menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
             if self.currentItem():
                 menu.addAction(_("View Token Details"), lambda: self.onViewTokenDetails())
+            menu.addAction(_("Burn tool..."), lambda: self.onBurnDialog())
             menu.addSeparator()
         
         menu.addAction(_("Add existing token"), lambda: SlpAddTokenDialog(self.parent,))
@@ -109,7 +111,12 @@ class SlpMgt(MyTreeWidget):
     def onViewTokenDetails(self):
         current = self.currentItem()
         if current:
-            SlpAddTokenDialog(self.parent, token_id_hex = current.data(0, Qt.UserRole), token_name=current.text(1) )
+            SlpAddTokenDialog(self.parent, token_id_hex = current.data(0, Qt.UserRole), token_name=current.text(1))
+
+    def onBurnDialog(self):
+        current = self.currentItem()
+        if current:
+            SlpBurnTokenDialog(self.parent, token_id_hex = current.data(0, Qt.UserRole), token_name=current.text(1))
 
     def get_balance_from_token_id(self,slpTokenId):
         # implement by looking at UTXO for this token!
