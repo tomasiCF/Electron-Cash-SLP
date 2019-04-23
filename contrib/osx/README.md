@@ -17,14 +17,18 @@ The above ensures that you pull in the OSX helper app, CalinsQRReader.
 
 ## 2. Use the provided script to begin building.
 
+    First, remove .egg from previous build:
+        - rm -rf ~/Library/Python/3.6/lib/python/site-packages/Electron_Cash_SLP-3.X.X-py3.6.egg
 
-    rm -rf ~/Library/Python/3.6/lib/python/site-packages/Electron_Cash_SLP-3.X.X-py3.6.egg
-    
-    ./make_osx
-    
-Or, if you wish to sign the app when building, provide an Apple developer identity installed on the system for signing:
+    If installation problems occur, try also:
+        - rm -rf ~/Library/Python/3.6 ~/.pyenv ~/Library/Caches/pip ~/Library/Application Support/pyinstaller
 
-    ./make_osx "Developer ID Application: MY NAME (123456789)"
+    To Build:
+        - ./make_osx
+    
+    Or, if you wish to sign the app when building, provide an Apple developer identity installed on the system for signing:
+
+        - ./make_osx "Developer ID Application: MY NAME (123456789)"
 
 ## 2. Done
 
