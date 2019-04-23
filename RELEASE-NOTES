@@ -55,3 +55,10 @@ Electron Cash - SLP Token Edition
 - Updated SLP feature set activation behavior in preparation for merge with mainline Electron Cash
 - Fixed bugs associated with token tab context menu causing errors
 - Fixed bugs associated with thread locking around SLP token data read/write activity
+
+3.4.8 Updates & Features
+-----
+- Added new Burn Tool dialog, accesible via Tokens Tab context menu (right-click on token)
+- Fixed Coin Chooser for SLP transactions
+- Fixed inaccessible Mint dialog in 3.4.7
+- Ported various improvements from mainline Electron Cash latest source
