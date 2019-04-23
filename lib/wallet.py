@@ -762,7 +762,7 @@ class Abstract_Wallet(PrintError):
         return out
 
     """ SLP -- keeps ONLY SLP UTXOs that are either unrelated, or unvalidated """
-    def get_slp_addr_utxo(self, address, slpTokenId):
+    def get_slp_addr_utxo(self, address, slpTokenId, slp_include_invalid=False, slp_include_baton=False, ):
         with self.lock, self.transaction_lock:
             coins, spent = self.get_addr_io(address)
             # removes spent coins
@@ -777,7 +777,20 @@ class Abstract_Wallet(PrintError):
                     txid = coin[0].split(":")[0]
                     idx = coin[0].split(":")[1]
                     try:
-                        if addrdict[txid][int(idx)]['token_id'] != slpTokenId or self.tx_tokinfo[txid]['validity'] != 1:
+                        slp_txo = addrdict[txid][int(idx)]
+                        slp_tx_info = self.tx_tokinfo[txid]
+                        # handle special burning modes
+                        if slp_txo['token_id'] == slpTokenId:
+                            # allow inclusion and possible burning of a valid minting baton
+                            if slp_include_baton and slp_txo['qty'] == "MINT_BATON" and slp_tx_info['validity'] == 1:
+                                #coin.burn = True
+                                continue
+                            # allow inclusion and possible burning of invalid SLP txos
+                            if slp_include_invalid and slp_tx_info['validity'] != 0:
+                                #coin.burn = True
+                                continue
+                        # normal remove any txos that are not valid for this token ID
+                        if slp_txo['token_id'] != slpTokenId or slp_tx_info['validity'] != 1 or slp_txo['qty'] == "MINT_BATON":
                             coins.pop(coin[0], None)
                     except KeyError:
                         coins.pop(coin[0], None)
@@ -787,14 +800,15 @@ class Abstract_Wallet(PrintError):
                 tx_height, value, is_cb = v
                 prevout_hash, prevout_n = txo.split(':')
                 x = {
-                    'address':address,
-                    'value':value,
-                    'prevout_n':int(prevout_n),
-                    'prevout_hash':prevout_hash,
-                    'height':tx_height,
-                    'coinbase':is_cb,
-                    'is_frozen_coin':txo in self.frozen_coins,
-                    'token_value': self._slp_txo[address][prevout_hash][int(prevout_n)]['qty']
+                    'address': address,
+                    'value': value,
+                    'prevout_n': int(prevout_n),
+                    'prevout_hash': prevout_hash,
+                    'height': tx_height,
+                    'coinbase': is_cb,
+                    'is_frozen_coin': txo in self.frozen_coins,
+                    'token_value': self._slp_txo[address][prevout_hash][int(prevout_n)]['qty'],
+                    'token_validation_state': self.tx_tokinfo[prevout_hash]['validity']
                 }
                 out[txo] = x
             return out
@@ -927,7 +941,7 @@ class Abstract_Wallet(PrintError):
                 continue
         return coins
 
-    def get_slp_utxos(self, slpTokenId, *, domain = None, exclude_frozen = False, mature = False, confirmed_only = False):
+    def get_slp_utxos(self, slpTokenId, *, domain = None, exclude_frozen = False, mature = False, confirmed_only = False, slp_include_invalid=False, slp_include_baton=False):
         ''' Note that exclude_frozen = True checks for BOTH address-level and coin-level frozen status. '''
         coins = []
         if domain is None:
@@ -935,7 +949,7 @@ class Abstract_Wallet(PrintError):
         if exclude_frozen:
             domain = set(domain) - self.frozen_addresses
         for addr in domain:
-            utxos = self.get_slp_addr_utxo(addr, slpTokenId)
+            utxos = self.get_slp_addr_utxo(addr, slpTokenId, slp_include_invalid=slp_include_invalid, slp_include_baton=slp_include_baton)
             for x in utxos.values():
                 if exclude_frozen and x['is_frozen_coin']:
                     continue

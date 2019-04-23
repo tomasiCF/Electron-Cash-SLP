@@ -37,6 +37,12 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.network = main_window.network
         self.app = main_window.app
 
+        self.baton_txo = None
+        try: 
+            self.baton_txo = self.main_window.wallet.get_slp_token_baton(token_id_hex)
+        except SlpNoMintingBatonFound:
+            pass
+
         self.setWindowTitle(_("Burn Tokens"))
 
         vbox = QVBoxLayout()
@@ -78,25 +84,37 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.token_dec, row, 1)
         row += 1
 
+        hbox = QHBoxLayout()
         msg = _('The number of tokens to be destroyed for this token.')
         grid.addWidget(HelpLabel(_('Burn Amount:'), msg), row, 0)
         name = self.main_window.wallet.token_types.get(token_id_hex)['name']
         self.token_qty_e = SLPAmountEdit(name, int(decimals))
         self.token_qty_e.setFixedWidth(200)
         #self.token_qty_e.textChanged.connect(self.check_token_qty)
-        grid.addWidget(self.token_qty_e, row, 1)
+        hbox.addWidget(self.token_qty_e)
 
         self.max_button = EnterButton(_("Max"), self.burn_max)
         self.max_button.setFixedWidth(140)
-        self.max_button.setCheckable(True)
-        grid.addWidget(self.max_button, row, 2)
-        hbox = QHBoxLayout()
+        #self.max_button.setCheckable(True)
+        hbox.addWidget(self.max_button)
         hbox.addStretch(1)
-        grid.addLayout(hbox, row, 3)
+        grid.addLayout(hbox, row, 1)
         row += 1
 
         hbox = QHBoxLayout()
         vbox.addLayout(hbox)
+
+        self.token_burn_baton_cb = cb = QCheckBox(_("Burn Minting Baton"))
+        self.token_burn_baton_cb.setChecked(False)
+        self.token_burn_baton_cb.setDisabled(True)
+        grid.addWidget(self.token_burn_baton_cb, row, 0)
+        if self.baton_txo != None: 
+            self.token_burn_baton_cb.setDisabled(False)
+
+        self.token_burn_invalid_cb = cb = QCheckBox(_("Burn invalid SLP transactions for this token"))
+        self.token_burn_invalid_cb.setChecked(True)
+        grid.addWidget(self.token_burn_invalid_cb, row, 1)
+        row += 1
 
         self.cancel_button = b = QPushButton(_("Cancel"))
         self.cancel_button.setAutoDefault(False)
@@ -137,29 +155,35 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             return
 
         outputs = []
-        slp_coins = self.wallet.get_slp_spendable_coins(self.token_id_e.text(), None, self.main_window.config)
+        slp_coins = self.wallet.get_slp_utxos(
+            self.token_id_e.text(), 
+            domain=None, exclude_frozen=True, mature=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
+            slp_include_invalid=self.token_burn_invalid_cb.isChecked(), slp_include_baton=self.token_burn_baton_cb.isChecked())
 
         try:
             selected_slp_coins = []
             if burn_amt < unfrozen_token_qty:
                 total_amt_added = 0
                 for coin in slp_coins:
-                    if coin['token_value'] >= burn_amt:
-                        selected_slp_coins.append(coin)
-                        total_amt_added+=coin['token_value']
-                        break
-                if total_amt_added < burn_amt:
-                    for coin in slp_coins:
-                        if total_amt_added < burn_amt:
+                    if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
+                        if coin['token_value'] >= burn_amt:
                             selected_slp_coins.append(coin)
                             total_amt_added+=coin['token_value']
-                slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt])
-                outputs.append(slp_op_return_msg)
-                outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
+                            break
+                if total_amt_added < burn_amt:
+                    for coin in slp_coins:
+                        if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
+                            if total_amt_added < burn_amt:
+                                selected_slp_coins.append(coin)
+                                total_amt_added+=coin['token_value']
+                if total_amt_added > burn_amt:
+                    slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt])
+                    outputs.append(slp_op_return_msg)
+                    outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
             else:  
-                selected_slp_coins = slp_coins
-                bch_change = sum(c['value'] for c in slp_coins)
-                outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), bch_change))
+                for coin in slp_coins:
+                    if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
+                        selected_slp_coins.append(coin)
 
         except OPReturnTooLarge:
             self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))
@@ -169,11 +193,24 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             self.show_message(str(e))
             return
     
+        if self.token_burn_baton_cb.isChecked():
+            for coin in slp_coins:
+                if coin['token_value'] == "MINT_BATON" and coin['token_validation_state'] == 1:
+                    selected_slp_coins.append(coin)
+
+        if self.token_burn_invalid_cb.isChecked():
+            for coin in slp_coins:
+                if coin['token_validation_state'] != 1:
+                    selected_slp_coins.append(coin)
+
+        bch_change = sum(c['value'] for c in selected_slp_coins)
+        outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), bch_change))
+
         coins = self.main_window.get_coins()
-        fee = None
+        fixed_fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, mandatory_coins=selected_slp_coins)
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return

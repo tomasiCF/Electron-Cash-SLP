@@ -186,7 +186,7 @@ class CoinChooserBase(PrintError):
         tx = Transaction.from_io([], outputs)
         # Size of the transaction with no inputs and no change
         base_size = tx.estimated_size()
-        spent_amount = tx.output_value() - sum(x['value'] for x in mandatory_coins)
+        spent_amount = tx.output_value()
 
         def sufficient_funds(buckets):
             '''Given a list of buckets, return True if it has enough
@@ -201,7 +201,8 @@ class CoinChooserBase(PrintError):
 
         tx.add_inputs([coin for b in buckets for coin in b.coins])
         tx.add_inputs(mandatory_coins)
-        tx_size = base_size + sum(bucket.size for bucket in buckets) + sum(bucket.size for bucket in self.bucketize_coins(mandatory_coins))
+        slp_size = sum(bucket.size for bucket in self.bucketize_coins(mandatory_coins))
+        tx_size = base_size + sum(bucket.size for bucket in buckets) + slp_size
 
         # This takes a count of change outputs and returns a tx fee;
         # each pay-to-bitcoin-address output serializes as 34 bytes
