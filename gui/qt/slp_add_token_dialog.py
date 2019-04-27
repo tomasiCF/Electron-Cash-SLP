@@ -65,7 +65,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
 
         self.token_id_e = ButtonsLineEdit()
         if token_id_hex is not None:
-            self.token_id_e.addCopyButton(self.app)
+            self.token_id_e.addCopyButton()
         self.token_id_e.setFixedWidth(550)
         vbox.addWidget(self.token_id_e)
 
