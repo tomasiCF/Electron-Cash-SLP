@@ -139,19 +139,39 @@ def parse_URI(uri, on_pr=None):
             raise Exception('Duplicate Key', k)
 
     out = {k: v[0] for k, v in pq.items()}
+    out['scheme'] = u.scheme
     if address:
         Address.from_string(address)
         out['address'] = address
 
+    amounts = dict()
+    for key in out:
+        if 'amount' in key and key not in amounts:
+            if '-' in out[key]:
+                am = out[key].split('-', 1)[0]
+                amount = PyDecimal(am)
+                tokenparams = out[key].split('-', 1)[1]
+            else:
+                tokenparams = None
+                amount = PyDecimal(out[key]) * bitcoin.COIN
+            if tokenparams:
+                tokenid = tokenparams.split('-', 1)[0]
+                #TODO check regex of tokenid
+                try:
+                    tokenflags = tokenparams.split('-', 1)[1]
+                    amounts[tokenid] = { 'amount': amount.real, 'tokenflags': tokenflags }
+                except:
+                    amounts[tokenid] = { 'amount': amount.real, 'tokenflags': None }
+            else:
+                amounts['bch'] = { 'amount': int(amount), 'tokenflags': None }
     if 'amount' in out:
-        am = out['amount']
-        m = re.match(r'([0-9\.]+)X([0-9])', am)
-        if m:
-            k = int(m.group(2)) - 8
-            amount = PyDecimal(m.group(1)) * pow(10, k)
-        else:
-            amount = PyDecimal(am) * bitcoin.COIN
-        out['amount'] = int(amount)
+        out.pop('amount')
+    if len(amounts) > 0:
+        out['amounts'] = amounts
+    if len(amounts) > 1:
+        raise Exception('This wallet does not yet support token payments with additional BCH send amounts.')
+    if len(amounts) > 2:
+        raise Exception('This wallet does not support more than 2 payment request amounts.')
     if 'message' in out:
         out['message'] = out['message']
         out['memo'] = out['message']

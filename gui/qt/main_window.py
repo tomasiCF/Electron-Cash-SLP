@@ -2224,7 +2224,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         try:
             out = web.parse_URI(URI, self.on_pr)
         except Exception as e:
-            #self.show_error(_('Invalid Address URI:') + '\n' + str(e))
+            if 'ms-python' in URI:  # this is needed for visual studio code debugger
+            return
+            self.show_error(_('Invalid Address URI:') + '\n' + str(e))
             return
         self.show_send_tab()
         r = out.get('r')
@@ -2233,8 +2235,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if r or (name and sig):
             self.prepare_for_payment_request()
             return
+        scheme = out.get('scheme')
         address = out.get('address')
-        amount = out.get('amount')
+        amounts = out.get('amounts')
         label = out.get('label')
         message = out.get('message')
         op_return = out.get('op_return')
@@ -2247,8 +2250,27 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payto_e.setText(URI.split('?')[0])
         if message:
             self.message_e.setText(message)
-        if amount:
-            self.amount_e.setAmount(amount)
+        if amounts:
+            if scheme == 'bitcoincash' and 'bch' in amounts:
+                self.amount_e.setAmount(amounts['bch']['amount'])
+                self.amount_e.textEdited.emit("")
+            elif scheme == 'simpleledger':
+                # pick first token in amounts
+                tokenid = None
+                for key in amounts:
+                    if key != 'bch':
+                        tokenid = key
+                        count = self.token_type_combo.count
+                        index = 0
+                        self.token_type_combo.setCurrentIndex(index)
+                        while self.token_type_combo.currentData() != tokenid:
+                            index+=1
+                            self.token_type_combo.setCurrentIndex(index)
+                        self.slp_amount_e.setAmount(amounts[tokenid]['amount'] * pow(10, self.slp_amount_e.token_decimals))
+                        self.slp_amount_e.textEdited.emit("")
+                        break
+                if tokenid == None and 'bch' in amounts:
+                    self.amount_e.setAmount(amounts['bch']['amount'])
             self.amount_e.textEdited.emit("")
         if op_return:
             self.message_opreturn_e.setText(op_return)
