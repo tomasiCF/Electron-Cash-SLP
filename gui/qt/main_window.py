@@ -2225,7 +2225,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             out = web.parse_URI(URI, self.on_pr)
         except Exception as e:
             if 'ms-python' in URI:  # this is needed for visual studio code debugger
-            return
+                return
             self.show_error(_('Invalid Address URI:') + '\n' + str(e))
             return
         self.show_send_tab()
@@ -2271,7 +2271,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         break
                 if tokenid == None and 'bch' in amounts:
                     self.amount_e.setAmount(amounts['bch']['amount'])
-            self.amount_e.textEdited.emit("")
+                    self.amount_e.textEdited.emit("")
         if op_return:
             self.message_opreturn_e.setText(op_return)
             self.message_opreturn_e.setHidden(False)
@@ -2301,26 +2301,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         after a payment is sent
         """
         if self.token_type_combo.currentData() is None:
-            self.max_button.setChecked(False)
-            self.not_enough_funds = False
-            self.not_enough_funds_slp = False
-            self.not_enough_unfrozen_funds_slp = False
-            self.op_return_toolong = False
-            self.payment_request = None
-            self.payto_e.is_pr = False
             for e in [self.payto_e, self.message_e, self.amount_e, self.fiat_send_e, self.fee_e, self.message_opreturn_e]:
                 e.setText('')
                 e.setFrozen(False)
             self.max_button.setDisabled(False)
-            self.opreturn_rawhex_cb.setChecked(False)
-            self.set_pay_from([])
-            self.tx_external_keypairs = {}
-            self.message_opreturn_e.setVisible(self.config.get('enable_opreturn', False))
-            self.opreturn_rawhex_cb.setVisible(self.config.get('enable_opreturn', False))
-            self.opreturn_label.setVisible(self.config.get('enable_opreturn', False))
-            self.update_status()
-            self.slp_amount_e.setText('')
-            run_hook('do_clear', self)
         else:
             self.not_enough_funds = False
             self.not_enough_funds_slp = False
@@ -2331,15 +2315,24 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 e.setText('')
                 e.setFrozen(False)
             self.max_button.setDisabled(True)
-            self.opreturn_rawhex_cb.setChecked(False)
-            self.set_pay_from([])
-            self.tx_external_keypairs = {}
-            self.message_opreturn_e.setVisible(self.config.get('enable_opreturn', False))
-            self.opreturn_rawhex_cb.setVisible(self.config.get('enable_opreturn', False))
-            self.opreturn_label.setVisible(self.config.get('enable_opreturn', False))
-            self.update_status()
-            self.slp_amount_e.setText('')
-            #run_hook('do_clear', self)
+            self.token_type_combo.setCurrentIndex(0)
+        
+        self.max_button.setChecked(False)
+        self.not_enough_funds = False
+        self.not_enough_funds_slp = False
+        self.not_enough_unfrozen_funds_slp = False
+        self.op_return_toolong = False
+        self.payment_request = None
+        self.payto_e.is_pr = False
+        self.opreturn_rawhex_cb.setChecked(False)
+        self.set_pay_from([])
+        self.tx_external_keypairs = {}
+        self.message_opreturn_e.setVisible(self.config.get('enable_opreturn', False))
+        self.opreturn_rawhex_cb.setVisible(self.config.get('enable_opreturn', False))
+        self.opreturn_label.setVisible(self.config.get('enable_opreturn', False))
+        self.update_status()
+        self.slp_amount_e.setText('')
+        run_hook('do_clear', self)
 
     def set_frozen_state(self, addrs, freeze):
         self.wallet.set_frozen_state(addrs, freeze)
