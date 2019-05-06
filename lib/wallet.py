@@ -1461,6 +1461,17 @@ class Abstract_Wallet(PrintError):
     def dust_threshold(self):
         return dust_threshold(self.network)
 
+    def check_sufficient_slp_balance(self, slpMessage):
+        if "slp_" in self.storage.get('wallet_type', ''):
+            if slpMessage.transaction_type == 'SEND':
+                total_token_out = sum(slpMessage.op_return_fields['token_output'])
+                valid_token_balance = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'])[0]
+                valid_unfrozen_token_balance = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'])[3]
+                if total_token_out > valid_token_balance:
+                    raise NotEnoughFundsSlp()
+                elif total_token_out > valid_unfrozen_token_balance:
+                    raise NotEnoughUnfrozenFundsSlp()
+
     def make_unsigned_transaction(self, inputs, outputs, config, fixed_fee=None, change_addr=None, *, mandatory_coins=[]):
         # check outputs
         i_max = None
@@ -1474,23 +1485,6 @@ class Abstract_Wallet(PrintError):
         # Avoid index-out-of-range with inputs[0] below
         if not inputs:
             raise NotEnoughFunds()
-
-        """ 
-        TODO: Replace this check with a SLP validation check pre-broadcast.
-
-        # Make sure SLP token spending is not greater than valid token balance
-        # if "slp_" in self.storage.get('wallet_type', '') and slpTokenId is not None:
-        #     slpMsg = SlpMessage.parseSlpOutputScript(outputs[0][1])
-        #     if slpMsg.transaction_type == 'SEND':
-        #         total_token_out = sum(slpMsg.op_return_fields['token_output'])
-        #         valid_token_balance = self.get_slp_token_balance(slpMsg.op_return_fields['token_id_hex'])[0]
-        #         valid_unfrozen_token_balance = self.get_slp_token_balance(slpMsg.op_return_fields['token_id_hex'])[3]
-        #         if total_token_out > valid_token_balance:
-        #             raise NotEnoughFundsSlp()
-        #         elif total_token_out > valid_unfrozen_token_balance:
-        #             raise NotEnoughUnfrozenFundsSlp()
-        
-        """
 
         if fixed_fee is None and config.fee_per_kb() is None:
             raise BaseException('Dynamic fee estimates not available')

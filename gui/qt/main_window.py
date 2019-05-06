@@ -1838,6 +1838,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         token_outputs_amts = []
         selected_slp_coins = []
         opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
+        if "slp_" in self.wallet.storage.get('wallet_type', '') and self.token_type_combo.currentData():
+            if self.slp_amount_e.get_amount() == 0 or self.slp_amount_e.get_amount() is None:
+                self.show_message(_("No SLP token amount provided."))
+                return
         try:
             if self.slp_token_id == None and (opreturn_message != '' and opreturn_message != None):
                 if "slp_" in self.wallet.storage.get('wallet_type', ''):
@@ -1986,21 +1990,25 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def do_send(self, preview = False):
         if run_hook('abort_send', self):
             return
-        if "slp_" in self.wallet.storage.get('wallet_type', '') and self.token_type_combo.currentData():
-            if self.slp_amount_e.get_amount() == 0 or self.slp_amount_e.get_amount() is None:
-                self.show_message(_("No SLP token amount provided."))
-                return
         r = self.read_send_tab(preview=preview)
         if not r:
             return
         outputs, fee, tx_desc, coins, change_addrs, slp_coins = r
+
+        if "slp_" in self.wallet.storage.get('wallet_type', '') and self.token_type_combo.currentData():
+            try:
+                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(outputs[0][1]))
+            except NotEnoughFundsSlp:
+                self.show_message(_("Insufficient valid SLP token balance"))
+                return
+            except NotEnoughUnfrozenFundsSlp:
+                self.show_message(_("Insufficient unfrozen SLP token balance"))
+                return
+
         try:
             tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
-            return
-        except NotEnoughFundsSlp:
-            self.show_message(_("Insufficient valid SLP token funds"))
             return
         except ExcessiveFee:
             self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
