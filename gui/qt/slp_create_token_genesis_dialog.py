@@ -68,7 +68,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         row += 1
 
         msg = _('An optional URL string embedded into the token genesis transaction.')
-        grid.addWidget(HelpLabel(_('Document URL or contact email (optional):'), msg), row, 0)
+        grid.addWidget(HelpLabel(_('Document URL (optional):'), msg), row, 0)
         self.token_url_e = QLineEdit()
         self.token_url_e.setFixedWidth(560)
         self.token_url_e.textChanged.connect(self.upd_token)
@@ -195,6 +195,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         # force update (will truncate excess decimals)
         self.token_qty_e.numbify()
         self.token_qty_e.update()
+        self.check_token_qty()
 
     def show_mint_baton_address(self):
         self.token_baton_to_e.setHidden(self.token_fixed_supply_cb.isChecked())
@@ -327,7 +328,9 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
     def check_token_qty(self):
         try:
-            if self.token_qty_e.get_amount() > (10 ** 19):
-                self.show_warning(_('If you issue this much, users will may find it awkward to transfer large amounts as each transaction output may only take up to ~2 x 10^(19-decimals) tokens, thus requiring multiple outputs for very large amounts.'))
+            if self.token_qty_e.get_amount() > 18446744073709551615:
+                self.token_qty_e.setAmount(18446744073709551615)
+            #if not self.token_fixed_supply_cb.isChecked():
+            #    self.show_warning(_("If you issue this much, users will may find it awkward to transfer large amounts, as each transaction output may only take up to ~" + str(self.token_qty_e.text()) + " tokens, thus requiring multiple outputs for very large amounts."))
         except:
             pass
