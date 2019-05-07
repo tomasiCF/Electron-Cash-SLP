@@ -70,3 +70,8 @@ Electron Cash - SLP Token Edition
 - Added "simpleledger:" URI support for token payment requests (currently for send tab only)
 - Fixed bugs in Send tab related to tokens
 - Ported various improvements from mainline Electron Cash latest master branch
+
+3.4.11 Updates & Features
+-----
+- Added new prompt to user to deposit BCH before tokens can be created
+- Fixed bug disabling the token amount field when Address toggle is not set to SLP format
