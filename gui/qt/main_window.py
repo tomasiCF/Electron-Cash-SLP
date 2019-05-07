@@ -2455,6 +2455,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return w
 
     def show_create_token_dialog(self):
+        c, u, x = self.wallet.get_balance()
+        bal = c + u - self.wallet.get_slp_locked_balance()
+        if bal < 1000:
+            self.show_warning("Low balance.\n\nBefore creating a new token you need to add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
+            self.show_receive_tab()
+            self.toggle_cashaddr(1, True)
+            return
         try:
             self.create_token_dialog.show()
             self.create_token_dialog.raise_()
