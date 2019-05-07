@@ -3525,12 +3525,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.config.set_key('addr_format', format)
         Address.show_cashaddr(format)
         self.setAddrFormatText(format)
-        if format == 2:
-            self.slp_amount_e.setEnabled(True)
-            self.token_type_combo.setEnabled(True)
-        else:
-            self.slp_amount_e.setEnabled(False)
-            self.token_type_combo.setCurrentIndex(0)
         for window in self.gui_object.windows:
             window.cashaddr_toggled_signal.emit()
 
