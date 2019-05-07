@@ -62,3 +62,9 @@ Electron Cash - SLP Token Edition
 - Fixed Coin Chooser for SLP transactions
 - Fixed inaccessible Mint dialog in 3.4.7
 - Ported various improvements from mainline Electron Cash latest source
+
+3.4.9 Updates & Features
+-----
+- Added "simpleledger:" URI support for token payment requests
+- Fixed bugs in Send tab related to tokens
+- Ported various improvements from mainline Electron Cash latest master branch
