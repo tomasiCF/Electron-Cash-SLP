@@ -2261,11 +2261,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if key != 'bch':
                         tokenid = key
                         count = self.token_type_combo.count
-                        index = 0
-                        self.token_type_combo.setCurrentIndex(index)
-                        while self.token_type_combo.currentData() != tokenid:
-                            index+=1
+                        index = 1
+                        while index < self.token_type_combo.count():
                             self.token_type_combo.setCurrentIndex(index)
+                            if self.token_type_combo.currentData() == tokenid:
+                                break
+                            index+=1
+                        if index == self.token_type_combo.count():
+                            self.token_type_combo.setCurrentIndex(0)
+                            self.show_error(_("Token is not in your wallet, check that you have added this token in the 'Tokens' tab"))
+                            return
                         self.slp_amount_e.setAmount(amounts[tokenid]['amount'] * pow(10, self.slp_amount_e.token_decimals))
                         self.slp_amount_e.textEdited.emit("")
                         break

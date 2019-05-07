@@ -169,9 +169,7 @@ def parse_URI(uri, on_pr=None):
     if len(amounts) > 0:
         out['amounts'] = amounts
     if len(amounts) > 1:
-        raise Exception('This wallet does not yet support token payments with additional BCH send amounts.')
-    if len(amounts) > 2:
-        raise Exception('This wallet does not support more than 2 payment request amounts.')
+        raise Exception('Too many amounts requested in the URI.  This wallet does not yet support token payments with additional BCH send amounts.')
     if 'message' in out:
         out['message'] = out['message']
         out['memo'] = out['message']
