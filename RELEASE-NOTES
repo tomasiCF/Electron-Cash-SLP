@@ -63,8 +63,10 @@ Electron Cash - SLP Token Edition
 - Fixed inaccessible Mint dialog in 3.4.7
 - Ported various improvements from mainline Electron Cash latest source
 
-3.4.9 Updates & Features
+3.4.9 Release discarded
+
+3.4.10 Updates & Features
 -----
-- Added "simpleledger:" URI support for token payment requests
+- Added "simpleledger:" URI support for token payment requests (currently for send tab only)
 - Fixed bugs in Send tab related to tokens
 - Ported various improvements from mainline Electron Cash latest master branch
