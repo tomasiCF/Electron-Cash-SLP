@@ -1342,7 +1342,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_max_button.setHidden(False)
             self.slp_amount_label.setHidden(False)
             tok = self.wallet.token_types[self.slp_token_id]
-            self.slp_amount_e.set_token(tok['name'],tok['decimals'])
+            self.slp_amount_e.set_token(tok['name'][:6],tok['decimals'])
             self.slp_amount_changed()
         self.update_status()
 
