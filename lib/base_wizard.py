@@ -411,12 +411,16 @@ class BaseWizard(object):
             self.run('confirm_seed', seed, '')
 
     def confirm_seed(self, seed, passphrase):
-        f = lambda x: self.confirm_passphrase(seed, passphrase)
-        self.confirm_seed_dialog(run_next=f, test=lambda x: x==seed)
+        f = lambda x,skip=False: self.confirm_passphrase(seed, passphrase, skipped_backup=skip)
+        self.confirm_seed_dialog(run_next=f, test=lambda x,skip=False: x==seed or skip)
 
-    def confirm_passphrase(self, seed, passphrase):
+    def confirm_passphrase(self, seed, passphrase, skipped_backup=False):
+        self.storage.put('wallet_seed_needs_backup', skipped_backup)
         f = lambda x: self.run('create_keystore', seed, x)
         if passphrase:
+            if skipped_backup:
+                f(passphrase)
+                return
             title = _('Confirm Seed Extension')
             message = '\n'.join([
                 _('Your seed extension must be saved together with your seed.'),

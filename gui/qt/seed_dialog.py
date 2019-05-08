@@ -117,13 +117,15 @@ class SeedLayout(QVBoxLayout):
         self.is_bip39 = True #Hard coded for SLP #cb_bip39.isChecked() if 'bip39' in self.options else False
         self.is_bip39_145 = False #cb_bip39_145.isChecked() if 'bip39_145' in self.options else False
 
-    def __init__(self, seed=None, title=None, icon=True, msg=None, options=None, is_seed=None, passphrase=None, parent=None, editable=True):
+    def __init__(self, seed=None, title=None, icon=True, msg=None, options=None, is_seed=None, passphrase=None, parent=None, editable=True,
+                 can_skip=None):
         QVBoxLayout.__init__(self)
         self.parent = parent
         self.options = options
         self.is_bip39 = True  # Hard-coded for SLP
         self.is_bip39_145 = False # Hard-coded for SLP
         self.is_seed = is_seed = lambda x: bool(x) # Hard-coded for SLP
+        self.was_skipped = False
         if title:
             self.addWidget(WWLabel(title))
         self.seed_e = ButtonsTextEdit()
@@ -151,6 +153,10 @@ class SeedLayout(QVBoxLayout):
         if options:
             opt_button = EnterButton(_('Options'), self.seed_options)
             hbox.addWidget(opt_button)
+            self.addLayout(hbox)
+        if can_skip:
+            skip_button = EnterButton(_('Skip this step'), self.on_skip_button)
+            hbox.addWidget(skip_button)
             self.addLayout(hbox)
         if passphrase:
             hbox = QHBoxLayout()
@@ -203,6 +209,12 @@ class SeedLayout(QVBoxLayout):
         label_text = label + (' ' if label else '') + ('(%s)'%status)
         self.seed_type_label.setText(label_text)
         self.parent.next_button.setEnabled(is_checksum) # only allow "Next" button if checksum is good. Note this is different behavior than Electron Cash and Electrum which allows bad checksum biip39
+
+    def on_skip_button(self):
+        if self.parent.question(_('As the old adage says: \n\n"No backup, no bitcoin"\n\nAre you sure you wish to skip this step? (You will be offered the opportunity to backup your seed later.)')):
+            self.was_skipped = True
+            self.parent.next_button.setEnabled(True)
+            self.parent.next_button.click()
 
 
 class KeysLayout(QVBoxLayout):
