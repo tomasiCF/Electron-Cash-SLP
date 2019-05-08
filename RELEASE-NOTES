@@ -73,5 +73,7 @@ Electron Cash - SLP Token Edition
 
 3.4.11 Updates & Features
 -----
-- Added new prompt to user to deposit BCH before tokens can be created
+- Added new prompt to user: "deposit BCH before tokens can be created"
 - Fixed bug disabling the token amount field when Address toggle is not set to SLP format
+- Added user confirmation in Burn Tool dialog
+- Add option to "Skip Seed Backup" when creating a new wallet

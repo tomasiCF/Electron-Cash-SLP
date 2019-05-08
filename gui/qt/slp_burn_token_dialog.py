@@ -117,8 +117,8 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         row += 1
 
         self.cancel_button = b = QPushButton(_("Cancel"))
-        self.cancel_button.setAutoDefault(False)
-        self.cancel_button.setDefault(False)
+        self.cancel_button.setAutoDefault(True)
+        self.cancel_button.setDefault(True)
         b.clicked.connect(self.close)
         b.setDefault(True)
         hbox.addWidget(self.cancel_button)
@@ -128,8 +128,8 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
         self.burn_button = b = QPushButton(_("Burn Tokens"))
         b.clicked.connect(self.burn_token)
-        self.burn_button.setAutoDefault(True)
-        self.burn_button.setDefault(True)
+        self.burn_button.setAutoDefault(False)
+        self.burn_button.setDefault(False)
         hbox.addWidget(self.preview_button)
         hbox.addWidget(self.burn_button)
 
@@ -152,6 +152,12 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             return
         if burn_amt > unfrozen_token_qty:
             self.show_message(_("Cannot burn more tokens than the unfrozen amount available."))
+            return
+
+        reply = QMessageBox.question(self, "Continue?", "Destroy " + self.token_qty_e.text() + " " + self.token_name.text() + " tokens?", QMessageBox.Yes, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            pass
+        else:
             return
 
         outputs = []
