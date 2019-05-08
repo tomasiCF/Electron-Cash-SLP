@@ -287,6 +287,8 @@ class SeedBackupDialog(AbstractSeedDialog):
         slayout = SeedLayout(title=title, seed=None, msg=False, passphrase=self.passphrase, editable=True, parent=self)
         vbox2.addLayout(slayout)
         self.vbox.insertWidget(0, self.slayout_widget)
+        # clear clipboard so they can't copy-paste
+        qApp.clipboard().clear()
 
 
     def on_confirmed_backup(self):
