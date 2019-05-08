@@ -165,7 +165,7 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
             addr = self.parse_address(self.token_pay_to_e.text())
             outputs.append((TYPE_ADDRESS, addr, 546))
         except:
-            self.show_message(_("Must have Receiver Address in simpleledger format."))
+            self.show_message(_("Enter a Mint Receiver Address in SLP address format."))
             return
 
         if not self.token_fixed_supply_cb.isChecked():
@@ -173,7 +173,7 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
                 addr = self.parse_address(self.token_baton_to_e.text())
                 outputs.append((TYPE_ADDRESS, addr, 546))
             except:
-                self.show_message(_("Must have Baton Address in simpleledger format."))
+                self.show_message(_("Enter a Baton Address in SLP address format."))
                 return
 
         # IMPORTANT: set wallet.sedn_slpTokenId to None to guard tokens during this transaction
