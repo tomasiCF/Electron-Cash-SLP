@@ -73,7 +73,11 @@ Electron Cash - SLP Token Edition
 
 3.4.11 Updates & Features
 -----
-- Added new prompt to user: "deposit BCH before tokens can be created"
+- Added "Skip Seed Backup" option when creating a new wallet; seed icon updated with warning
+- Added "Deposit BCH before tokens can be created" message prompt when creating a new token if balance < 0.0001 BCH; auto-switch to "Receive" tab
 - Fixed bug disabling the token amount field when Address toggle is not set to SLP format
 - Added user confirmation in Burn Tool dialog
-- Add option to "Skip Seed Backup" when creating a new wallet
+- Updated Receive tab with address toggle below current address.
+- Updated Receive tab to auto switch to SLP address format if balance > 0.0001 BCH; otherwise display BCH format
+- Updated Receive tab to include "Low balance" notification.
+- Set maximum length for token amount field name
