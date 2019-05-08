@@ -877,6 +877,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 "status_connected_fork" : QIcon(":icons/status_connected_fork.png"),
                 "status_connected_proxy" : QIcon(":icons/status_connected_proxy.png"),
                 "status_connected_proxy_fork" : QIcon(":icons/status_connected_proxy_fork.png"),
+                "seed_ok" : QIcon(":icons/seed.png"),
+                "seed_warning" : QIcon(":icons/seed_warning.png")
             })
 
         if self.network is None or not self.network.is_running():
@@ -935,6 +937,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         addr_format = self.config.get('addr_format', 1)
         self.setAddrFormatText(addr_format)
         self.status_button.setIcon( icon )
+        if self.wallet.has_seed():
+            if self.wallet.storage.get('wallet_seed_needs_backup'):
+                self.seed_button.setIcon(icon_dict["seed_warning"])
+                self.seed_button.setToolTip(_("Seed Requires Backup!"))
+                self.seed_button.setStatusTip(self.seed_button.toolTip())
+            else:
+                self.seed_button.setIcon(icon_dict["seed_ok"])
+                self.seed_button.setToolTip(_("Seed"))
+                self.seed_button.setStatusTip(None)
 
     def update_wallet(self):
         self.need_update.set() # will enqueue an _update_wallet() call in at most 0.5 seconds from now.
@@ -2321,7 +2332,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 e.setFrozen(False)
             self.max_button.setDisabled(True)
             self.token_type_combo.setCurrentIndex(0)
-        
+
         self.max_button.setChecked(False)
         self.not_enough_funds = False
         self.not_enough_funds_slp = False
@@ -2863,9 +2874,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except BaseException as e:
             self.show_error(str(e))
             return
-        from .seed_dialog import SeedDialog
-        d = SeedDialog(self.top_level_window(), seed, passphrase)
-        d.exec_()
+        from .seed_dialog import SeedDialog, SeedBackupDialog
+        WhichClass = SeedBackupDialog if self.wallet.storage.get('wallet_seed_needs_backup') else SeedDialog
+        d = WhichClass(self.top_level_window(), seed, passphrase, wallet=self.wallet)
+        if d.exec_() == QDialog.Accepted:
+            # This banch is in case they were in the SeedBackupDialog; below
+            # makes the new non-warning icon (if any) take effect
+            self.update_status()
+        d.setParent(None)  # gc now rather than later
 
     def show_qrcode(self, data, title = _("QR code"), parent=None):
         if not data:

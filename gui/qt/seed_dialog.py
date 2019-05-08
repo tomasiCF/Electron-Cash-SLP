@@ -235,13 +235,60 @@ class KeysLayout(QVBoxLayout):
         self.parent.next_button.setEnabled(b)
 
 
-class SeedDialog(WindowModalDialog):
-
-    def __init__(self, parent, seed, passphrase):
-        WindowModalDialog.__init__(self, parent, ('Electron Cash - ' + _('Seed')))
+class AbstractSeedDialog(WindowModalDialog):
+    def __init__(self, parent, seed, passphrase, *, wallet=None):
+        super().__init__(parent, ('Electron Cash - ' + _('Seed')))
+        self.wallet = wallet
+        self.seed = seed
+        self.passphrase = passphrase
         self.setMinimumWidth(400)
+
+
+class SeedDialog(AbstractSeedDialog):
+    def __init__(self, parent, seed, passphrase, *, wallet=None):
+        super().__init__(parent, seed, passphrase, wallet=wallet)
         vbox = QVBoxLayout(self)
         title =  _("Your wallet generation seed is:")
         slayout = SeedLayout(title=title, seed=seed, msg=True, passphrase=passphrase, editable=False)
         vbox.addLayout(slayout)
         vbox.addLayout(Buttons(CloseButton(self)))
+
+
+class SeedBackupDialog(AbstractSeedDialog):
+    def __init__(self, parent, seed, passphrase, *, wallet=None):
+        super().__init__(parent, seed, passphrase, wallet=wallet)
+        assert self.wallet is not None
+        self.vbox = vbox = QVBoxLayout(self)
+        title =  _("<b>Warning:</b> Your wallet generation seed has <i>not</i> yet been confirmed to have been backed-up by you!  It is important you save your seed somewhere (perferably on paper).<br><br>In order to confirm that your seed is backed-up, please write your seed down and proceed to the next screen:<br><br>")
+        self.slayout_widget = QWidget()
+        vbox2 = QVBoxLayout(self.slayout_widget)
+        vbox2.setContentsMargins(0,0,0,0)
+        slayout = SeedLayout(title=title, seed=seed, msg=True, passphrase=passphrase, editable=False, parent=self)
+        vbox2.addLayout(slayout)
+        vbox.addWidget(self.slayout_widget)
+        self.next_button = next_button = QPushButton(_("Next"))
+        next_button.clicked.connect(self.on_next)
+        self.buttons=Buttons(CancelButton(self), next_button)
+        vbox.addLayout(self.buttons)
+
+    def on_next(self):
+        # remove the old layout
+        self.vbox.removeWidget(self.slayout_widget)
+        self.slayout_widget.setParent(None)
+        # mogrify next button to 'Confirm'
+        self.next_button.clicked.disconnect(self.on_next)
+        self.next_button.setText(_("Confirm"))
+        self.next_button.setEnabled(False)
+        self.next_button.clicked.connect(self.on_confirmed_backup)
+        self.slayout_widget = QWidget()
+        vbox2 = QVBoxLayout(self.slayout_widget)
+        vbox2.setContentsMargins(0,0,0,0)
+        title = _('To make sure that you have properly saved your seed, please retype it here.') + "<br><br>"
+        slayout = SeedLayout(title=title, seed=None, msg=False, passphrase=self.passphrase, editable=True, parent=self)
+        vbox2.addLayout(slayout)
+        self.vbox.insertWidget(0, self.slayout_widget)
+
+
+    def on_confirmed_backup(self):
+        self.wallet.storage.put('wallet_seed_needs_backup', False)
+        self.accept()
