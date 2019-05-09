@@ -983,13 +983,14 @@ class Abstract_Wallet(PrintError):
                 _, spent = self.get_addr_io(addr)
                 for txid, txdict in addrdict.items():
                     for idx, txo in txdict.items():
-                        if not isinstance(txo.get('qty',None), int): # Ignore baton / non-inputs
-                            continue
                         if (txid + ":" + str(idx)) in spent:
                             continue
-                        for i, a, _ in self.txo[txid][addr]:
-                            if i == idx:
-                                bch+=a
+                        try:
+                            for i, a, _ in self.txo[txid][addr]:
+                                if i == idx:
+                                    bch+=a
+                        except KeyError:
+                            pass
         return bch
 
     def get_balance(self, domain=None, exclude_frozen_coins=False, exclude_frozen_addresses=False):
