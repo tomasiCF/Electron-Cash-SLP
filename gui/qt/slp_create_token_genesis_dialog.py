@@ -298,21 +298,67 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     show_transaction(tx, self.main_window, None, False, self)
                     self.main_window.do_clear()
                 else:
-                    self.main_window.broadcast_transaction(tx, tx_desc)
+                    
+                    token_id = tx.txid()
+                    if self.token_name_e.text() == '':
+                        wallet_name = tx.txid()[0:10]
+                    else:
+                        wallet_name = self.token_name_e.text()[0:20]
 
-                token_id = tx.txid()
-                if self.token_name_e.text() == '':
-                    token_name = tx.txid()[0:10]
-                else:
-                    token_name = self.token_name_e.text()[0:20]
-                decimals = int(self.token_ds_e.value())
-                ow = (token_name is not None)
-                ret = self.main_window.add_token_type('SLP1', token_id, token_name, decimals,
-                                                        error_callback = self.show_error, allow_overwrite=ow)
+                    # Check for duplication error
+                    d = self.wallet.token_types.get(token_id)
+                    for tid, d in self.wallet.token_types.items():
+                        if d['name'] == wallet_name and tid != token_id:
+                            wallet_name = wallet_name + "-" + token_id[:3]
+                            break
+                    
+                    self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name)
 
         self.main_window.sign_tx_with_password(tx, sign_done, password)
+        #self.create_button.setDisabled(True)
 
-        self.create_button.setDisabled(True)
+    def broadcast_transaction(self, tx, token_name, token_wallet_name):
+
+        # Capture current TL window; override might be removed on return
+        parent = self.main_window
+
+        if self.main_window.gui_object.warn_if_no_network(self):
+            # Don't allow a useless broadcast when in offline mode. Previous to this we were getting an exception on broadcast.
+            return
+        elif not self.network.is_connected():
+            # Don't allow a potentially very slow broadcast when obviously not connected.
+            parent.show_error(_("Not connected"))
+            return
+
+        def broadcast_thread():
+            # non-GUI thread
+            status = False
+            msg = "Failed"
+            status, msg =  self.network.broadcast_transaction(tx)
+            return status, msg
+
+        def broadcast_done(result):
+            # GUI thread
+            if result:
+                status, msg = result
+                if status:
+                    token_id = msg
+                    self.main_window.add_token_type('SLP1', token_id, token_wallet_name, int(self.token_ds_e.value()), allow_overwrite=True)
+                    if tx.is_complete():
+                        self.wallet.set_label(token_id, "SLP Token Created: " + token_wallet_name)
+                    if token_name == '':
+                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name in wallet: " + token_wallet_name + "\n" + "TokenId: " + token_id)
+                    elif token_name != token_wallet_name:
+                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name in wallet: " + token_wallet_name + "\n" + "Name on blockchain: " + token_name + "\n" + "TokenId: " + token_id)
+                    else:
+                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name: " + token_name + "\n" + "Token ID: " + token_id)
+                else:
+                    if msg.startswith("error: "):
+                        msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
+                    parent.show_error(msg)
+
+        WaitingDialog(self, _('Creating SLP Token on Bitcoin Cash blockchain...'),
+                    broadcast_thread, broadcast_done, self.main_window.on_error)
         self.close()
 
     def closeEvent(self, event):

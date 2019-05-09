@@ -250,8 +250,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             sorted_items = sorted(token_types.items(), key=lambda x:x[1]['name'])
             for token_id, i in sorted_items:
-                if self.wallet.get_slp_token_balance(token_id)[0] > 0:
-                    self.token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
+                self.token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
 
     def on_history(self, event, *args):
         # NB: event should always be 'on_history'
@@ -2614,9 +2613,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return False
         for tid, d in self.wallet.token_types.items():
             if d['name'] == token_name and tid != token_id:
-                if show_errors:
-                    error_callback(_('Token with this name exists already'))
-                return False
+                token_name = token_name + "-" + token_id[:3]
+                break
 
         #Hash id validation
         hexregex='^[a-fA-F0-9]+$'
