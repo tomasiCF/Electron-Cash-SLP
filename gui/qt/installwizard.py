@@ -103,7 +103,7 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
     def __init__(self, config, app, plugins, storage, partial_title='Install Wizard'):
         BaseWizard.__init__(self, config, storage)
         QDialog.__init__(self, None)
-        self.setWindowTitle('Electron Cash  -  ' + _(partial_title))
+        self.setWindowTitle('Electron Cash SLP Edition -  ' + _(partial_title))
         self.app = app
         self.config = config
         # Set for base base class

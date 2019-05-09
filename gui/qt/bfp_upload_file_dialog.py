@@ -314,7 +314,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                     self.tx_batch.append(getFundingTxn(self.parent.wallet, addr, cost, self.parent.config))
                     self.progress_label.setText('')
                 except NotEnoughFunds:
-                    self.show_message("Insufficient funds.\n\nYou must have a balance of at least: " + str(cost) + " satoshis AND have at least 1 block confirmation.")
+                    self.show_message("Insufficient funds.\n\nYou must have a CONFIRMED balance of at least: " + str(cost) + " satoshis.")
                     self.progress_label.setText('')
                     self.filename = None
                     self.make_dirty()

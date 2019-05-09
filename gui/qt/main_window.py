@@ -121,6 +121,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object = gui_object
         self.wallet = wallet
         self.config = config = gui_object.config
+        self.is_slp_wallet = "slp_" in self.wallet.storage.get('wallet_type', '')
 
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
@@ -423,7 +424,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
         slp_validator_0x01.setup_config(self.config)
 
-        if "slp_" in self.wallet.storage.get('wallet_type', ''):
+        if self.is_slp_wallet:
             self.wallet.activate_slp()
             self.slp_history_list.update()
             self.token_list.update()
@@ -442,7 +443,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.watching_only_changed()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         """ If using SLP for the first time, turn it on by default. """
-        if "slp_" in self.wallet.storage.get('wallet_type', ''):
+        if self.is_slp_wallet:
             self.config.set_key('enable_opreturn', False)
             self.message_opreturn_e.setHidden(True)
             self.opreturn_rawhex_cb.setHidden(True)
@@ -536,7 +537,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return is_old_bad
 
     def _warn_slp_prefers_slp_wallets_if_not_slp_wallet(self):
-        if "slp_" not in self.wallet.storage.get('wallet_type', ''):
+        if not self.is_slp_wallet:
             msg = '\n\n'.join([
                 _("WARNING: This type of wallet file does not allow use of SLP tokens.") + " "
                 + _("If you have SLP tokens saved in this electrum wallet file, please use a version prior to 3.4.7 to send your tokens to a new SLP wallet format."),
@@ -968,7 +969,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.contact_list.update()
         self.invoice_list.update()
         self.update_completions()
-        if "slp_" in self.wallet.storage.get('wallet_type', ''):
+        if self.is_slp_wallet:
             self.slp_history_list.update()
             self.token_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history, also clears self.tx_update_mgr.verif_q
@@ -1014,7 +1015,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self._tx_dialogs.add(d)
 
     def addr_toggle_slp(self):
-        if Address.FMT_UI == 3 or Address.FMT_UI == 2:
+        if Address.FMT_UI == Address.FMT_SLPADDR:
             self.toggle_cashaddr(1, True)
         else: 
             self.toggle_cashaddr(2, True)
@@ -1131,12 +1132,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 bal = c + u - self.main_window.wallet.get_slp_locked_balance()
                 if bal < 1000:
                     if not self.low_balance_warning_shown:
-                        self.main_window.show_warning("Low balance.\n\nBefore using SLP tokens you need to add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.")
+                        self.main_window.show_warning("Low balance.\n\nBefore using SLP tokens you need to add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
                     self.main_window.toggle_cashaddr(1, True)
                     self.low_balance_warning_shown = False
                 else:
                     self.main_window.toggle_cashaddr(2, True)
-                if Address.FMT_UI == 3:
+                if Address.FMT_UI == Address.FMT_SLPADDR:
                     self.main_window.show_slp_addr_btn.setText("Show BCH Address")
                 else: 
                     self.main_window.show_slp_addr_btn.setText("Show SLP Address")
@@ -1345,11 +1346,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.qr_window:
             self.qr_window.set_content(self, self.receive_address_e.text(), amount,
                                        message, uri)
-
+        if Address.FMT_UI == Address.FMT_SLPADDR:
+            self.show_slp_addr_btn.setText("Show BCH Address")
+        else:
+            self.show_slp_addr_btn.setText("Show SLP Address")
 
     def on_slptok(self):
         self.slp_token_id = self.token_type_combo.currentData()
         self.payto_e.check_text()
+        self.slp_amount_e.setAmount(0)
         if self.slp_token_id is None:
             self.amount_e.setAmount(0)
             self.amount_e.setText("")
@@ -1518,7 +1523,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.token_type_combo, 7, 1)
 
 
-        if "slp_" not in self.wallet.storage.get('wallet_type', ''):
+        if not self.is_slp_wallet:
             self.slp_amount_label.setHidden(True)
             self.slp_token_type_label.setHidden(True)
             self.token_type_combo.setHidden(True)
@@ -1605,30 +1610,31 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.opreturn_rawhex_cb.stateChanged.connect(entry_changed)
 
         def entry_changed_slp():
-            text = ""
-            if self.not_enough_funds_slp:
-                amt_color = ColorScheme.RED
-                text = _("Not enough " + self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens")
-            elif self.not_enough_unfrozen_funds_slp:
-                amt_color = ColorScheme.RED
-                text = _("Not enough unfrozen " + self.wallet.token_types.get(self.slp_token_id)['name'] + "tokens")
-            elif self.slp_amount_e.isModified():
-                amt_color = ColorScheme.DEFAULT
-            else:
-                amt_color = ColorScheme.BLUE
-
-            try:
-                if self.slp_amount_e.get_amount() > (2 ** 64) - 1:
+            if self.token_type_combo.currentData():
+                text = ""
+                if self.not_enough_funds_slp:
                     amt_color = ColorScheme.RED
-                    maxqty = format_satoshis_plain_nofloat((2 ** 64) - 1, self.wallet.token_types.get(self.slp_token_id)['decimals'])
-                    text = _("Token output quantity is too large. Maximum %s.")%(maxqty,)
-            except TypeError:
-                pass
+                    text = _("Not enough " + self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + str(self.wallet.get_slp_token_balance(self.slp_token_id)[0]) + " tokens available)")
+                elif self.not_enough_unfrozen_funds_slp:
+                    amt_color = ColorScheme.RED
+                    text = _("Not enough unfrozen " + self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + str(self.wallet.get_slp_token_balance(self.slp_token_id)[4]) + " tokens frozen)")
+                elif self.slp_amount_e.isModified():
+                    amt_color = ColorScheme.DEFAULT
+                else:
+                    amt_color = ColorScheme.BLUE
 
-            self.statusBar().showMessage(text)
-            self.slp_amount_e.setStyleSheet(amt_color.as_stylesheet())
-            if text != "": 
-                return True
+                try:
+                    if self.slp_amount_e.get_amount() > (2 ** 64) - 1:
+                        amt_color = ColorScheme.RED
+                        maxqty = format_satoshis_plain_nofloat((2 ** 64) - 1, self.wallet.token_types.get(self.slp_token_id)['decimals'])
+                        text = _("Token output quantity is too large. Maximum %s.")%(maxqty,)
+                except TypeError:
+                    pass
+
+                self.statusBar().showMessage(text)
+                self.slp_amount_e.setStyleSheet(amt_color.as_stylesheet())
+                if text != "": 
+                    return True
             return False
 
         self.invoices_label = QLabel(_('Invoices'))
@@ -1656,7 +1662,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.do_update_fee()
 
     def slp_spend_max(self):
-        self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id)[3])
+        self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id)[0])
         self.update_fee()
 
     def update_fee(self):
@@ -1714,6 +1720,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         '''Recalculate the fee.  If the fee was manually input, retain it, but
         still build the TX to see if there are enough funds.
         '''
+        self.not_enough_funds_slp = False
+        self.not_enough_unfrozen_funds_slp = False
         freeze_fee = (self.fee_e.isModified()
                       and (self.fee_e.text() or self.fee_e.hasFocus()))
         amount = '!' if self.max_button.isChecked() else self.amount_e.get_amount()
@@ -1739,7 +1747,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
                 elif self.slp_token_id is None:
                     pass
-                elif "slp_" in self.wallet.storage.get('wallet_type', '') and self.slp_token_id:
+                elif self.is_slp_wallet and self.slp_token_id:
                     amt = self.slp_amount_e.get_amount() or 0
                     if self.slp_amount_e.text() == '!':
                         self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id)[3])
@@ -1756,13 +1764,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
                     outputs.append(slp_op_return_msg)
                     for amt in token_outputs_amts:
-                        outputs.append((TYPE_ADDRESS, slp_coins[0]['address'], 546))
+                        outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
                 tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, mandatory_coins=selected_slp_coins)
-                if "slp_" in self.wallet.storage.get('wallet_type', '') and self.slp_token_id:
+                if self.is_slp_wallet and self.slp_token_id:
                     self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]))
                 self.not_enough_funds = False
-                self.not_enough_funds_slp = False
-                self.not_enough_unfrozen_funds_slp = False
                 self.op_return_toolong = False
             except NotEnoughFunds:
                 self.not_enough_funds = True
@@ -1876,13 +1882,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         token_outputs_amts = []
         selected_slp_coins = []
         opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
-        if "slp_" in self.wallet.storage.get('wallet_type', '') and self.token_type_combo.currentData():
+        if self.is_slp_wallet and self.token_type_combo.currentData():
             if self.slp_amount_e.get_amount() == 0 or self.slp_amount_e.get_amount() is None:
                 self.show_message(_("No SLP token amount provided."))
                 return
         try:
             if self.slp_token_id == None and (opreturn_message != '' and opreturn_message != None):
-                if "slp_" in self.wallet.storage.get('wallet_type', ''):
+                if self.is_slp_wallet:
                     try:
                         slpMsg = slp.SlpMessage.parseSlpOutputScript(self.output_for_opreturn_stringdata(opreturn_message)[1])
                         if slpMsg.transaction_type == 'SEND' and not preview:
@@ -1897,7 +1903,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         pass
             elif self.slp_token_id is None:
                 pass
-            elif "slp_" in self.wallet.storage.get('wallet_type', ''):
+            elif self.is_slp_wallet:
                 """ Guard against multiline 'Pay To' field """
                 if self.payto_e.is_multiline():
                     self.show_error(_("Too many receivers listed.\n\nCurrently this wallet only supports a single SLP token receiver."))
@@ -1985,7 +1991,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 outputs.append((TYPE_ADDRESS, change_addr, 546))
 
         """ Only Allow OP_RETURN if SLP is disabled. """
-        if "slp_" not in self.wallet.storage.get('wallet_type', ''):
+        if not self.is_slp_wallet:
             try:
                 # handle op_return if specified and enabled
                 opreturn_message = self.message_opreturn_e.text()
@@ -2033,14 +2039,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
         outputs, fee, tx_desc, coins, change_addrs, slp_coins = r
 
-        if "slp_" in self.wallet.storage.get('wallet_type', '') and self.token_type_combo.currentData():
+        if self.is_slp_wallet and self.token_type_combo.currentData():
             try:
                 self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(outputs[0][1]))
             except NotEnoughFundsSlp:
-                self.show_message(_("Insufficient token balance"))
+                self.show_message(_("Token balance too low."))
                 return
             except NotEnoughUnfrozenFundsSlp:
-                self.show_message(_("Insufficient unfrozen SLP token balance"))
+                self.show_message(_("Unfrozen SLP token balance is too low.  Unfreeze some of the token coins associated with with this token."))
                 return
 
         try:
@@ -3566,7 +3572,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def toggle_cashaddr(self, format, specified = False):
         #Gui toggle should just increment, if "specified" is True it is being set from preferences, so leave the value as is.
         if specified==False:
-            if "slp_" in self.wallet.storage.get('wallet_type', ''):
+            if self.is_slp_wallet:
                 max_format=2
             else:
                 max_format=1
@@ -3576,10 +3582,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.config.set_key('addr_format', format)
         Address.show_cashaddr(format)
         self.setAddrFormatText(format)
-        if Address.FMT_UI == 3 or Address.FMT_UI == 2:
-            self.show_slp_addr_btn.setText("Show BCH Address")
-        else:
-            self.show_slp_addr_btn.setText("Show SLP Address")
         for window in self.gui_object.windows:
             window.cashaddr_toggled_signal.emit()
 
@@ -3889,9 +3891,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         enable_opreturn = bool(self.config.get('enable_opreturn'))
         opret_cb = QCheckBox(_('Enable OP_RETURN output'))
-        opret_cb.setToolTip(_('Enable posting messages with OP_RETURN.'))
-        opret_cb.setChecked(enable_opreturn)
-        opret_cb.stateChanged.connect(on_opret)
+        if not self.is_slp_wallet:
+            opret_cb.setToolTip(_('Enable posting messages with OP_RETURN.'))
+            opret_cb.setChecked(enable_opreturn)
+            opret_cb.stateChanged.connect(on_opret)
+        else:
+            opret_cb.setToolTip(_('(Disabled in SLP wallets) Enable posting messages with OP_RETURN.'))
+            opret_cb.setChecked(False)
+            opret_cb.setDisabled(True)
         tx_widgets.append((opret_cb,None))
 
         def on_slptok_pref(x):

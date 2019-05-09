@@ -40,7 +40,7 @@ from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 
 from .i18n import _
-from .util import NotEnoughFunds, NotEnoughFundsSlp, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
+from .util import NotEnoughFunds, NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
 
 from .address import Address, Script, ScriptOutput, PublicKey
 from .bitcoin import *
@@ -919,7 +919,7 @@ class Abstract_Wallet(PrintError):
                                 invalid_token_bal += txo['qty']
                             elif validity == 0: # Unknown DAG status (should be in processing queue)
                                 unvalidated_token_bal += txo['qty']
-        return (valid_token_bal, unvalidated_token_bal, invalid_token_bal, unfrozen_valid_token_bal)
+        return (valid_token_bal, unvalidated_token_bal, invalid_token_bal, unfrozen_valid_token_bal, valid_token_bal - unfrozen_valid_token_bal)
 
     def get_utxos(self, *, domain = None, exclude_frozen = False, mature = False, confirmed_only = False, exclude_slp = True):
         ''' Note that exclude_frozen = True checks for BOTH address-level and coin-level frozen status. '''
