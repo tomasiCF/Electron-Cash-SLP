@@ -1013,11 +1013,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self._tx_dialogs.add(d)
 
     def addr_toggle_slp(self):
-        if Address.FMT_UI == 3:
-            self.show_slp_addr_btn.setText("Show SLP Address")
+        if Address.FMT_UI == 3 or Address.FMT_UI == 2:
             self.toggle_cashaddr(1, True)
         else: 
-            self.show_slp_addr_btn.setText("Show BCH Address")
             self.toggle_cashaddr(2, True)
 
     def create_receive_tab(self):
@@ -3577,6 +3575,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.config.set_key('addr_format', format)
         Address.show_cashaddr(format)
         self.setAddrFormatText(format)
+        if Address.FMT_UI == 3 or Address.FMT_UI == 2:
+            self.show_slp_addr_btn.setText("Show BCH Address")
+        else:
+            self.show_slp_addr_btn.setText("Show SLP Address")
         for window in self.gui_object.windows:
             window.cashaddr_toggled_signal.emit()
 
