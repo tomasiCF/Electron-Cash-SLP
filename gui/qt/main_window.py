@@ -58,6 +58,7 @@ try:
 except:
     plot_history = None
 import electroncash.web as web
+from electroncash import schnorr  # for schnorr.is_available
 
 from .amountedit import AmountEdit, BTCAmountEdit, MyLineEdit, BTCkBEdit, BTCSatsByteEdit
 from .qrcodewidget import QRCodeWidget, QRDialog
@@ -1016,7 +1017,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def addr_toggle_slp(self):
         if Address.FMT_UI == Address.FMT_SLPADDR:
             self.toggle_cashaddr(1, True)
-        else: 
+        else:
             self.toggle_cashaddr(2, True)
 
     def create_receive_tab(self):
@@ -1138,7 +1139,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.main_window.toggle_cashaddr(2, True)
                 if Address.FMT_UI == Address.FMT_SLPADDR:
                     self.main_window.show_slp_addr_btn.setText("Show BCH Address")
-                else: 
+                else:
                     self.main_window.show_slp_addr_btn.setText("Show SLP Address")
 
 
@@ -1567,7 +1568,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             hasError = entry_changed_slp()
             if hasError == False:
                 entry_changed_bch()
-            
+
         def entry_changed_bch():
             text = ""
             if self.not_enough_funds:
@@ -1632,7 +1633,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
                 self.statusBar().showMessage(text)
                 self.slp_amount_e.setStyleSheet(amt_color.as_stylesheet())
-                if text != "": 
+                if text != "":
                     return True
             return False
 
@@ -1764,7 +1765,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     outputs.append(slp_op_return_msg)
                     for amt in token_outputs_amts:
                         outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
-                tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, mandatory_coins=selected_slp_coins)
+                tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
                 if self.is_slp_wallet and self.slp_token_id:
                     self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]))
                 self.not_enough_funds = False
@@ -2049,7 +2050,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 return
 
         try:
-            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
+            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, sign_schnorr=self.is_schnorr_enabled(), mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
         except NotEnoughFunds:
             self.show_message(_("Insufficient BCH balance"))
             return
@@ -3932,6 +3933,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_cashaddr_icon()
             self.update_tabs()
 
+        # Schnorr
+        use_schnorr_cb = QCheckBox(_("Enable Schnorr signatures"))
+        no_schnorr_reason = []
+        use_schnorr_cb.setEnabled(self.is_schnorr_possible(no_schnorr_reason))
+        use_schnorr_cb.setChecked(self.is_schnorr_enabled())
+        use_schnorr_cb.stateChanged.connect(self.set_schnorr_enabled)
+        if use_schnorr_cb.isEnabled():
+            use_schnorr_cb.setToolTip(_("Sign all transactions using Schnorr signatures."))
+        else:
+            use_schnorr_cb.setToolTip(_("Schnorr signatures are disabled.") if not no_schnorr_reason else no_schnorr_reason[0])
+        tx_widgets.append((use_schnorr_cb, None))
 
         def update_currencies():
             if not self.fx: return
@@ -4064,6 +4076,33 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.need_restart:
             self.show_warning(_('Please restart Electron Cash to activate the new GUI settings'), title=_('Success'))
 
+    def is_schnorr_possible(self, reason: list = None) -> bool:
+        ''' Returns True if this system can sign with Schnorr and/or this
+        wallet type is compatible.
+        `reason` is an optional list where you would like an translated string
+        of why Schnorr isn't possible placed (on False return). '''
+        wallet_ok = bool(not self.wallet.is_multisig() and not self.wallet.is_hardware())
+        available = schnorr.is_available()
+        ret = wallet_ok and available
+        if not ret and isinstance(reason, list):
+            if not wallet_ok:
+                reason.insert(0, _('Schnorr signatures are disabled for this wallet type.'))
+            elif not available:
+                reason.insert(0, _('Schnorr signatures are disabled because no secp256k1 library with Schnorr capabilities could be found.'))
+        return ret
+
+    def is_schnorr_enabled(self) -> bool:
+        ''' Returns whether schnorr is enabled AND possible for this wallet.
+        Schnorr is enabled per-wallet. '''
+        return bool(self.is_schnorr_possible() and self.wallet.storage.get('sign_schnorr', 0))
+
+    def set_schnorr_enabled(self, b: bool):
+        ''' Enable schnorr for this wallet. Note that if Schnorr is not possible,
+        (due to missing libs or invalid wallet type) is_schnorr_enabled() will
+        still return False after calling this function with a True argument. '''
+        # Note: we will have '1' at some point in the future which will mean:
+        # 'ask me per tx', so for now True -> 2.
+        self.wallet.storage.put('sign_schnorr', 2 if b else 0)
 
     def closeEvent(self, event):
         # It seems in some rare cases this closeEvent() is called twice
@@ -4309,7 +4348,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if fee > max_fee:
             self.show_error(_('Max fee exceeded'))
             return
-        new_tx = self.wallet.cpfp(parent_tx, fee)
+        new_tx = self.wallet.cpfp(parent_tx, fee, sign_schnorr=self.is_schnorr_enabled())
         if new_tx is None:
             self.show_error(_('CPFP no longer valid'))
             return
