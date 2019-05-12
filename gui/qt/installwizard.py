@@ -187,7 +187,7 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
 
         vbox.addWidget(QLabel(_("To avoid losing SLP tokens, you should avoid opening a wallet on") + '\n' \
                                 + _("wallet software not aware of SLP tokens.")))
-                                
+
         vbox.addWidget(QLabel(_("For more information visit: <a href=\"https://SimpleLedger.cash\">https://SimpleLedger.cash</a>")))
 
         self.set_layout(vbox, title=_('Electron Cash SLP wallet'))
@@ -393,7 +393,7 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
             options.append('bip39')
         title = _('Enter Seed')
         message = _('Please enter your seed phrase in order to restore your wallet.')
-        return self.seed_input(title, message, test, options)
+        return self.seed_input(title, message, test, options)[:3]
 
     @wizard_dialog
     def confirm_seed_dialog(self, run_next, test):
