@@ -186,6 +186,9 @@ class BaseWizard(util.PrintError):
         k = keystore.from_master_key(text)
         self.on_keystore(k)
 
+    def on_hw_wallet_support(self):
+        ''' Derived class InstallWizard for Qt implements this '''
+
     def choose_hw_device(self):
         title = _('Hardware Keystore')
         # check available plugins
@@ -208,14 +211,33 @@ class BaseWizard(util.PrintError):
                 devmgr.print_error("error", name)
                 continue
             devices += list(map(lambda x: (name, x), u))
+        extra_button = None
+        if sys.platform in ("linux", "linux2", "linux3"):
+            extra_button = (_("Hardware Wallet Support..."), self.on_hw_wallet_support)
         if not devices:
-            msg = ''.join([
-                _('No hardware device detected.') + '\n',
-                _('To trigger a rescan, press \'Next\'.') + '\n\n',
-                _('If your device is not detected on Windows, go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + ' ',
-                _('On Linux, you might have to add a new permission to your udev rules.'),
-            ])
-            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device())
+            msgs = [
+                _('No hardware device detected.') + '\n\n',
+                _('To trigger a rescan, press \'Next\'.') + '\n\n'
+            ]
+
+            if sys.platform in ('win32', 'win64', 'windows'):
+                msgs.append(_('Go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + '\n')
+
+            if sys.platform in ('linux', 'linux2', 'linux3'):
+                msgs.append(_('You may try the "Hardware Wallet Support" tool (below).') + '\n')
+
+            support_no_libs = [s for s in support if not s[2].libraries_available]
+            if len(support_no_libs) > 0:
+                msgs.append('\n' + _('Please install the relevant libraries for these plugins:') + ' ')
+                msgs.append(', '.join(s[2].name for s in support_no_libs) + '\n')
+                msgs.append(_('On most systems you can do so with this command:') + '\n')
+                msgs.append('pip3 install -r contrib/requirements/requirements-hw.txt\n')
+
+            msgs.append('\n' + _("If this problem persists, please visit:")
+                        + "\n\n     https://github.com/Electron-Cash/Electron-Cash/issues")
+
+            msg = ''.join(msgs)
+            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device(), extra_button=extra_button)
             return
         # select device
         self.devices = devices
@@ -247,7 +269,7 @@ class BaseWizard(util.PrintError):
         self.choice_dialog(title=title, message=msg, choices=choices, run_next=run_next,
                            disabled_indices = disabled_indices,
                            disabled_tooltip = _('This hardware wallet device'
-                                                ' cannot be used with SLP Tokens'))
+                                                ' cannot be used with SLP Tokens'), extra_button=extra_button)
 
     def on_device(self, name, device_info):
         self.plugin = self.plugins.find_plugin(name, force_load=True)
