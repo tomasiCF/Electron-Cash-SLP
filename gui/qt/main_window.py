@@ -1613,10 +1613,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 text = ""
                 if self.not_enough_funds_slp:
                     amt_color = ColorScheme.RED
-                    text = _("Not enough " + self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + str(self.wallet.get_slp_token_balance(self.slp_token_id)[0]) + " tokens available)")
+                    text = "Not enough " + \
+                            self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
+                                format_satoshis_plain_nofloat(
+                                    self.wallet.get_slp_token_balance(self.slp_token_id)[0], 
+                                    self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens available)"
                 elif self.not_enough_unfrozen_funds_slp:
                     amt_color = ColorScheme.RED
-                    text = _("Not enough unfrozen " + self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + str(self.wallet.get_slp_token_balance(self.slp_token_id)[4]) + " tokens frozen)")
+                    text = "Not enough unfrozen " + \
+                            self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
+                                format_satoshis_plain_nofloat(
+                                    self.wallet.get_slp_token_balance(self.slp_token_id)[4], 
+                                    self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens frozen)"
                 elif self.slp_amount_e.isModified():
                     amt_color = ColorScheme.DEFAULT
                 else:
