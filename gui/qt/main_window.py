@@ -1131,7 +1131,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 bal = c + u - self.main_window.wallet.get_slp_locked_balance()
                 if bal < 1000:
                     if not self.low_balance_warning_shown:
-                        self.main_window.show_warning("Low balance.\n\nBefore using SLP tokens you need to add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
+                        self.main_window.show_warning("Low BCH balance.\n\nCreating and sending SLP tokens requires Bitcoin Cash to cover transaction fees.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
                     self.main_window.toggle_cashaddr(1, True)
                     self.low_balance_warning_shown = False
                 else:
@@ -2511,7 +2511,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         bal = c + u - self.wallet.get_slp_locked_balance()
         if bal < 1000:
             self.receive_tab.low_balance_warning_shown = True
-            self.show_warning("Low balance.\n\nBefore creating a new token you need to add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
+            self.show_warning("Low BCH balance.\n\nBefore creating a new token you must add Bitcoin Cash to this wallet.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
             self.show_receive_tab()
             self.toggle_cashaddr(1, True)
             return
