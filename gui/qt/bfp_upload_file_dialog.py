@@ -2,7 +2,7 @@ import copy
 import datetime
 import time
 from functools import partial
-import json
+import json, io
 import threading
 import sys
 from pathlib import Path
@@ -54,7 +54,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
 
         self.file_receiver = file_receiver
         self.metadata = None
-        self.filename = None
+        self.local_file_path = None
         self.is_dirty = False
         self.password = None
 
@@ -63,41 +63,70 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         vbox = QVBoxLayout()
         self.setLayout(vbox)
 
-        vbox.addWidget(QLabel("Upload and download documents using the Bitcoin Files Protocol (<a href=https://bitcoinfiles.com>bitcoinfiles.com</a>)"))
-
-        # Select File
-        self.select_file_button = b = QPushButton(_("Select File..."))
-        b.setAutoDefault(True)
-        b.setDefault(True)
-        b.clicked.connect(self.select_file)
-        vbox.addWidget(self.select_file_button)
+        #vbox.addWidget(QLabel("Upload and download documents using the Bitcoin Files Protocol (<a href=https://bitcoinfiles.com>bitcoinfiles.com</a>)"))
 
         grid = QGridLayout()
-        grid.setColumnStretch(1, 1)
+        #grid.setColumnStretch(1, 1)
         vbox.addLayout(grid)
         row = 0
 
         # Local file path
-        grid.addWidget(QLabel(_('Local Path:')), row, 0)
-        self.path = QLineEdit("")
-        self.path.setReadOnly(True)
-        self.path.setFixedWidth(570)
-        grid.addWidget(self.path, row, 1)
+        # grid.addWidget(QLabel(_("Local 'token.json' path:")), row, 0)
+        # hbox = QHBoxLayout()
+        # self.path = QLineEdit("")
+        # self.path.setReadOnly(True)
+        # self.path.setFixedWidth(450)
+        # hbox.addWidget(self.path)
+
+        # self.select_file_button = b = QPushButton(_("Browse..."))
+        # b.setAutoDefault(False)
+        # b.setDefault(False)
+        # b.clicked.connect(self.select_local_document)
+        # hbox.addWidget(b)
+        # grid.addLayout(hbox, row, 1)
+        # row += 1
+
+        # Document Filename
+        grid.addWidget(QLabel(_('Filename:')), row, 0)
+        self.filename_e = QLineEdit("token.json")
+        self.filename_e.setDisabled(True)
+        self.filename_e.setReadOnly(True)
+        self.filename_e.setFixedWidth(570)
+        self.filename_e.textChanged.connect(self.make_dirty)
+        grid.addWidget(self.filename_e, row, 1)
         row += 1
 
-        # Estimated Fees
-        grid.addWidget(QLabel(_('Upload Cost (satoshis):')), row, 0)
-        self.upload_cost_label = QLabel("")
-        grid.addWidget(self.upload_cost_label, row, 1)
+        # Contact Email
+        grid.addWidget(QLabel(_('Contact Email:')), row, 0)
+        self.email_e = QLineEdit("")
+        self.email_e.setReadOnly(False)
+        self.email_e.setFixedWidth(570)
+        self.email_e.textChanged.connect(self.make_dirty)
+        grid.addWidget(self.email_e, row, 1)
         row += 1
 
-        # File hash
-        grid.addWidget(QLabel(_('File sha256 (auto-populated):')), row, 0)
-        self.hash = QLineEdit("")
-        self.hash.setReadOnly(True)
-        self.hash.setFixedWidth(570)
-        self.hash.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
-        grid.addWidget(self.hash, row, 1)
+        # Contact URL:
+        grid.addWidget(QLabel(_('Contact URL:')), row, 0)
+        self.url_e = QLineEdit("")
+        self.url_e.setReadOnly(False)
+        self.url_e.setFixedWidth(570)
+        self.url_e.textChanged.connect(self.make_dirty)
+        grid.addWidget(self.url_e, row, 1)
+        row += 1
+
+        # Token.json builder
+        grid.addWidget(QLabel(_('Token.json Icon SVG:')), row, 0)
+        hbox = QHBoxLayout()
+        self.svg_path_e = QLineEdit("")
+        self.svg_path_e.setReadOnly(True)
+        self.svg_path_e.setFixedWidth(450)
+        hbox.addWidget(self.svg_path_e)
+
+        b = QPushButton(_("Browse..."))
+        b.clicked.connect(self.select_svg_file)
+        hbox.addWidget(b)
+        
+        grid.addLayout(hbox, row, 1)
         row += 1
 
         # Previous file hash
@@ -148,10 +177,27 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.file_receiver_e, row, 1)
         row += 1
 
-        # File path
-        grid.addWidget(QLabel(_('URI after upload (auto-populated):')), row, 0)
+        # Estimated Fees
+        grid.addWidget(QLabel(_('Upload Cost (satoshis):')), row, 0)
+        self.upload_cost_label = QLabel("")
+        grid.addWidget(self.upload_cost_label, row, 1)
+        row += 1
+
+        # File hash
+        grid.addWidget(QLabel(_('Token Document sha256:')), row, 0)
+        self.hash = QLineEdit("")
+        self.hash.setReadOnly(True)
+        self.hash.setDisabled(True)
+        self.hash.setFixedWidth(570)
+        self.hash.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+        grid.addWidget(self.hash, row, 1)
+        row += 1
+
+        # Token Document URI
+        grid.addWidget(QLabel(_('Token Document URI:')), row, 0)
         self.bitcoinfileAddr_label = QLineEdit("")
         self.bitcoinfileAddr_label.setReadOnly(True)
+        self.bitcoinfileAddr_label.setDisabled(True)
         self.bitcoinfileAddr_label.setFixedWidth(570)
         grid.addWidget(self.bitcoinfileAddr_label, row, 1)
 
@@ -176,10 +222,9 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         hbox.addStretch(1)
 
         self.sign_button = b = QPushButton(_("Sign"))
-        self.sign_button.setAutoDefault(False)
-        self.sign_button.setDefault(False)
-        self.sign_button.setDisabled(True)
-        b.clicked.connect(self.sign_txns)
+        self.sign_button.setAutoDefault(True)
+        self.sign_button.setDefault(True)
+        b.clicked.connect(self.sign_bfp_txns)
         b.setDefault(False)
         hbox.addWidget(self.sign_button)
 
@@ -235,16 +280,20 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         self.chunks_processed = 0
         self.chunks_total = 0
         self.final_metadata_txn_created = False
-        if self.filename != '' and self.filename != None:
-            self.sign_button.setEnabled(True)
-            self.sign_button.setDefault(True)
-        else:
-            self.select_file_button.setDefault(True)
-            self.path.setText('')
-            self.hash.setText('')
-            self.upload_cost_label.setText('')
+        self.upload_cost_label.setText('')
+        self.sign_button.setEnabled(True)
+        self.sign_button.setDefault(True)
 
-    def sign_txns(self):
+    def sign_bfp_txns(self):
+        if self.local_file_path == "" or self.local_file_path == None:
+            json = self.rebuild_token_json()
+            self._sign_bfp_txns(json)
+            return
+        with open(self.local_file_path, 'rb') as f:
+            self._sign_bfp_txns(f)
+
+    def _sign_bfp_txns(self, file_data):
+            #with open(self.local_file_path, "rb") as f:
 
         # set all file Metadata to None for now... UI needs updated for this
         self.metadata = { 'filename': None, 'fileext': None, 'filesize': None, 'file_sha256': None, 'prev_file_sha256': None, 'uri': None }
@@ -274,113 +323,118 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         else:
             self.file_receiver = None
     
-        if self.filename != '':
-            self.select_file_button.setDefault(False)
-            with open(self.filename,"rb") as f:
+        if self.local_file_path == '' or self.local_file_path == None:
+            filename = 'token.json'
+            fileext = 'json'
+        else:
+            s = basename(self.local_file_path).split(os.extsep, 1)
+            filename = basename(self.local_file_path)
+            fileext = s[len(s)-1]
 
-                # clear fields before re-populating
-                self.hash.setText('')
-                self.path.setText('')
-                self.upload_cost_label.setText('')
-                self.bitcoinfileAddr_label.setText('')
+        #self.select_file_button.setDefault(False)
+        #with open(self.local_file_path, "rb") as f:
+        # clear fields before re-populating
+        self.hash.setText('')
+        #self.path.setText('')
+        self.upload_cost_label.setText('')
+        self.bitcoinfileAddr_label.setText('')
 
-                bytes = f.read()
-                if len(bytes) > 5261:
-                    self.show_error("Files cannot be larger than 5.261kB in size.")
-                    return
-                import hashlib
-                readable_hash = hashlib.sha256(bytes).hexdigest()
-                self.hash.setText(readable_hash)
-                self.path.setText(self.filename)
-                self.metadata['filesize'] = len(bytes)
-                try:
-                    self.metadata['filename'] = basename(self.filename).split(os.extsep, 1)[0]
-                    self.metadata['fileext'] = basename(self.filename).split(os.extsep, 1)[1]
-                except IndexError:
-                    pass
-                self.metadata['file_sha256'] = readable_hash
-                cost = calculateUploadCost(len(bytes), self.metadata)
-                self.upload_cost_label.setText(str(cost))
-                if(self.org_addr_cb.isChecked and self.file_org_addr_e.text() != ''):
-                    addr = Address.from_string(self.file_org_addr_e.text())
-                else:
-                    addr = self.parent.wallet.get_unused_address()
+        bytes = file_data.read()
+        if len(bytes) > 5261:
+            self.show_error("Files cannot be larger than 5.261kB in size.")
+            return
+        import hashlib
+        readable_hash = hashlib.sha256(bytes).hexdigest()
+        self.hash.setText(readable_hash)
+        self.metadata['file_sha256'] = readable_hash
 
-                # # IMPORTANT: set wallet.send_slpTokenId to None to guard tokens during this transaction
-                self.main_window.token_type_combo.setCurrentIndex(0)
-                assert self.main_window.slp_token_id == None
+        #self.path.setText(self.local_file_path)
+        self.metadata['filesize'] = len(bytes)
+        self.metadata['filename'] = filename
+        self.metadata['fileext'] = fileext
 
-                try:
-                    self.tx_batch.append(getFundingTxn(self.parent.wallet, addr, cost, self.parent.config))
-                    self.progress_label.setText('')
-                except NotEnoughFunds:
-                    self.show_message("Insufficient funds.\n\nYou must have a CONFIRMED balance of at least: " + str(cost) + " satoshis.")
-                    self.progress_label.setText('')
-                    self.filename = None
-                    self.make_dirty()
-                    return
+        cost = calculateUploadCost(len(bytes), self.metadata)
+        self.upload_cost_label.setText(str(cost))
+        if(self.org_addr_cb.isChecked and self.file_org_addr_e.text() != ''):
+            addr = Address.from_string(self.file_org_addr_e.text())
+        else:
+            addr = self.parent.wallet.get_unused_address()
 
-                # Rewind and put file into chunks
-                f.seek(0, 0)
-                chunks = []
-                while True:
-                    b = f.read(220)
-                    if b == b'': break
+        # # IMPORTANT: set wallet.send_slpTokenId to None to guard tokens during this transaction
+        self.main_window.token_type_combo.setCurrentIndex(0)
+        assert self.main_window.slp_token_id == None
+
+        try:
+            self.tx_batch.append(getFundingTxn(self.parent.wallet, addr, cost, self.parent.config))
+            self.progress_label.setText('')
+        except NotEnoughFunds:
+            self.show_message("Insufficient funds.\n\nYou must have a CONFIRMED balance of at least: " + str(cost) + " satoshis.")
+            self.progress_label.setText('')
+            self.local_file_path = None
+            self.make_dirty()
+            return
+
+        # Rewind and put file into chunks
+        file_data.seek(0, 0)
+        chunks = []
+        while True:
+            b = file_data.read(220)
+            if b == b'': break
+            try:
+                chunks.append(b)
+                self.chunks_total += 1
+            except ValueError:
+                break
+
+        min_len = 223 - len(make_bitcoinfile_metadata_opreturn(1, 0, None, self.metadata['filename'], self.metadata['fileext'], self.metadata['filesize'], self.metadata['file_sha256'], self.metadata['prev_file_sha256'], self.metadata['uri'])[1].to_script())
+        
+        # determine if the metadata txn data chunk will be empty for progress bar accuracy
+        if len(bytes) < 220:
+            chunk_count_adder = 1 if len(bytes) > min_len else 0
+        else:
+            chunk_count_adder = 1 if min_len - (len(bytes) % 220) < 0 else 0
+
+        self.progress.setMaximum(len(chunks) + chunk_count_adder + 1)
+        self.progress.setMinimum(0)
+        self.progress.setVisible(True)
+        self.progress_label.setText("Signing 1 of " + str(len(chunks) + chunk_count_adder + 1) + " transactions")
+        
+        # callback to recursive sign next txn or finish
+        def sign_done(success):
+            if success:
+                self.tx_batch_signed_count += 1
+                self.progress.setValue(self.tx_batch_signed_count)
+                self.activateWindow()
+                self.raise_()
+                self.progress_label.setText("Signing " + str(self.tx_batch_signed_count + 1) + " of " + str(len(chunks) + chunk_count_adder + 1) + " transactions")
+                if self.chunks_processed <= self.chunks_total and not self.final_metadata_txn_created:
                     try:
-                        chunks.append(b)
-                        self.chunks_total += 1
-                    except ValueError:
-                        break
+                        chunk_bytes = chunks[self.chunks_processed]
+                    except IndexError:
+                        chunk_bytes = None
+                    try:
+                        txn, self.final_metadata_txn_created = getUploadTxn(self.parent.wallet, self.tx_batch[self.chunks_processed], self.chunks_processed, self.chunks_total, chunk_bytes, self.parent.config, self.metadata, self.file_receiver)
+                        self.tx_batch.append(txn)
+                    except NotEnoughFunds as e:
+                        self.show_message("Insufficient funds for file chunk #" + str(self.chunks_processed + 1))
+                        return
+                    self.chunks_processed += 1
 
-                min_len = 223 - len(make_bitcoinfile_metadata_opreturn(1, 0, None, self.metadata['filename'], self.metadata['fileext'], self.metadata['filesize'], self.metadata['file_sha256'], self.metadata['prev_file_sha256'], self.metadata['uri'])[1].to_script())
-                
-                # determine if the metadata txn data chunk will be empty for progress bar accuracy
-                if len(bytes) < 220:
-                    chunk_count_adder = 1 if len(bytes) > min_len else 0
+                if self.tx_batch_signed_count < len(self.tx_batch):
+                    self.sign_tx_with_password(self.tx_batch[self.tx_batch_signed_count], sign_done, self.password)
                 else:
-                    chunk_count_adder = 1 if min_len - (len(bytes) % 220) < 0 else 0
-
-                self.progress.setMaximum(len(chunks) + chunk_count_adder + 1)
-                self.progress.setMinimum(0)
-                self.progress.setVisible(True)
-                self.progress_label.setText("Signing 1 of " + str(len(chunks) + chunk_count_adder + 1) + " transactions")
-                
-                # callback to recursive sign next txn or finish
-                def sign_done(success):
-                    if success:
-                        self.tx_batch_signed_count += 1
-                        self.progress.setValue(self.tx_batch_signed_count)
-                        self.activateWindow()
-                        self.raise_()
-                        self.progress_label.setText("Signing " + str(self.tx_batch_signed_count + 1) + " of " + str(len(chunks) + chunk_count_adder + 1) + " transactions")
-                        if self.chunks_processed <= self.chunks_total and not self.final_metadata_txn_created:
-                            try:
-                                chunk_bytes = chunks[self.chunks_processed]
-                            except IndexError:
-                                chunk_bytes = None
-                            try:
-                                txn, self.final_metadata_txn_created = getUploadTxn(self.parent.wallet, self.tx_batch[self.chunks_processed], self.chunks_processed, self.chunks_total, chunk_bytes, self.parent.config, self.metadata, self.file_receiver)
-                                self.tx_batch.append(txn)
-                            except NotEnoughFunds as e:
-                                self.show_message("Insufficient funds for file chunk #" + str(self.chunks_processed + 1))
-                                return
-                            self.chunks_processed += 1
-
-                        if self.tx_batch_signed_count < len(self.tx_batch):
-                            self.sign_tx_with_password(self.tx_batch[self.tx_batch_signed_count], sign_done, self.password)
-                        else:
-                            uri = "bitcoinfile:" + self.tx_batch[len(self.tx_batch)-1].txid()
-                            self.bitcoinfileAddr_label.setText(uri)
-                            self.progress_label.setText("Signing complete. Ready to upload.")
-                            self.progress.setHidden(True)
-                            self.is_dirty = False
-                            self.progress.setValue(0)
-                            self.sign_button.setDisabled(True)
-                            self.upload_button.setEnabled(True)
-                            self.upload_button.setDefault(True)
-                            self.activateWindow()
-                            self.raise_()
-                self.sign_tx_with_password(self.tx_batch[0], sign_done, self.password)
+                    uri = "bitcoinfile:" + self.tx_batch[len(self.tx_batch)-1].txid()
+                    self.bitcoinfileAddr_label.setText(uri)
+                    self.progress_label.setText("Signing complete. Ready to upload.")
+                    self.progress.setHidden(True)
+                    self.is_dirty = False
+                    self.progress.setValue(0)
+                    self.sign_button.setDisabled(True)
+                    self.upload_button.setEnabled(True)
+                    self.upload_button.setDefault(True)
+                    self.activateWindow()
+                    self.raise_()
+        self.sign_tx_with_password(self.tx_batch[0], sign_done, self.password)
 
     def sign_tx_with_password(self, tx, callback, password):
         '''Sign the transaction in a separate thread.  When done, calls
@@ -401,7 +455,48 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             task = partial(self.wallet.sign_transaction, tx, password)
         WaitingDialog(self, _('Signing transaction...'), task, on_signed, on_failed)
 
-    def select_file(self):
+
+    def select_svg_file(self):
+        if self.wallet.has_password():
+            if self.password == None:
+                x = self.show_message("Incorrect password.")
+                self.close()
+                return
+            try:
+                self.wallet.check_password(self.password)
+            except InvalidPassword:
+                x = self.show_message("Incorrect password.")
+                self.close()
+                return
+
+        self.progress.setValue(0)
+        self.tx_batch = []
+        self.tx_batch_signed_count = 0
+        self.chunks_processed = 0
+        self.chunks_total = 0
+        self.final_metadata_txn_created = False
+        options = QFileDialog.Options()
+        #options |= QFileDialog.DontUseNativeDialog
+        home = str(Path.home())
+        self.svg_file_path, _ = QFileDialog.getOpenFileName(self, "Select SVG for token.json", home, "svg(*.svg)", options=options)
+        self.svg_path_e.setText(self.svg_file_path)
+        self.make_dirty()
+        # json = self.rebuild_token_json()
+        # self.sign_bfp_txns(json)
+
+    def rebuild_token_json(self):
+        data = {}
+        data['v'] = 0
+        data['update_auth'] = []
+        data['contact'] = {}
+        data['contact']['email'] = self.email_e.text()
+        data['contact']['url'] = self.url_e.text()
+        data['contact']['phone'] = ""
+        with open(self.svg_file_path, "rb") as f:
+                data['icon_svg'] = f.read().decode('utf8')
+        return io.BytesIO(json.dumps(data).encode('utf8'))
+
+    def select_local_document(self):
         if self.wallet.has_password():
             if self.password == None:
                 x = self.show_message("Incorrect password.")
@@ -423,8 +518,8 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         home = str(Path.home())
-        self.filename, _ = QFileDialog.getOpenFileName(self, "Select File to Upload", home, "All Files (*)", options=options)
-        self.sign_txns()
+        self.local_file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Upload", home, "All Files (*)", options=options)
+        self.make_dirty()
         
     def upload(self):
         if not self.is_dirty:
@@ -443,6 +538,9 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                     self.show_error(msg)
                     self.show_error("Upload failed. Try again.")
                     return
+
+                if tx_desc is not None and tx.is_complete():
+                    self.wallet.set_label(tx.txid(), "File Upload: " + str(broadcast_count) + " of " + str(len(self.tx_batch)))
 
                 broadcast_count += 1
                 time.sleep(0.1)
