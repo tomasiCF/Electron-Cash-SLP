@@ -289,45 +289,55 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 return
         else:
             password = None
-
         tx_desc = None
-
         def sign_done(success):
             if success:
                 if not tx.is_complete():
                     show_transaction(tx, self.main_window, None, False, self)
                     self.main_window.do_clear()
                 else:
-                    
                     token_id = tx.txid()
                     if self.token_name_e.text() == '':
                         wallet_name = tx.txid()[0:10]
                     else:
                         wallet_name = self.token_name_e.text()[0:20]
-
                     # Check for duplication error
                     d = self.wallet.token_types.get(token_id)
                     for tid, d in self.wallet.token_types.items():
                         if d['name'] == wallet_name and tid != token_id:
                             wallet_name = wallet_name + "-" + token_id[:3]
                             break
-                    
                     self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name)
+        self.sign_tx_with_password(tx, sign_done, password)
 
-        self.main_window.sign_tx_with_password(tx, sign_done, password)
-        #self.create_button.setDisabled(True)
+    def sign_tx_with_password(self, tx, callback, password):
+        '''Sign the transaction in a separate thread.  When done, calls
+        the callback with a success code of True or False.
+        '''
+        # call hook to see if plugin needs gui interaction
+        run_hook('sign_tx', self, tx)
+
+        def on_signed(result):
+            callback(True)
+        def on_failed(exc_info):
+            self.on_error(exc_info)
+            callback(False)
+
+        if self.main_window.tx_external_keypairs:
+            task = partial(Transaction.sign, tx, self.main_window.tx_external_keypairs)
+        else:
+            task = partial(self.wallet.sign_transaction, tx, password)
+        WaitingDialog(self, _('Signing transaction...'), task, on_signed, on_failed)
 
     def broadcast_transaction(self, tx, token_name, token_wallet_name):
-
         # Capture current TL window; override might be removed on return
-        parent = self.main_window
-
+        parent = self.top_level_window()
         if self.main_window.gui_object.warn_if_no_network(self):
             # Don't allow a useless broadcast when in offline mode. Previous to this we were getting an exception on broadcast.
             return
         elif not self.network.is_connected():
             # Don't allow a potentially very slow broadcast when obviously not connected.
-            parent.show_error(_("Not connected"))
+            #parent.show_error(_("Not connected"))
             return
 
         def broadcast_thread():
@@ -347,23 +357,21 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     if tx.is_complete():
                         self.wallet.set_label(token_id, "SLP Token Created: " + token_wallet_name)
                     if token_name == '':
-                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name in wallet: " + token_wallet_name + "\n" + "TokenId: " + token_id)
+                        parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nTokenId: " + token_id)
                     elif token_name != token_wallet_name:
-                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name in wallet: " + token_wallet_name + "\n" + "Name on blockchain: " + token_name + "\n" + "TokenId: " + token_id)
+                        parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nName on blockchain: " + token_name + "\nTokenId: " + token_id)
                     else:
-                        parent.show_message(_('SLP Token Created.') + '\n\n' + "Name: " + token_name + "\n" + "Token ID: " + token_id)
+                        parent.show_message("SLP Token Created.\n\nName: " + token_name + "\nToken ID: " + token_id)
                 else:
                     if msg.startswith("error: "):
                         msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
-                    parent.show_error(msg)
+                    self.show_error(msg)
+            self.close()
 
-        WaitingDialog(self, _('Creating SLP Token on Bitcoin Cash blockchain...'),
-                    broadcast_thread, broadcast_done, self.main_window.on_error)
-        self.close()
+        WaitingDialog(self, 'Creating SLP Token...', broadcast_thread, broadcast_done, None)
 
     def closeEvent(self, event):
         self.main_window.create_token_dialog = None
-        event.accept()
         try:
             dialogs.remove(self)
         except ValueError:

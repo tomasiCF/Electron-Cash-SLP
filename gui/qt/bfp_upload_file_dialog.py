@@ -367,7 +367,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                             self.chunks_processed += 1
 
                         if self.tx_batch_signed_count < len(self.tx_batch):
-                            self.main_window.sign_tx_with_password(self.tx_batch[self.tx_batch_signed_count], sign_done, self.password)
+                            self.sign_tx_with_password(self.tx_batch[self.tx_batch_signed_count], sign_done, self.password)
                         else:
                             uri = "bitcoinfile:" + self.tx_batch[len(self.tx_batch)-1].txid()
                             self.bitcoinfileAddr_label.setText(uri)
@@ -380,7 +380,26 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                             self.upload_button.setDefault(True)
                             self.activateWindow()
                             self.raise_()
-                self.main_window.sign_tx_with_password(self.tx_batch[0], sign_done, self.password)
+                self.sign_tx_with_password(self.tx_batch[0], sign_done, self.password)
+
+    def sign_tx_with_password(self, tx, callback, password):
+        '''Sign the transaction in a separate thread.  When done, calls
+        the callback with a success code of True or False.
+        '''
+        # call hook to see if plugin needs gui interaction
+        run_hook('sign_tx', self, tx)
+
+        def on_signed(result):
+            callback(True)
+        def on_failed(exc_info):
+            self.on_error(exc_info)
+            callback(False)
+
+        if self.main_window.tx_external_keypairs:
+            task = partial(Transaction.sign, tx, self.main_window.tx_external_keypairs)
+        else:
+            task = partial(self.wallet.sign_transaction, tx, password)
+        WaitingDialog(self, _('Signing transaction...'), task, on_signed, on_failed)
 
     def select_file(self):
         if self.wallet.has_password():
@@ -449,4 +468,4 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         try:
             dialogs.remove(self)
         except ValueError:
-            pass
+             pass
