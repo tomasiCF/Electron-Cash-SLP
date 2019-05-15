@@ -158,30 +158,25 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.file_org_addr_e, row, 1)
         row += 1
 
-        # File Receiver Checkbox
-        self.receiver_addr_cb = cb = QCheckBox(_('Send file to a BCH address'))
-        self.receiver_addr_cb.setChecked(False)
-        grid.addWidget(self.receiver_addr_cb, row, 1)
-        cb.clicked.connect(self.toggle_receiver_addr)
-        row += 1
+        # # File Receiver Checkbox
+        # self.receiver_addr_cb = cb = QCheckBox(_('Send file to a BCH address'))
+        # self.receiver_addr_cb.setChecked(False)
+        # grid.addWidget(self.receiver_addr_cb, row, 1)
+        # cb.clicked.connect(self.toggle_receiver_addr)
+        # row += 1
 
-        # Specific file receiver
-        self.file_receiver_label = QLabel(_('Receiver Address:'))
-        self.file_receiver_label.setHidden(True)
-        grid.addWidget(self.file_receiver_label, row, 0)
-        self.file_receiver_e = QLineEdit("")
-        self.file_receiver_e.setHidden(True)
-        self.file_receiver_e.setReadOnly(False)
-        self.file_receiver_e.setFixedWidth(570)
-        self.file_receiver_e.textChanged.connect(self.make_dirty)
-        grid.addWidget(self.file_receiver_e, row, 1)
-        row += 1
+        # # Specific file receiver
+        # self.file_receiver_label = QLabel(_('Receiver Address:'))
+        # self.file_receiver_label.setHidden(True)
+        # grid.addWidget(self.file_receiver_label, row, 0)
+        # self.file_receiver_e = QLineEdit("")
+        # self.file_receiver_e.setHidden(True)
+        # self.file_receiver_e.setReadOnly(False)
+        # self.file_receiver_e.setFixedWidth(570)
+        # self.file_receiver_e.textChanged.connect(self.make_dirty)
+        # grid.addWidget(self.file_receiver_e, row, 1)
+        # row += 1
 
-        # Estimated Fees
-        grid.addWidget(QLabel(_('Upload Cost (satoshis):')), row, 0)
-        self.upload_cost_label = QLabel("")
-        grid.addWidget(self.upload_cost_label, row, 1)
-        row += 1
 
         # File hash
         grid.addWidget(QLabel(_('Token Document sha256:')), row, 0)
@@ -200,6 +195,12 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         self.bitcoinfileAddr_label.setDisabled(True)
         self.bitcoinfileAddr_label.setFixedWidth(570)
         grid.addWidget(self.bitcoinfileAddr_label, row, 1)
+        row += 1
+
+        # Estimated Fees
+        grid.addWidget(QLabel(_('Upload Cost (satoshis):')), row, 0)
+        self.upload_cost_label = QLabel("")
+        grid.addWidget(self.upload_cost_label, row, 1)
 
         self.progress_label = QLabel("")
         vbox.addWidget(self.progress_label)
@@ -265,11 +266,11 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         if not self.file_org_addr_e.isVisible():
             self.file_org_addr_e.setText('')
 
-    def toggle_receiver_addr(self):
-        self.file_receiver_e.setVisible(not self.file_receiver_e.isVisible())
-        self.file_receiver_label.setVisible(not self.file_receiver_label.isVisible())
-        if not self.file_receiver_e.isVisible():
-            self.file_receiver_e.setText('')
+    # def toggle_receiver_addr(self):
+    #     self.file_receiver_e.setVisible(not self.file_receiver_e.isVisible())
+    #     self.file_receiver_label.setVisible(not self.file_receiver_label.isVisible())
+    #     if not self.file_receiver_e.isVisible():
+    #         self.file_receiver_e.setText('')
 
     def make_dirty(self):
         self.is_dirty = True
@@ -311,17 +312,17 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                 self.show_message(_("Originating address checksum fails."))
                 return
 
-        if self.file_receiver_e.text() != '':
-            try: 
-                #addr = Address.from_string(self.file_receiver_e.text())
-                Address.from_string(self.file_receiver_e.text())
-            except Base58Error:
-                self.show_message(_("Receiver address checksum fails."))
-                return
+        # if self.file_receiver_e.text() != '':
+        #     try: 
+        #         #addr = Address.from_string(self.file_receiver_e.text())
+        #         Address.from_string(self.file_receiver_e.text())
+        #     except Base58Error:
+        #         self.show_message(_("Receiver address checksum fails."))
+        #         return
             
-            self.file_receiver = Address.from_string(self.file_receiver_e.text())
-        else:
-            self.file_receiver = None
+        #     self.file_receiver = Address.from_string(self.file_receiver_e.text())
+        # else:
+        #     self.file_receiver = None
     
         if self.local_file_path == '' or self.local_file_path == None:
             filename = 'token.json'
@@ -492,8 +493,11 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         data['contact']['email'] = self.email_e.text()
         data['contact']['url'] = self.url_e.text()
         data['contact']['phone'] = ""
-        with open(self.svg_file_path, "rb") as f:
-                data['icon_svg'] = f.read().decode('utf8')
+        try:
+            with open(self.svg_file_path, "rb") as f:
+                    data['icon_svg'] = f.read().decode('utf8')
+        except:
+            data['icon_svg'] = ""
         return io.BytesIO(json.dumps(data).encode('utf8'))
 
     def select_local_document(self):
@@ -530,7 +534,6 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             broadcast_count = 0
             # Broadcast all transaction to the nexwork
             for tx in self.tx_batch:
-                tx_desc = None
                 status, msg = self.network.broadcast_transaction(tx)
                 # print(status)
                 # print(msg)
@@ -539,8 +542,11 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                     self.show_error("Upload failed. Try again.")
                     return
 
-                if tx_desc is not None and tx.is_complete():
-                    self.wallet.set_label(tx.txid(), "File Upload: " + str(broadcast_count) + " of " + str(len(self.tx_batch)))
+                if tx.is_complete():
+                    if broadcast_count == len(self.tx_batch)-1:
+                        self.wallet.set_label(tx.txid(), "SLP token.json file pointer")
+                    #else:
+                        #self.wallet.set_label(tx.txid(), "token.json upload (chunk " + str(broadcast_count+1) + " of " + str(len(self.tx_batch))+ ")")
 
                 broadcast_count += 1
                 time.sleep(0.1)

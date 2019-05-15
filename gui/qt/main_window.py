@@ -681,9 +681,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         tools_menu.addAction(_("&Sign/verify message"), self.sign_verify_message)
         tools_menu.addAction(_("&Encrypt/decrypt message"), self.encrypt_message)
         tools_menu.addSeparator()
-        tools_menu.addAction(_("Upload a file using BFP"), lambda: BitcoinFilesUploadDialog(self, None, True, "Upload a File Using BFP"))
-        tools_menu.addAction(_("Download a file using BFP"), lambda: BfpDownloadFileDialog(self,))
-        tools_menu.addSeparator()
 
         paytomany_menu = tools_menu.addAction(_("&Pay to many"), self.paytomany)
 
@@ -692,7 +689,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("&From text"), self.do_process_from_text)
         raw_transaction_menu.addAction(_("&From the blockchain"), self.do_process_from_txid)
         raw_transaction_menu.addAction(_("&From QR code"), self.read_tx_from_qrcode)
-        self.raw_transaction_menu = raw_transaction_menu
+        tools_menu.addSeparator()
+
+        slp_tools_menu = tools_menu.addMenu(_("SLP tokens"))
+        slp_tools_menu.addAction(_("Update token.json"), lambda: BitcoinFilesUploadDialog(self, None, True, "Update token.json"))
+        slp_tools_menu.addAction(_("Download a file"), lambda: BfpDownloadFileDialog(self,))
+
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))

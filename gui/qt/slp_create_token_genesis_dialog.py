@@ -150,7 +150,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         # b.setDefault(True)
         # hbox.addWidget(self.hash_button)
 
-        self.tok_doc_button = b = QPushButton(_("Upload a Token Document..."))
+        self.tok_doc_button = b = QPushButton(_("Upload Token.json Document..."))
         self.tok_doc_button.setAutoDefault(False)
         self.tok_doc_button.setDefault(False)
         b.clicked.connect(self.show_upload)
