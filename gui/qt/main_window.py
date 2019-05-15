@@ -184,10 +184,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_optional_tab(tabs, self.addresses_tab, QIcon(":icons/tab_addresses.png"), _("&Addresses"), "addresses")
         add_optional_tab(tabs, self.utxo_tab, QIcon(":icons/tab_coins.png"), _("Co&ins"), "utxo")
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
-        add_optional_tab(tabs, self.slp_mgt_tab, QIcon(":icons/tab_slp_icon.png"), _("Tokens"), "tokens")
         add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.png"), _("Address Converter"), "converter", True)
         add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console")
-        add_optional_tab(tabs, self.slp_history_tab, QIcon(":icons/tab_slp_icon.png"), _("SLP History"), "slp_history", True)
+        if self.is_slp_wallet:
+            add_optional_tab(tabs, self.slp_mgt_tab, QIcon(":icons/tab_slp_icon.png"), _("Tokens"), "tokens")
+            add_optional_tab(tabs, self.slp_history_tab, QIcon(":icons/tab_slp_icon.png"), _("SLP History"), "slp_history", True)
 
 
         tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -441,27 +442,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self._warn_if_invalid_testnet_wallet()
         self.watching_only_changed()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
-        """ If using SLP for the first time, turn it on by default. """
         if self.is_slp_wallet:
-            self.config.set_key('enable_opreturn', False)
-            self.message_opreturn_e.setHidden(True)
-            self.opreturn_rawhex_cb.setHidden(True)
-            self.opreturn_label.setHidden(True)
-            self.config.set_key('show_slp_history_tab',True)
-            self.config.set_key('show_tokens_tab',True)
             self.toggle_cashaddr(2, True)
-            self.update_receive_address_widget()
-            self.toggle_tab(self.slp_mgt_tab, 1)
-            self.toggle_tab(self.slp_history_tab, 1)
-            Address.show_cashaddr(2)
         else:
             self.toggle_cashaddr(1, True)
-            self.slp_amount_e.setAmount(0)
-            self.slp_amount_e.setText("")
-            self.token_type_combo.setCurrentIndex(0)
-            self.toggle_tab(self.slp_mgt_tab, 2)
-            self.toggle_tab(self.slp_history_tab, 2)
-            Address.show_cashaddr(1)
+        self.update_receive_address_widget()
         self.address_list.update()
         self.utxo_list.update()
         self.slp_mgt_tab.update()
@@ -676,9 +661,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_toggle_action(view_menu, self.utxo_tab)
         add_toggle_action(view_menu, self.contacts_tab)
         add_toggle_action(view_menu, self.converter_tab)
-        add_toggle_action(view_menu, self.slp_history_tab)
         add_toggle_action(view_menu, self.console_tab)
-        add_toggle_action(view_menu, self.slp_mgt_tab)
+        if self.is_slp_wallet:
+            add_toggle_action(view_menu, self.slp_mgt_tab)
+            add_toggle_action(view_menu, self.slp_history_tab)
 
         tools_menu = menubar.addMenu(_("&Tools"))
 
@@ -1038,9 +1024,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(label, 0, 0)
         grid.addWidget(self.receive_address_e, 0, 1, 1, -1)
 
-        self.show_slp_addr_btn = QPushButton(_('Show SLP Address'))
-        self.show_slp_addr_btn.clicked.connect(self.addr_toggle_slp)
-        grid.addWidget(self.show_slp_addr_btn, 1, 1)
+        if self.is_slp_wallet:
+            self.show_slp_addr_btn = QPushButton(_('Show SLP Address'))
+            self.show_slp_addr_btn.clicked.connect(self.addr_toggle_slp)
+            grid.addWidget(self.show_slp_addr_btn, 1, 1)
 
         self.receive_message_e = QLineEdit()
         label = QLabel(_('&Description'))
@@ -1127,19 +1114,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     slf = weakSelf()
                     if slf:
                         slf.check_and_reset_receive_address_if_needed()
-                c, u, x = self.main_window.wallet.get_balance()
-                bal = c + u - self.main_window.wallet.get_slp_locked_balance()
-                if bal < 1000:
-                    if not self.low_balance_warning_shown:
-                        self.main_window.show_warning("Low BCH balance.\n\nCreating and sending SLP tokens requires Bitcoin Cash to cover transaction fees.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
+                if self.main_window.is_slp_wallet:
+                    c, u, x = self.main_window.wallet.get_balance()
+                    bal = c + u - self.main_window.wallet.get_slp_locked_balance()
+                    if bal < 1000:
+                        if not self.low_balance_warning_shown:
+                            self.main_window.show_warning("Low BCH balance.\n\nCreating and sending SLP tokens requires Bitcoin Cash to cover transaction fees.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
+                        self.main_window.toggle_cashaddr(1, True)
+                        self.low_balance_warning_shown = False
+                    else:
+                        self.main_window.toggle_cashaddr(2, True)
+                    if Address.FMT_UI == Address.FMT_SLPADDR:
+                        self.main_window.show_slp_addr_btn.setText("Show BCH Address")
+                    else:
+                        self.main_window.show_slp_addr_btn.setText("Show SLP Address")
+                else:
                     self.main_window.toggle_cashaddr(1, True)
-                    self.low_balance_warning_shown = False
-                else:
-                    self.main_window.toggle_cashaddr(2, True)
-                if Address.FMT_UI == Address.FMT_SLPADDR:
-                    self.main_window.show_slp_addr_btn.setText("Show BCH Address")
-                else:
-                    self.main_window.show_slp_addr_btn.setText("Show SLP Address")
 
 
         w = ReceiveTab()
@@ -1345,10 +1335,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.qr_window:
             self.qr_window.set_content(self, self.receive_address_e.text(), amount,
                                        message, uri)
-        if Address.FMT_UI == Address.FMT_SLPADDR:
-            self.show_slp_addr_btn.setText("Show BCH Address")
-        else:
-            self.show_slp_addr_btn.setText("Show SLP Address")
+        if self.is_slp_wallet:
+            if Address.FMT_UI == Address.FMT_SLPADDR:
+                self.show_slp_addr_btn.setText("Show BCH Address")
+            else:
+                self.show_slp_addr_btn.setText("Show SLP Address")
 
     def on_slptok(self):
         self.slp_token_id = self.token_type_combo.currentData()
@@ -2411,8 +2402,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         legacy_address = ButtonsLineEdit()
         legacy_address.addCopyButton()
         legacy_address.setReadOnly(True)
-        slp_address = QLineEdit()
+        slp_address = ButtonsLineEdit()
         slp_address.setReadOnly(True)
+        slp_address.addCopyButton()
         widgets = [
             (cash_address, Address.FMT_CASHADDR),
             (legacy_address, Address.FMT_LEGACY),
@@ -2464,7 +2456,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return w
 
     def create_list_tab(self, l, list_header=None):
-        w = QWidget()
+        class ListTab(QWidget):
+            def showEvent(self, e):
+                super().showEvent(e)
+                if self.main_window.is_slp_wallet:
+                    self.main_window.toggle_cashaddr(2, True)
+                else: 
+                    self.main_window.toggle_cashaddr(1, True)
+
+        w = ListTab()
+        w.main_window = self
         w.searchable_list = l
         vbox = QVBoxLayout()
         w.setLayout(vbox)
@@ -3907,39 +3908,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             opret_cb.setChecked(False)
             opret_cb.setDisabled(True)
         tx_widgets.append((opret_cb,None))
-
-        def on_slptok_pref(x):
-            x = bool(x)
-
-            wallet = self.wallet
-
-            self.slp_amount_e.setHidden(not x)
-            self.slp_max_button.setHidden(not x)
-            self.token_type_combo.setHidden(not x)
-            self.slp_amount_label.setHidden(not x)
-            self.slp_token_type_label.setHidden(not x)
-
-            if x:
-                self.toggle_tab(self.slp_mgt_tab, 1)
-                self.toggle_tab(self.slp_history_tab, 1)
-                opret_cb.setChecked(False)
-                opret_cb.setDisabled(True)
-                self.config.set_key('enable_opreturn',False)
-                self.toggle_cashaddr(2, True)
-            else:
-                self.toggle_tab(self.slp_mgt_tab, 2)
-                self.toggle_tab(self.slp_history_tab, 2)
-                opret_cb.setEnabled(True)
-                self.slp_amount_e.setAmount(0)
-                self.slp_amount_e.setText("")
-                self.token_type_combo.setCurrentIndex(0)
-                self.toggle_cashaddr(1, True)
-
-            if x: wallet.activate_slp()
-
-            self.update_token_type_combo()
-            self.update_cashaddr_icon()
-            self.update_tabs()
 
         # Schnorr
         use_schnorr_cb = QCheckBox(_("Enable Schnorr signatures"))
