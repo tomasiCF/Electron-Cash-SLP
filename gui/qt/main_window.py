@@ -444,6 +444,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         if self.is_slp_wallet:
             self.toggle_cashaddr(2, True)
+            self.toggle_tab(self.slp_mgt_tab, 1)
+            self.toggle_tab(self.slp_history_tab, 1)
         else:
             self.toggle_cashaddr(1, True)
         self.update_receive_address_widget()
