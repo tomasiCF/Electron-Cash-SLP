@@ -526,11 +526,18 @@ class Transaction:
                 continue
             pre_hash = Hash(bfh(self.serialize_preimage(i)))
             sig_bytes = bfh(sig)
+            added = False
+            reason = []
             for j, pubkey in enumerate(pubkeys):
                 # see which pubkey matches this sig (in non-multisig only 1 pubkey, in multisig may be multiple pubkeys)
-                if self.verify_signature(bfh(pubkey), sig_bytes, pre_hash):
+                if self.verify_signature(bfh(pubkey), sig_bytes, pre_hash, reason):
                     print_error("adding sig", i, j, pubkey, sig_final)
                     self._inputs[i]['signatures'][j] = sig_final
+                    added = True
+            if not added:
+                resn = ', '.join(reversed(reason)) if reason else ''
+                print_error("failed to add signature {} for any pubkey for reason(s): '{}' ; pubkey(s) / sig / pre_hash = ".format(i, resn),
+                            pubkeys, '/', sig, '/', bh2u(pre_hash))
         # redo raw
         self.raw = self.serialize()
 
