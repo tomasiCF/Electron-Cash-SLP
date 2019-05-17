@@ -692,7 +692,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         tools_menu.addSeparator()
 
         slp_tools_menu = tools_menu.addMenu(_("SLP tokens"))
-        slp_tools_menu.addAction(_("Update token.json"), lambda: BitcoinFilesUploadDialog(self, None, True, "Update token.json"))
+        slp_tools_menu.addAction(_("Update token.json"), lambda: BitcoinFilesUploadDialog(self, is_new_token=False, show_on_create=True, screen_name="Update token.json"))
         slp_tools_menu.addAction(_("Download a file"), lambda: BfpDownloadFileDialog(self,))
 
         run_hook('init_menubar_tools', self, tools_menu)

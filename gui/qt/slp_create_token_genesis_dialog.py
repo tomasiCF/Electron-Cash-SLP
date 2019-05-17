@@ -54,13 +54,13 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         row = 0
 
         msg = _('An optional name string embedded in the token genesis transaction.')
-        grid.addWidget(HelpLabel(_('Token Name (optional):'), msg), row, 0)
+        grid.addWidget(HelpLabel(_('Token Name:'), msg), row, 0)
         self.token_name_e = QLineEdit()
         grid.addWidget(self.token_name_e, row, 1)
         row += 1
 
         msg = _('An optional ticker symbol string embedded into the token genesis transaction.')
-        grid.addWidget(HelpLabel(_('Ticker Symbol (optional):'), msg), row, 0)
+        grid.addWidget(HelpLabel(_('Ticker Symbol:'), msg), row, 0)
         self.token_ticker_e = QLineEdit()
         self.token_ticker_e.setFixedWidth(110)
         self.token_ticker_e.textChanged.connect(self.upd_token)
@@ -68,18 +68,28 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         row += 1
 
         msg = _('An optional URL string embedded into the token genesis transaction.')
-        grid.addWidget(HelpLabel(_('Document URL (optional):'), msg), row, 0)
+        grid.addWidget(HelpLabel(_('Document URI:'), msg), row, 0)
+        hbox = QHBoxLayout()
         self.token_url_e = QLineEdit()
-        self.token_url_e.setFixedWidth(560)
+        self.token_url_e.setAlignment(Qt.AlignLeft)
+        #self.token_url_e.setFixedWidth(560)
         self.token_url_e.textChanged.connect(self.upd_token)
-        grid.addWidget(self.token_url_e, row, 1)
+        self.tok_doc_button = b = QPushButton(_("Build Token.json..."))
+        self.tok_doc_button.setAutoDefault(False)
+        self.tok_doc_button.setDefault(False)
+        b.clicked.connect(self.show_upload)
+        b.setDefault(True)
+        hbox.addWidget(self.tok_doc_button)
+        hbox.addWidget(self.token_url_e)
+        grid.addLayout(hbox, row, 1)
         row += 1
 
         msg = _('An optional hash hexidecimal bytes embedded into the token genesis transaction for hashing the document file contents at the URL provided above.')
-        grid.addWidget(HelpLabel(_('Document Hash (optional):'), msg), row, 0)
+        grid.addWidget(HelpLabel(_('Document Hash:'), msg), row, 0)
         self.token_dochash_e = QLineEdit()
         self.token_dochash_e.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
         self.token_dochash_e.setFixedWidth(560)
+        self.token_dochash_e.setAlignment(Qt.AlignLeft)
         self.token_dochash_e.textChanged.connect(self.upd_token)
         grid.addWidget(self.token_dochash_e, row, 1)
         row += 1
@@ -150,13 +160,6 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         # b.setDefault(True)
         # hbox.addWidget(self.hash_button)
 
-        self.tok_doc_button = b = QPushButton(_("Upload Token.json Document..."))
-        self.tok_doc_button.setAutoDefault(False)
-        self.tok_doc_button.setDefault(False)
-        b.clicked.connect(self.show_upload)
-        b.setDefault(True)
-        hbox.addWidget(self.tok_doc_button)
-
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
         self.create_button = b = QPushButton(_("Create New Token")) #if self.provided_token_name is None else _("Change"))
         b.clicked.connect(self.create_token)
@@ -170,7 +173,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.token_name_e.setFocus()
 
     def show_upload(self):
-        d = BitcoinFilesUploadDialog(self)
+        d = BitcoinFilesUploadDialog(self, is_new_token=True, upload_addr=self.token_pay_to_e.text())
         dialogs.append(d)
         d.setModal(True)
         d.show()
@@ -276,7 +279,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             return
 
         if preview:
-            show_transaction(tx, self.main_window, None, False, self)
+            show_transaction(tx, self.main_window, None, False, self, self)
             return
 
         msg = []
@@ -293,7 +296,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         def sign_done(success):
             if success:
                 if not tx.is_complete():
-                    show_transaction(tx, self.main_window, None, False, self)
+                    show_transaction(tx, self.main_window, None, False, self, self)
                     self.main_window.do_clear()
                 else:
                     token_id = tx.txid()

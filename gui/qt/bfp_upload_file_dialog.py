@@ -33,7 +33,7 @@ dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
 class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
 
-    def __init__(self, parent, file_receiver=None, show_on_create=False, screen_name="Upload Token Document"):
+    def __init__(self, parent, *, is_new_token, file_receiver=None, show_on_create=False, screen_name="Build and Upload 'token.json' Document to Blockchain", upload_addr=None):
         # We want to be a top-level window
         QDialog.__init__(self, parent)
 
@@ -97,7 +97,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         row += 1
 
         # Contact Email
-        grid.addWidget(QLabel(_('Contact Email:')), row, 0)
+        grid.addWidget(QLabel(_('Support Email:')), row, 0)
         self.email_e = QLineEdit("")
         self.email_e.setReadOnly(False)
         self.email_e.setFixedWidth(570)
@@ -106,7 +106,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         row += 1
 
         # Contact URL:
-        grid.addWidget(QLabel(_('Contact URL:')), row, 0)
+        grid.addWidget(QLabel(_('Support URL:')), row, 0)
         self.url_e = QLineEdit("")
         self.url_e.setReadOnly(False)
         self.url_e.setFixedWidth(570)
@@ -114,47 +114,64 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.url_e, row, 1)
         row += 1
 
+        # Contact URL:
+        grid.addWidget(QLabel(_('Support Phone:')), row, 0)
+        self.phone_e = QLineEdit("")
+        self.phone_e.setReadOnly(False)
+        self.phone_e.setFixedWidth(570)
+        self.phone_e.textChanged.connect(self.make_dirty)
+        grid.addWidget(self.phone_e, row, 1)
+        row += 1
+
         # Token.json builder
-        grid.addWidget(QLabel(_('Token.json Icon SVG:')), row, 0)
+        grid.addWidget(QLabel(_('Token Logo:')), row, 0)
         hbox = QHBoxLayout()
         self.svg_path_e = QLineEdit("")
         self.svg_path_e.setReadOnly(True)
-        self.svg_path_e.setFixedWidth(450)
-        hbox.addWidget(self.svg_path_e)
+        #self.svg_path_e.setFixedWidth(450)
 
-        b = QPushButton(_("Browse..."))
+        b = QPushButton(_("Browse SVG..."))
         b.clicked.connect(self.select_svg_file)
         hbox.addWidget(b)
-        
+        hbox.addWidget(self.svg_path_e)
         grid.addLayout(hbox, row, 1)
         row += 1
 
         # Previous file hash
-        grid.addWidget(QLabel(_('Previous file sha256 (manual entry):')), row, 0)
+        l = QLabel(_('Previous file sha256 (manual entry):'))
+        grid.addWidget(l, row, 0)
         self.prev_hash = QLineEdit("")
         self.prev_hash.setReadOnly(False)
+        
         self.prev_hash.setFixedWidth(570)
         self.prev_hash.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
         self.prev_hash.textChanged.connect(self.make_dirty)
         grid.addWidget(self.prev_hash, row, 1)
+        if is_new_token:
+            l.setHidden(True)
+            self.prev_hash.setHidden(True)
         row += 1
 
         # Originating address checkbox
         self.org_addr_cb = cb = QCheckBox(_('Upload file using a specific wallet address'))
-        self.org_addr_cb.setChecked(False)
+        self.org_addr_cb.setChecked(True)
+        self.org_addr_cb.setDisabled(False)
         grid.addWidget(self.org_addr_cb, row, 1)
         cb.clicked.connect(self.toggle_org_addr)
         row += 1
 
         # Specific file origination address
-        self.org_add_label = QLabel(_('Originating Address for Upload:'))
-        self.org_add_label.setHidden(True)
+        self.org_add_label = QLabel(_('File Notarized By:'))
         grid.addWidget(self.org_add_label, row, 0)
         self.file_org_addr_e = QLineEdit("")
-        self.file_org_addr_e.setHidden(True)
-        self.file_org_addr_e.setReadOnly(False)
         self.file_org_addr_e.setFixedWidth(570)
-        self.file_org_addr_e.textChanged.connect(self.make_dirty)
+        if(upload_addr and upload_addr != ""):
+            self.org_addr_cb.setDisabled(True)
+            self.file_org_addr_e.setDisabled(True)
+            self.file_org_addr_e.setText(upload_addr)
+        else:
+            self.file_org_addr_e.textChanged.connect(self.make_dirty)
+
         grid.addWidget(self.file_org_addr_e, row, 1)
         row += 1
 
@@ -179,22 +196,26 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
 
 
         # File hash
-        grid.addWidget(QLabel(_('Token Document sha256:')), row, 0)
-        self.hash = QLineEdit("")
-        self.hash.setReadOnly(True)
-        self.hash.setDisabled(True)
-        self.hash.setFixedWidth(570)
-        self.hash.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
-        grid.addWidget(self.hash, row, 1)
+        self.hash_label = l = QLabel(_('Token Document sha256:'))
+        l.setHidden(True)
+        grid.addWidget(l, row, 0)
+        self.hash_e = QLineEdit("")
+        self.hash_e.setDisabled(True)
+        self.hash_e.setHidden(True)
+        self.hash_e.setFixedWidth(570)
+        self.hash_e.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+        grid.addWidget(self.hash_e, row, 1)
         row += 1
 
         # Token Document URI
-        grid.addWidget(QLabel(_('Token Document URI:')), row, 0)
-        self.bitcoinfileAddr_label = QLineEdit("")
-        self.bitcoinfileAddr_label.setReadOnly(True)
-        self.bitcoinfileAddr_label.setDisabled(True)
-        self.bitcoinfileAddr_label.setFixedWidth(570)
-        grid.addWidget(self.bitcoinfileAddr_label, row, 1)
+        self.bitcoinfileId_label = l = QLabel(_('Token Document URI:'))
+        l.setHidden(True)
+        grid.addWidget(l, row, 0)
+        self.bitcoinfileId_e = QLineEdit("")
+        self.bitcoinfileId_e.setDisabled(True)
+        self.bitcoinfileId_e.setHidden(True)
+        self.bitcoinfileId_e.setFixedWidth(570)
+        grid.addWidget(self.bitcoinfileId_e, row, 1)
         row += 1
 
         # Estimated Fees
@@ -240,14 +261,14 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         hbox = QHBoxLayout()
         vbox.addLayout(hbox)
 
-        warnpm = QIcon(":icons/warning.png").pixmap(20,20)
+        #warnpm = QIcon(":icons/warning.png").pixmap(20,20)
 
-        l = QLabel(); l.setPixmap(warnpm)
-        hbox.addWidget(l)
-        hbox.addWidget(QLabel(_('            WARNING: The selected file will be uploaded to the blockchain and be permanently part of the public record.')))
-        l = QLabel(); l.setPixmap(warnpm)
-        hbox.addStretch(1)
-        hbox.addWidget(l)
+        #l = QLabel(); l.setPixmap(warnpm)
+        #hbox.addWidget(l)
+        #hbox.addWidget(QLabel(_('            WARNING: The selected file will be uploaded to the blockchain and be permanently part of the public record.')))
+        #l = QLabel(); l.setPixmap(warnpm)
+        #hbox.addStretch(1)
+        #hbox.addWidget(l)
 
         # check if self.password is needed for wallet
         if parent.wallet.has_password():
@@ -284,6 +305,10 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         self.upload_cost_label.setText('')
         self.sign_button.setEnabled(True)
         self.sign_button.setDefault(True)
+        self.hash_e.setHidden(True)
+        self.hash_label.setHidden(True)
+        self.bitcoinfileId_label.setHidden(True)
+        self.bitcoinfileId_e.setHidden(True)
 
     def sign_bfp_txns(self):
         if self.local_file_path == "" or self.local_file_path == None:
@@ -335,10 +360,10 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         #self.select_file_button.setDefault(False)
         #with open(self.local_file_path, "rb") as f:
         # clear fields before re-populating
-        self.hash.setText('')
+        self.hash_e.setText('')
         #self.path.setText('')
         self.upload_cost_label.setText('')
-        self.bitcoinfileAddr_label.setText('')
+        self.bitcoinfileId_e.setText('')
 
         bytes = file_data.read()
         if len(bytes) > 5261:
@@ -346,7 +371,9 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             return
         import hashlib
         readable_hash = hashlib.sha256(bytes).hexdigest()
-        self.hash.setText(readable_hash)
+        self.hash_e.setText(readable_hash)
+        self.hash_label.setHidden(False)
+        self.hash_e.setHidden(False)
         self.metadata['file_sha256'] = readable_hash
 
         #self.path.setText(self.local_file_path)
@@ -369,7 +396,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             self.tx_batch.append(getFundingTxn(self.parent.wallet, addr, cost, self.parent.config))
             self.progress_label.setText('')
         except NotEnoughFunds:
-            self.show_message("Insufficient funds.\n\nYou must have a CONFIRMED balance of at least: " + str(cost) + " satoshis.")
+            self.show_message("Insufficient confirmed funds.\n\nYou must have a CONFIRMED balance of at least: " + str(cost) + " satoshis.\n\nPlease check that your wallet has sufficient funds.  You may need to wait for the next block.")
             self.progress_label.setText('')
             self.local_file_path = None
             self.make_dirty()
@@ -425,7 +452,9 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                     self.sign_tx_with_password(self.tx_batch[self.tx_batch_signed_count], sign_done, self.password)
                 else:
                     uri = "bitcoinfile:" + self.tx_batch[len(self.tx_batch)-1].txid()
-                    self.bitcoinfileAddr_label.setText(uri)
+                    self.bitcoinfileId_e.setText(uri)
+                    self.bitcoinfileId_e.setHidden(False)
+                    self.bitcoinfileId_label.setHidden(False)
                     self.progress_label.setText("Signing complete. Ready to upload.")
                     self.progress.setHidden(True)
                     self.is_dirty = False
@@ -488,11 +517,11 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
     def rebuild_token_json(self):
         data = {}
         data['v'] = 0
-        data['update_auth'] = []
+        data['auth'] = []
         data['contact'] = {}
         data['contact']['email'] = self.email_e.text()
         data['contact']['url'] = self.url_e.text()
-        data['contact']['phone'] = ""
+        data['contact']['phone'] = self.phone_e.text()
         try:
             with open(self.svg_file_path, "rb") as f:
                     data['icon_svg'] = f.read().decode('utf8')
@@ -554,11 +583,14 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                 self.progress.setValue(broadcast_count)
                 QApplication.processEvents()
 
-            self.progress_label.setText("Broadcasting complete.")
+            self.progress_label.setText("File upload complete.")
             self.progress.setHidden(True)
             try:
-                self.parent.token_dochash_e.setText(self.hash.text())
-                self.parent.token_url_e.setText(self.bitcoinfileAddr_label.text())
+                self.parent.token_dochash_e.setText(self.hash_e.text())
+                self.parent.token_dochash_e.setDisabled(True)
+                self.parent.token_url_e.setText(self.bitcoinfileId_e.text())
+                self.parent.token_url_e.setDisabled(True)
+                self.parent.token_url_e.setAlignment(Qt.AlignLeft)
             except AttributeError:
                 pass
 
