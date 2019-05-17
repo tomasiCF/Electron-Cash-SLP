@@ -69,6 +69,58 @@ build_secp256k1() {
 }
 build_secp256k1
 
+build_zbar() {
+    info "Building libzbar..."
+    (
+        set -e
+        build_dll() {
+            export SOURCE_DATE_EPOCH=1530212462
+            echo "libzbar_la_LDFLAGS += -Wc,-static" >> zbar/Makefile.am
+            echo "LDFLAGS += -Wc,-static" >> Makefile.am
+            autoreconf -vfi || fail "Could not run autoreconf for zbar"
+            # Note: It's really important that you set --build and --host when running configure
+            # Otherwise weird voodoo magic happens with Docker and Wine. Also for correctness GNU
+            # autoconf docs say you should.
+            # https://www.gnu.org/software/autoconf/manual/autoconf-2.69/html_node/Hosts-and-Cross_002dCompilation.html
+            LDFLAGS="-Wl,--no-insert-timestamp" ./configure \
+                --host=$1 \
+                --build=x86_64-pc-linux-gnu \
+                --with-x=no \
+                --enable-pthread=no \
+                --enable-doc=no \
+                --enable-video=yes \
+                --with-directshow=yes \
+                --with-jpeg=no \
+                --with-python=no \
+                --with-gtk=no \
+                --with-qt=no \
+                --with-java=no \
+                --with-imagemagick=no \
+                --with-dbus=no \
+                --enable-codes=qrcode \
+                --disable-dependency-tracking \
+                --disable-static \
+                --enable-shared || fail "Could not run ./configure for zbar"
+            make -j4 || fail "Could not build zbar"
+            ${1}-strip zbar/.libs/libzbar-0.dll
+        }
+
+        pushd "$here"/../zbar || fail "Could not chdir to zbar"
+        LIBZBAR_VERSION="11e819815be2de88b64b985605a3386a95079245" # mchehab master as of 2019-05-19
+        git checkout $LIBZBAR_VERSION || fail "Could not check out zbar $LIBZBAR_VERSION"
+        git clean -f -x -q
+
+        build_dll i686-w64-mingw32 # 64-bit would be: x86_64-w64-mingw32
+        mv zbar/.libs/libzbar-0.dll libzbar-0.dll || fail "Could not find generated DLL"
+
+        find -exec touch -d '2000-11-11T11:11:11+00:00' {} +
+
+        popd
+    ) || fail "Could not build libzbar"
+    info "Build of libzbar finished"
+}
+build_zbar
+
 prepare_wine() {
     info "Preparing Wine..."
     (
