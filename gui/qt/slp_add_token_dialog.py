@@ -268,6 +268,17 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
                 cursor.insertText(showstr, f_normal)
             cursor.insertBlock()
 
+        # try to auto-fill name input
+        name_ext = ''
+        for key in [ 'ticker', 'token_name' ]:
+            if self.token_name_e.text() == '' and slpMsg.op_return_fields[key] != b'':
+                base_name = slpMsg.op_return_fields[key].decode("utf-8")
+                for k,v in self.wallet.token_types.items():
+                    if v['name'] == base_name:
+                        name_ext = "-" + self.token_id_e.text()[:3]
+                self.token_name_e.setText(base_name + name_ext)
+                break
+
         self.newtoken_decimals = slpMsg.op_return_fields['decimals']
         cursor.insertText(_('Decimals:') + ' ' + str(self.newtoken_decimals))
         cursor.insertBlock()
