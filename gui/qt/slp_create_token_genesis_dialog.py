@@ -298,7 +298,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 else:
                     token_id = tx.txid()
                     if self.token_name_e.text() == '':
-                        wallet_name = tx.txid()[0:10]
+                        wallet_name = tx.txid()[0:5]
                     else:
                         wallet_name = self.token_name_e.text()[0:20]
                     # Check for duplication error

@@ -149,5 +149,8 @@ class SlpMgt(MyTreeWidget):
             item.setFont(3, QFont(MONOSPACE_FONT))
             item.setData(0, Qt.UserRole, token_id)
             if decimals == "?":
+                item.setForeground(0, QBrush(QColor("#BC1E1E")))
+                item.setForeground(1, QBrush(QColor("#BC1E1E")))
+                item.setForeground(2, QBrush(QColor("#BC1E1E")))
                 item.setForeground(3, QBrush(QColor("#BC1E1E")))
             self.addTopLevelItem(item)

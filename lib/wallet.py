@@ -1155,7 +1155,7 @@ class Abstract_Wallet(PrintError):
             if new_token:
                 tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
                         'decimals': "?",
-                        'name': 'unknown-' + slpMsg.op_return_fields['token_id_hex'][:5]
+                        'name': 'unknown-' + slpMsg.op_return_fields['token_id_hex'][:3]
                         }
                 self.token_types[slpMsg.op_return_fields['token_id_hex']] = tty
 
