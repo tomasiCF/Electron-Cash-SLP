@@ -84,23 +84,26 @@ class SlpMgt(MyTreeWidget):
         menu = QMenu()
         selected = self.selectedItems()
         if len(selected) == 1:
-            names = [item.text(0) for item in selected]
             keys = [item.text(0) for item in selected]
-            try:
-                self.parent.wallet.get_slp_token_baton(keys[0])
-                menu.addAction(_("Mint Tool..."), lambda: SlpCreateTokenMintDialog(self.parent, keys[0]))
-            except SlpNoMintingBatonFound:
-                pass
-            menu.addAction(_("Burn Tool..."), lambda: self.onBurnDialog())
-            column = self.currentColumn()
-            column_title = self.headerItem().text(column)
-            column_data = '\n'.join([item.text(column) for item in selected])
-            menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
-            menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
-            if self.currentItem():
-                menu.addAction(_("View Token Details"), lambda: self.onViewTokenDetails())
+            if self.parent.wallet.token_types[keys[0]]['decimals'] == "?":
+                menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = keys[0], allow_overwrite=True))
+                menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
+            else:
+                try:
+                    self.parent.wallet.get_slp_token_baton(keys[0])
+                    menu.addAction(_("Mint Tool"), lambda: SlpCreateTokenMintDialog(self.parent, keys[0]))
+                except SlpNoMintingBatonFound:
+                    pass
+                menu.addAction(_("Burn Tool"), lambda: self.onBurnDialog())
+                column = self.currentColumn()
+                column_title = self.headerItem().text(column)
+                column_data = '\n'.join([item.text(column) for item in selected])
+                menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
+                menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
+                if self.currentItem():
+                    menu.addAction(_("View Token Details"), lambda: self.onViewTokenDetails())
             menu.addSeparator()
-        
+            
         menu.addAction(_("Add existing token"), lambda: SlpAddTokenDialog(self.parent,))
         menu.addAction(_("Create a new token"), lambda: SlpCreateTokenGenesisDialog(self.parent,))
 
@@ -131,8 +134,11 @@ class SlpMgt(MyTreeWidget):
             name     = i["name"]
             decimals = i["decimals"]
             calculated_balance= self.get_balance_from_token_id(token_id)
-            balancestr = format_satoshis_nofloat(calculated_balance, decimal_point=decimals, num_zeros=decimals)
-            balancestr += ' '*(9-decimals)
+            if decimals != "?":
+                balancestr = format_satoshis_nofloat(calculated_balance, decimal_point=decimals, num_zeros=decimals)
+                balancestr += ' '*(9-decimals)
+            else:
+                balancestr = "right-click to add"
 
             item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr])
             squishyfont = QFont(MONOSPACE_FONT)
@@ -142,4 +148,6 @@ class SlpMgt(MyTreeWidget):
             item.setTextAlignment(3, Qt.AlignRight)
             item.setFont(3, QFont(MONOSPACE_FONT))
             item.setData(0, Qt.UserRole, token_id)
+            if decimals == "?":
+                item.setForeground(3, QBrush(QColor("#BC1E1E")))
             self.addTopLevelItem(item)

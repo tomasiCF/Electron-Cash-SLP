@@ -41,12 +41,12 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         tx = Transaction(raw)
         self.handle_genesis_tx(tx)
 
-    def __init__(self, main_window, token_id_hex=None, token_name=None):
+    def __init__(self, main_window, token_id_hex=None, token_name=None, allow_overwrite=False):
         # We want to be a top-level window
         QDialog.__init__(self, parent=None)
 
         self.provided_token_name = token_name
-
+        self.allow_overwrite = allow_overwrite
         self.main_window = main_window
         self.wallet = main_window.wallet
         self.network = main_window.network
@@ -306,7 +306,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
     def add_token(self):
         # Make sure to throw an error dialog if name exists, hash exists, ...
         token_name = self.token_name_e.text()
-        ow = (self.provided_token_name is not None)
+        ow = (self.provided_token_name is not None) or self.allow_overwrite
         ret = self.main_window.add_token_type('SLP1', self.newtoken_token_id, token_name, self.newtoken_decimals,
                                               error_callback = self.show_error, allow_overwrite=ow)
         if ret:

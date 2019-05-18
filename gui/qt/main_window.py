@@ -251,7 +251,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             sorted_items = sorted(token_types.items(), key=lambda x:x[1]['name'])
             for token_id, i in sorted_items:
-                self.token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
+                if i['decimals'] != '?':
+                    self.token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
 
     def on_history(self, event, *args):
         # NB: event should always be 'on_history'

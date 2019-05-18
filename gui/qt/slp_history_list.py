@@ -145,15 +145,20 @@ class HistoryList(MyTreeWidget):
             tokenname = _("%.4s... (unknown - right click to add)"%(token_id,))
             deltastr = '%+d'%(delta,)
         else:
-            unktoken = False
-            tokenname=tinfo['name']
-            deltastr = format_satoshis_nofloat(delta, is_diff=True, decimal_point=tinfo['decimals'],)
+            if tinfo['decimals'] == '?':
+                unktoken = True
+                tokenname = _("%.4s... (unknown - right click to add)"%(token_id,))
+                deltastr = '%+d'%(delta,)
+            else:
+                unktoken = False
+                tokenname=tinfo['name']
+                deltastr = format_satoshis_nofloat(delta, is_diff=True, decimal_point=tinfo['decimals'],)
 
-            # right-pad so the decimal points line up
-            # (note that because zeros are stripped, we have to locate decimal point here)
-            dp = localeconv()['decimal_point']
-            d1,d2 = deltastr.rsplit(dp,1)
-            deltastr += "\u2014"*(9-len(d2)) # \u2014 is long dash
+                # right-pad so the decimal points line up
+                # (note that because zeros are stripped, we have to locate decimal point here)
+                dp = localeconv()['decimal_point']
+                d1,d2 = deltastr.rsplit(dp,1)
+                deltastr += "\u2014"*(9-len(d2)) # \u2014 is long dash
 
         if unktoken and validity in (None,0,1):
             # If a token is not in our list of known token_ids, warn the user.
@@ -225,7 +230,9 @@ class HistoryList(MyTreeWidget):
 
         if not self.wallet.token_types.get(token_id):
             menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = token_id))
-
+        elif self.wallet.token_types.get(token_id)['decimals'] == '?':
+            menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = token_id, allow_overwrite=True))
+            
         menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
         if column in self.editable_columns:
             # We grab a fresh reference to the current item, as it has been deleted in a reported issue.

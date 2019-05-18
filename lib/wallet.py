@@ -1142,6 +1142,23 @@ class Abstract_Wallet(PrintError):
         else:
             raise RuntimeError(slpMsg.transaction_type)
 
+        # On receiving a new SEND always add entry to token_types if wallet hasn't seen tokenId yet
+        if slpMsg.transaction_type == 'SEND':
+            tokenid = slpMsg.op_return_fields['token_id_hex']
+            new_token = True
+            for k, v in self.tx_tokinfo.items():
+                try:
+                    if v['token_id'] == tokenid:
+                        new_token = False
+                except KeyError:
+                    pass
+            if new_token:
+                tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
+                        'decimals': "?",
+                        'name': 'unknown-' + slpMsg.op_return_fields['token_id_hex'][:5]
+                        }
+                self.token_types[slpMsg.op_return_fields['token_id_hex']] = tty
+
         # Always add entry to tx_tokinfo
         tti = { 'type':'SLP%d'%(slpMsg.token_type,),
                 'transaction_type':slpMsg.transaction_type,
@@ -1158,7 +1175,11 @@ class Abstract_Wallet(PrintError):
     """
     def slp_check_validation(self, tx_hash, tx):
         tti = self.tx_tokinfo[tx_hash]
-        if tti['validity'] == 0 and tti['token_id'] in self.token_types and tti['type'] == 'SLP1':
+        try: 
+            is_new = self.token_types[tti['token_id']]['decimals'] == "?"
+        except:
+            is_new = False
+        if tti['validity'] == 0 and tti['token_id'] in self.token_types and not is_new and tti['type'] == 'SLP1':
             def callback(job):
                 (txid,node), = job.nodes.items()
                 val = node.validity
