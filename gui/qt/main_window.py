@@ -1349,20 +1349,24 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payto_e.check_text()
         self.slp_amount_e.setAmount(0)
         if self.slp_token_id is None:
+            self.max_button.setEnabled(True)
+            self.max_button.setHidden(False)
             self.amount_e.setAmount(0)
             self.amount_e.setText("")
-            self.max_button.setEnabled(True)
             self.amount_e.setFrozen(False)
-
+            self.amount_e.setHidden(False)
+            self.amount_label.setHidden(False)
             self.slp_amount_e.setHidden(True)
             self.slp_max_button.setHidden(True)
             self.slp_amount_label.setHidden(True)
         else:
             self.max_button.setEnabled(False)
             self.max_button.setChecked(False)
+            self.max_button.setHidden(True)
             self.amount_e.setAmount(546)
             self.amount_e.setFrozen(True)
-
+            self.amount_e.setHidden(True)
+            self.amount_label.setHidden(True)
             self.slp_amount_e.setHidden(False)
             self.slp_max_button.setHidden(False)
             self.slp_amount_label.setHidden(False)
@@ -1435,12 +1439,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.from_list, 4, 1, 1, -1)
         self.set_pay_from([])
 
-        msg = _('Amount to be sent.') + '\n\n' \
+        msg = _('BCH amount to be sent.') + '\n\n' \
               + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
               + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
               + _('Keyboard shortcut: type "!" to send all your coins.')
-        amount_label = HelpLabel(_('Amount'), msg)
-        grid.addWidget(amount_label, 5, 0)
+        self.amount_label = HelpLabel(_('BCH Amount'), msg)
+        grid.addWidget(self.amount_label, 5, 0)
         grid.addWidget(self.amount_e, 5, 1)
 
 
