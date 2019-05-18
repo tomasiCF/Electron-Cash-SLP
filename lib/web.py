@@ -168,8 +168,8 @@ def parse_URI(uri, on_pr=None):
         out.pop('amount')
     if len(amounts) > 0:
         out['amounts'] = amounts
-    if len(amounts) > 1:
-        raise Exception('Too many amounts requested in the URI.  This wallet does not yet support token payments with additional BCH send amounts.')
+    if len(amounts) > 2:
+        raise Exception('Too many amounts requested in the URI. SLP payment requests cannot send more than 1 BCH and 1 SLP payment simultaneously.')
     if 'message' in out:
         out['message'] = out['message']
         out['memo'] = out['message']
