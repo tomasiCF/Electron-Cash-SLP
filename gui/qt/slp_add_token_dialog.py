@@ -66,7 +66,6 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         self.token_id_e = ButtonsLineEdit()
         if token_id_hex is not None:
             self.token_id_e.addCopyButton()
-        self.token_id_e.setFixedWidth(550)
         vbox.addWidget(self.token_id_e)
 
 
@@ -95,9 +94,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         hbox.addStretch(1)
 
         self.token_info_e = QTextBrowser()
-#        self.token_info_e.setReadOnly(True)
         self.token_info_e.setOpenExternalLinks(True)
-        self.token_info_e.setFixedWidth(550)
         self.token_info_e.setMinimumHeight(100)
         vbox.addWidget(self.token_info_e)
 
@@ -171,7 +168,6 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
 
         self.token_id_e.setReadOnly(True)
         self.token_info_e.setText("Downloading...")
-#        self.token_info_e.setHidden(False)
         self.get_info_button.setDisabled(True)
         self.load_tx_menu_button.setDisabled(True)
         self.view_tx_button.setDisabled(True)
