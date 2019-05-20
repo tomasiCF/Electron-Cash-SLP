@@ -66,6 +66,5 @@ def parse_package_version(pvstr):
         raise_(e)
     # .. and.. finally: Normalize it! (lopping off zeros at the end)
     toks[:-1] = normalize_version('.'.join(str(t) for t in toks[:-1]))
-    print(tuple(toks))
     return tuple(toks)
 

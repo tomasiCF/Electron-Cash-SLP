@@ -2394,6 +2394,14 @@ class ImportedAddressWallet(ImportedWalletBase):
         txin['x_pubkeys'] = [x_pubkey]
         txin['signatures'] = [None]
 
+class Slp_ImportedAddressWallet(ImportedAddressWallet):
+    # Watch-only wallet of imported addresses
+
+    wallet_type = 'slp_imported_addr'
+
+    def __init__(self, storage):
+        self._sorted = None
+        super().__init__(storage)
 
 class ImportedPrivkeyWallet(ImportedWalletBase):
     # wallet made of imported private keys
@@ -2477,6 +2485,15 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
         pubkey = PublicKey.from_string(pubkey)
         if pubkey in self.keystore.keypairs:
             return pubkey.address
+
+
+class Slp_ImportedPrivkeyWallet(ImportedPrivkeyWallet):
+    # wallet made of imported private keys
+
+    wallet_type = 'slp_imported_privkey'
+
+    def __init__(self, storage):
+        Abstract_Wallet.__init__(self, storage)
 
 
 class Deterministic_Wallet(Abstract_Wallet):
@@ -2634,15 +2651,19 @@ class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
         return self.keystore.derive_pubkey(c, i)
 
 
-
-
-
-
 class Standard_Wallet(Simple_Deterministic_Wallet):
-    wallet_type = 'slp_standard'
+    wallet_type = 'standard'
+    def __init__(self, storage):
+        super().__init__(storage)
 
     def pubkeys_to_address(self, pubkey):
         return Address.from_pubkey(pubkey)
+
+
+class Slp_Standard_Wallet(Standard_Wallet):
+    wallet_type = 'slp_standard'
+    def __init__(self, storage):
+        super().__init__(storage)
 
 
 class Multisig_Wallet(Deterministic_Wallet):
@@ -2736,11 +2757,13 @@ def register_wallet_type(category):
 
 wallet_constructors = {
     'standard': Standard_Wallet,
+    'slp_standard': Slp_Standard_Wallet,
     'old': Standard_Wallet,
     'xpub': Standard_Wallet,
-    'slp_standard': Standard_Wallet,
     'imported_privkey': ImportedPrivkeyWallet,
+    'slp_imported_privkey': Slp_ImportedPrivkeyWallet,
     'imported_addr': ImportedAddressWallet,
+    'slp_imported_addr': Slp_ImportedAddressWallet,
 }
 
 def register_constructor(wallet_type, constructor):

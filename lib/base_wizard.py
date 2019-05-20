@@ -28,8 +28,8 @@ import os
 from . import bitcoin
 from . import keystore
 from .keystore import bip44_derivation, bip44_derivation_245
-from .wallet import (ImportedAddressWallet, ImportedPrivkeyWallet,
-                     Standard_Wallet, Multisig_Wallet, wallet_types)
+from .wallet import (ImportedAddressWallet, Slp_ImportedAddressWallet, ImportedPrivkeyWallet, Slp_ImportedPrivkeyWallet,
+                     Standard_Wallet, Slp_Standard_Wallet, Multisig_Wallet, wallet_types)
 from .i18n import _
 
 
@@ -80,8 +80,8 @@ class BaseWizard(object):
             _("What kind of wallet do you want to create?")
         ])
         wallet_kinds = [
-            ('slp_standard',  _("Standard wallet (SLP-enabled)")),
-            ('slp_multisig',  _("Multi-signature wallet (SLP-enabled)")),
+            ('slp_standard',  _("Standard wallet")),
+            ('slp_multisig',  _("Multi-signature wallet")),
             ('slp_imported',  _("Import Bitcoin Cash addresses or private keys")),
         ]
         choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]
@@ -146,7 +146,8 @@ class BaseWizard(object):
 
     def on_import(self, text):
         if keystore.is_address_list(text):
-            self.wallet = ImportedAddressWallet.from_text(self.storage, text)
+            #TODO: pre-merge task: figure out how to hook a "enable_slp" checkbox GUI to call the correct class type
+            self.wallet = Slp_ImportedAddressWallet.from_text(self.storage, text)
         elif keystore.is_private_key_list(text, allow_bip38=True):
 
             bip38_keys = [k for k in text.split() if k and bitcoin.is_bip38_key(k)]
@@ -158,9 +159,8 @@ class BaseWizard(object):
                 for b38, tup in decrypted.items():
                     wif, adr = tup
                     text = text.replace(b38, wif)  # kind of a hack.. but works. replace the bip38 key with the wif key in the text.
-
-            self.wallet = ImportedPrivkeyWallet.from_text(self.storage, text,
-                                                          None)
+            #TODO: pre-merge task: figure out how to hook a "enable_slp" checkbox GUI to call the correct class type
+            self.wallet = Slp_ImportedPrivkeyWallet.from_text(self.storage, text, None)
             self.keystores = self.wallet.get_keystores()
             self.request_password(run_next=self.on_password)
         self.terminate()
@@ -371,18 +371,24 @@ class BaseWizard(object):
         for k in self.keystores:
             if k.may_have_password():
                 k.update_password(None, password)
-        if self.wallet_type == 'slp_standard':
+        if self.wallet_type == 'standard':
+            raise Exception('Wallet type is not handled in this version')
+        elif self.wallet_type == 'slp_standard':
             self.storage.put('seed_type', self.seed_type)
             keys = self.keystores[0].dump()
             self.storage.put('keystore', keys)
-            self.wallet = Standard_Wallet(self.storage)
+            self.wallet = Slp_Standard_Wallet(self.storage)
             self.run('create_addresses')
+        elif self.wallet_type == 'multisig':
+            raise Exception('Wallet type is not handled in this version')
         elif self.wallet_type == 'slp_multisig':
             for i, k in enumerate(self.keystores):
                 self.storage.put('x%d/'%(i+1), k.dump())
             self.storage.write()
             self.wallet = Multisig_Wallet(self.storage)
             self.run('create_addresses')
+        elif self.wallet_type == 'imported':
+            raise Exception('Wallet type is not handled in this version')
         elif self.wallet_type == 'slp_imported':
             self.wallet.save_keystore()
 
