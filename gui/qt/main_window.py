@@ -1363,9 +1363,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.max_button.setEnabled(False)
             self.max_button.setChecked(False)
             self.max_button.setHidden(True)
-            self.amount_e.setText('')
-            self.amount_e.setHidden(True)
-            self.amount_label.setHidden(True)
+            if not self.slp_extra_bch_cb.isChecked():
+                self.amount_e.setText('')
+                self.amount_e.setHidden(True)
+                self.amount_label.setHidden(True)
             self.slp_amount_e.setHidden(False)
             self.slp_max_button.setHidden(False)
             self.slp_amount_label.setHidden(False)
