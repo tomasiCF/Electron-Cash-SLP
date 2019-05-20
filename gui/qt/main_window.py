@@ -1367,6 +1367,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.amount_e.setText('')
                 self.amount_e.setHidden(True)
                 self.amount_label.setHidden(True)
+            else:
+                self.max_button.setHidden(False)
+                self.max_button.setDisabled(True)
             self.slp_amount_e.setHidden(False)
             self.slp_max_button.setHidden(False)
             self.slp_amount_label.setHidden(False)
@@ -1381,9 +1384,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.slp_extra_bch_cb.isChecked():
             self.amount_e.setHidden(False)
             self.amount_label.setHidden(False)
+            self.max_button.setHidden(False)
+            self.max_button.setDisabled(True)
         else:
             self.amount_e.setHidden(True)
             self.amount_label.setHidden(True)
+            self.max_button.setHidden(True)
         self.update_fiat()
 
     def create_send_tab(self):
@@ -1457,9 +1463,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
               + _('Keyboard shortcut: type "!" to send all your coins.')
         self.amount_label = HelpLabel(_('BCH Amount'), msg)
         grid.addWidget(self.amount_label, 5, 0)
-        grid.addWidget(self.amount_e, 5, 1)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.amount_e)
 
-
+        self.max_button = EnterButton(_("Max"), self.spend_max)
+        self.max_button.setCheckable(True)
+        hbox.addWidget(self.max_button)
+        hbox.addStretch(1)
+        grid.addLayout(hbox, 5, 1)
 
 
         self.fiat_send_e = AmountEdit(self.fx.get_currency if self.fx else '')
@@ -1469,10 +1480,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.amount_e.frozen.connect(
             lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
 
-        self.max_button = EnterButton(_("Max"), self.spend_max)
-        self.max_button.setFixedWidth(140)
-        self.max_button.setCheckable(True)
-        grid.addWidget(self.max_button, 5, 3)
         hbox = QHBoxLayout()
         hbox.addStretch(1)
         grid.addLayout(hbox, 5, 4)
@@ -1510,23 +1517,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.connect_fields(self, self.amount_e, self.fiat_send_e, self.fee_e)
 
         if self.is_slp_wallet:
-            msg = _('Amount to be sent.') + '\n\n' \
-                + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
-                + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
-                + _('Keyboard shortcut: type "!" to send all your coins.')
-            self.slp_amount_label = HelpLabel(_('Token Amount'), msg)
-            grid.addWidget(self.slp_amount_label, 7, 0)
-            grid.addWidget(self.slp_amount_e, 7, 1)
-
-            self.slp_max_button = EnterButton(_("Max"), self.slp_spend_max)
-            self.slp_max_button.setFixedWidth(140)
-            grid.addWidget(self.slp_max_button, 7, 3)
-
             msg = _('Token Amount to be sent.') + '\n\n' \
                 + _("To enable make sure 'Address Mode' is set to SLP.") + '\n\n' \
                 + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
                 + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
                 + _('Keyboard shortcut: type "!" to send all your coins.')
+            self.slp_amount_label = HelpLabel(_('Token Amount'), msg)
+            grid.addWidget(self.slp_amount_label, 7, 0)
+            hbox = QHBoxLayout()
+            self.amount_e.setMinimumWidth(195)
+            self.slp_amount_e.setMinimumWidth(195)
+            hbox.addWidget(self.slp_amount_e)
+
+            self.slp_max_button = EnterButton(_("Max"), self.slp_spend_max)
+            hbox.addWidget(self.slp_max_button)
+            grid.addLayout(hbox, 7, 1)
+
+            self.slp_extra_bch_cb = QCheckBox(_('Enabled sending extra BCH with tokens'))
+            self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)
+            grid.addWidget(self.slp_extra_bch_cb, 7, 2)
+            self.slp_amount_e.textEdited.connect(self.update_fee)
+
+
+            msg = _('Select the SLP token to send.')
             self.slp_token_type_label = HelpLabel(_('Token Type'), msg)
             grid.addWidget(self.slp_token_type_label, 8, 0)
             grid.addWidget(self.token_type_combo, 8, 1)
@@ -1543,17 +1556,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.send_button = EnterButton(_("Send"), self.do_send)
         self.clear_button = EnterButton(_("Clear"), self.do_clear)
         buttons = QHBoxLayout()
-        buttons.addStretch(1)
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
-        grid.addLayout(buttons, 10, 1, 1, 3)
+        buttons.addStretch(1)
+        grid.addLayout(buttons, 11, 1, 1, 3)
 
-        if self.is_slp_wallet:
-            self.slp_extra_bch_cb = QCheckBox(_('Send additional BCH with tokens'))
-            self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)
-            grid.addWidget(self.slp_extra_bch_cb, 11, 1)
-            self.slp_amount_e.textEdited.connect(self.update_fee)
 
         self.amount_e.shortcut.connect(self.spend_max)
         self.payto_e.textChanged.connect(self.update_fee)
@@ -1565,8 +1573,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         def reset_max(text):
             self.max_button.setChecked(False)
-            enabled = not bool(text) and not self.amount_e.isReadOnly()
-            self.max_button.setEnabled(enabled)
+            if not self.slp_token_id:
+                enabled = not bool(text) and not self.amount_e.isReadOnly()
+                self.max_button.setEnabled(enabled)
         self.amount_e.textEdited.connect(reset_max)
         self.fiat_send_e.textEdited.connect(reset_max)
 
@@ -1820,9 +1829,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 fee = None if self.not_enough_funds else tx.get_fee()
                 self.fee_e.setAmount(fee)
 
-            if self.max_button.isChecked():
+            if self.max_button.isChecked() and not self.slp_token_id:
                 amount = tx.output_value()
                 self.amount_e.setAmount(amount)
+            elif self.max_button.isChecked():
+                self.amount_e.setText('')
             if fee is not None:
                 fee_rate = fee / tx.estimated_size()
         self.fee_slider_mogrifier(self.get_custom_fee_text(fee_rate))
