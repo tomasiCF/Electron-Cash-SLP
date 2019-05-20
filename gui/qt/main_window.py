@@ -1367,6 +1367,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.amount_e.setText('')
                 self.amount_e.setHidden(True)
                 self.amount_label.setHidden(True)
+                self.fiat_send_e.setHidden(True)
             else:
                 self.max_button.setHidden(False)
                 self.max_button.setDisabled(True)
@@ -1376,8 +1377,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_extra_bch_cb.setHidden(False)
             tok = self.wallet.token_types[self.slp_token_id]
             self.slp_amount_e.set_token(tok['name'][:6],tok['decimals'])
-#        self.update_status()
-        self.update_fiat()  #<-- does update_status()
+        self.update_status()
         self.do_update_fee()
 
     def on_slp_extra_bch(self):
@@ -1386,11 +1386,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.amount_label.setHidden(False)
             self.max_button.setHidden(False)
             self.max_button.setDisabled(True)
+            if self.fx and self.fx.is_enabled():
+                self.fiat_send_e.setHidden(False)
         else:
             self.amount_e.setHidden(True)
             self.amount_label.setHidden(True)
             self.max_button.setHidden(True)
-        self.update_fiat()
+            self.fiat_send_e.setHidden(True)
 
     def create_send_tab(self):
         # A 4-column grid layout.  All the stretch is in the last column.
@@ -3599,7 +3601,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_fiat(self):
         b = self.fx and self.fx.is_enabled()
-        if self.slp_token_id:
+        if not self.amount_e.isVisible():
             self.fiat_send_e.setVisible(False)
         else:
             self.fiat_send_e.setVisible(b)
