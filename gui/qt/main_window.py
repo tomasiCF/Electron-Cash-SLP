@@ -455,7 +455,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.slp_mgt_tab.update()
         self.slp_history_tab.update()
         self.update_cashaddr_icon()
-        self._warn_slp_prefers_slp_wallets_if_not_slp_wallet()
         run_hook('load_wallet', wallet, self)
 
     def init_geometry(self):
@@ -526,13 +525,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def _warn_slp_prefers_slp_wallets_if_not_slp_wallet(self):
         if not self.is_slp_wallet:
             msg = '\n\n'.join([
-                _("WARNING: This type of wallet file does not allow use of SLP tokens.") + " "
-                + _("If you have SLP tokens saved in this electrum wallet file, please use a version prior to 3.4.7 to send your tokens to a new SLP wallet format."),
-                _("Since version 3.4.3 all newly created Electron Cash SLP wallet files use the HD path m/44'/245' to reduce the risk of burning SLP tokens."),
+                _("WARNING: SLP Tokens Disabled."),
+                _("SLP tokens were detected in this older style wallet file and this version does not allow use of SLP tokens for your protection."),
+                _("Please install version 3.4.6 to create a new SLP wallet file and then transfer the tokens from this wallet file to the new 3.4.6 style wallet file."),
+                _("Why? This is because Electron Cash SLP versions 3.4.3 and later all include a significant security improvement for SLP tokens. That is, all standard wallet files created with 3.4.3 and later use BIP-44 key derivation path m/44'/245' to reduce the risk of burning SLP tokens.  Taking no action could result in burning your tokens if this wallet's seed is imported into a non-SLP aware wallet."),
                 _('''If you're wondering "what do I have to do?":'''),
-                _("If you want to use SLP with this wallet file you need to install version 3.4.6 of this software.")
+                _("If you want to recover the SLP tokens in this wallet file you need to install version 3.4.6 of this software and follow the instructions provided above.")
             ])
-            self.show_warning(msg, title=_("Non-SLP Wallet"))
+            self.show_warning(msg, title=_("SLP Tokens Detected in a Non-SLP Wallet"))
 
     def open_wallet(self):
         try:
@@ -890,6 +890,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 icon = icon_dict["status_lagging"] if num_chains <= 1 else icon_dict["status_lagging_fork"]
             else:
                 text = ""
+                if not self.is_slp_wallet:
+                    text += "Tokens Disabled - "
                 token_id = self.slp_token_id
                 try:
                     d = self.wallet.token_types[token_id]
@@ -918,6 +920,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     icon = icon_dict["status_connected"] if num_chains <= 1 else icon_dict["status_connected_fork"]
                 else:
                     icon = icon_dict["status_connected_proxy"] if num_chains <= 1 else icon_dict["status_connected_proxy_fork"]
+
+                # Provide extra warning and instructions to user if he/she has tokens in a non-SLP wallet type.
+                if not self.is_slp_wallet:
+                    locked_in_slp = self.wallet.get_slp_locked_balance()
+                    if locked_in_slp > 0:
+                        self._warn_slp_prefers_slp_wallets_if_not_slp_wallet()
         else:
             text = _("Not connected")
             icon = icon_dict["status_disconnected"]
