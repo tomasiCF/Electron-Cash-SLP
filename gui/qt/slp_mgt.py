@@ -50,7 +50,7 @@ class SlpMgt(MyTreeWidget):
         self.update()
 
     def __init__(self, parent):
-        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance')], 0, [0])
+        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Baton')], 0, [0])
         self.slp_validity_signal = parent.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -140,7 +140,12 @@ class SlpMgt(MyTreeWidget):
             else:
                 balancestr = "right-click to add"
 
-            item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr])
+            try:
+                self.parent.wallet.get_slp_token_baton(token_id)
+                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,"★"])
+            except SlpNoMintingBatonFound:
+                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,""])
+
             squishyfont = QFont(MONOSPACE_FONT)
             squishyfont.setStretch(85)
             item.setFont(0, squishyfont)
