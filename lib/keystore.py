@@ -385,6 +385,89 @@ class BIP32_KeyStore(Deterministic_KeyStore, Xpub):
     def set_wallet_advice(self, addr, advice): #overrides KeyStore.set_wallet_advice
         self.wallet_advice[addr] = advice
 
+class Slp_BIP32_KeyStores():
+
+    def __init__(self, d):
+        self.keystore_bch = BIP32_KeyStore(d['keystores']['bch'])
+        self.keystore_slp = BIP32_KeyStore(d['keystores']['slp'])
+
+    def format_seed(self, seed):
+        return ' '.join(seed.split())
+
+    def dump(self):
+        dbch = self.keystore_bch.dump()
+        dslp = self.keystore_slp.dump()
+
+        d = {}
+        d['type'] = 'slp_bip32' 
+        d['keystores'] = {}
+        d['keystores']['bch'] = { 'xpub': dbch.xpub, 'xprv': dbch.xprv }
+        d['keystores']['slp'] = { 'xpub': dslp.xpub, 'xprv': dslp.xprv }
+        return d
+
+    def get_master_private_key(self, password):
+        return { 'bch': pw_decode(dbch.xprv, password), 'slp': pw_decode(dslp.xprv, password) }
+
+    def check_password(self, password):
+        xprv = pw_decode(dbch.xprv, password)
+        try:
+            assert DecodeBase58Check(xprv) is not None
+        except Exception:
+            # Password was None but key was encrypted.
+            raise InvalidPassword()
+        if deserialize_xprv(xprv)[4] != deserialize_xpub(dbch.xpub)[4]:
+            raise InvalidPassword()
+
+    def update_password(self, old_password, new_password):
+        self.check_password(old_password)
+        if new_password == '':
+            new_password = None
+        if self.dbch.has_seed():
+            decoded = self.dbch.get_seed(old_password)
+            self.dbch.seed = pw_encode(decoded, new_password)
+        if self.dbch.passphrase:
+            decoded = self.dbch.get_passphrase(old_password)
+            self.dbch.passphrase = pw_encode(decoded, new_password)
+        if self.dbch.xprv is not None:
+            b = pw_decode(self.dbch.xprv, old_password)
+            self.dbch.xprv = pw_encode(b, new_password)
+        if self.dslp.has_seed():
+            decoded = self.dslp.get_seed(old_password)
+            self.dslp.seed = pw_encode(decoded, new_password)
+        if self.dslp.passphrase:
+            decoded = self.dslp.get_passphrase(old_password)
+            self.dslp.passphrase = pw_encode(decoded, new_password)
+        if self.dslp.xprv is not None:
+            b = pw_decode(self.dslp.xprv, old_password)
+            self.dslp.xprv = pw_encode(b, new_password)
+
+    def is_watching_only(self):
+        return self.dbch.xprv is None and self.dslp.xprv is None
+
+    def add_xprv(self, bch_xprv, slp_xprv):
+        self.dbch.xprv = bch_xprv
+        self.dbch.xpub = bitcoin.xpub_from_xprv(bch_xprv)
+        self.dslp.xprv = slp_xprv
+        self.dslp.xpub = bitcoin.xpub_from_xprv(slp_xprv)
+
+    def add_xprv_from_seed(self, bip32_seed, xtype):
+        xprv, xpub = bip32_root(bip32_seed, xtype)
+        bch_xprv, bch_xpub = bip32_private_derivation(xprv, "m/", "44'/145'/0'")
+        slp_xprv, slp_xpub = bip32_private_derivation(xprv, "m/", "44'/245'/0'")
+        self.add_xprv(bch_xprv, slp_xprv)
+
+    def get_private_key(self, sequence, password, coin_type):
+            # coin_type is 'bch' or 'slp'
+            xprv = self.get_master_private_key(password)[coin_type]
+            _, _, _, _, c, k = deserialize_xprv(xprv)
+            pk = bip32_private_key(sequence, k, c)
+            return pk, True
+
+    def set_wallet_advice(self, addr, advice, coin_type): #overrides KeyStore.set_wallet_advice
+        if coin_type == 'bch':
+            self.dbch.wallet_advice[addr] = advice
+        elif coin_type == 'slp':
+            self.dslp.wallet_advice[addr] = advice
 
 class Old_KeyStore(Deterministic_KeyStore):
 
@@ -695,6 +778,8 @@ def load_keystore(storage, name):
         k = Imported_KeyStore(d)
     elif t == 'bip32':
         k = BIP32_KeyStore(d)
+    elif t == 'slp_bip32':
+        k = Slp_BIP32_KeyStores(d)
     elif t == 'hardware':
         k = hardware_keystore(d)
     else:
@@ -750,6 +835,9 @@ def bip44_derivation(account_id):
     coin = 1 if networks.net.TESTNET else 0
     return "m/%d'/%d'/%d'" % (bip, coin, int(account_id))
 
+def bip44_derivation_145(account_id):
+	return "m/44'/145'/%d'"% int(account_id)
+
 def bip44_derivation_245(account_id):
 	return "m/44'/245'/%d'"% int(account_id)
 
@@ -774,6 +862,13 @@ def from_seed(seed, passphrase, is_p2sh):
         der = "m/44'/245'/0'"
         xtype = 'standard'
         keystore.add_xprv_from_seed(bip32_seed, xtype, der)
+    elif t == 'slp_bip39':
+        keystore = Slp_BIP32_KeyStore({})
+        keystore.add_seed(seed)
+        keystore.passphrase = passphrase
+        bip32_seed = Mnemonic.mnemonic_to_seed(seed, passphrase)
+        xtype = 'standard'
+        keystore.add_xprv_from_seed(bip32_seed, xtype)
     else:
         raise InvalidSeed()
     return keystore
