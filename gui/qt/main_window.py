@@ -1417,6 +1417,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.is_slp_wallet:
             self.slp_amount_e = SLPAmountEdit('tokens', 0)
             self.token_type_combo = QComboBox()
+            if ColorScheme.dark_scheme and sys.platform == 'darwin':
+                # Hack/Workaround to QDarkStyle bugs; see https://github.com/ColinDuquesnoy/QDarkStyleSheet/issues/169#issuecomment-494647801
+                self.token_type_combo.setItemDelegate(QStyledItemDelegate(self.token_type_combo))
             self.token_type_combo.setFixedWidth(200)
             self.token_type_combo.currentIndexChanged.connect(self.on_slptok)
 
@@ -1646,14 +1649,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     text = "Not enough " + \
                             self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
                                 format_satoshis_plain_nofloat(
-                                    self.wallet.get_slp_token_balance(self.slp_token_id)[0], 
+                                    self.wallet.get_slp_token_balance(self.slp_token_id)[0],
                                     self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens available)"
                 elif self.not_enough_unfrozen_funds_slp:
                     amt_color = ColorScheme.RED
                     text = "Not enough unfrozen " + \
                             self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
                                 format_satoshis_plain_nofloat(
-                                    self.wallet.get_slp_token_balance(self.slp_token_id)[4], 
+                                    self.wallet.get_slp_token_balance(self.slp_token_id)[4],
                                     self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens frozen)"
                 elif self.slp_amount_e.isModified():
                     amt_color = ColorScheme.DEFAULT
@@ -2252,7 +2255,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return clayout.selected_index()
 
     def lock_amount(self, b):
-        pass 
+        pass
         # the following is now not needed since slp dust amounts are now hard coded
         '''
         This if-statement was added for SLP around the following two lines
@@ -2520,7 +2523,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 super().showEvent(e)
                 if self.main_window.is_slp_wallet:
                     self.main_window.toggle_cashaddr(2, True)
-                else: 
+                else:
                     self.main_window.toggle_cashaddr(1, True)
 
         w = ListTab()
