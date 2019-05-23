@@ -3200,6 +3200,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         from electroncash import get_config
         from .qrreader import QrReaderCameraDialog
         data = ''
+        dialog = None
         try:
             dialog = QrReaderCameraDialog(parent=self)
             data = dialog.scan(get_config().get_video_device())
@@ -3208,6 +3209,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 import traceback
                 traceback.print_exc()
             self.show_error(str(e))
+        if dialog:
+            dialog.setParent(None)  # Python GC
+            dialog = None
         if not data:
             return
         # if the user scanned a bitcoincash URI
