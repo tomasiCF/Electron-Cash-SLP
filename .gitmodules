@@ -4,9 +4,9 @@
 [submodule "contrib/electrum-locale"]
 	path = contrib/electrum-locale
 	url = https://github.com/Electron-Cash/electrum-locale
-[submodule "contrib/zbar"]
-	path = contrib/zbar
-	url = https://github.com/mchehab/zbar
 [submodule "contrib/osx/OSXQRDetect"]
 	path = contrib/osx/OSXQRDetect
 	url = https://github.com/cculianu/OSXQRDetect
+[submodule "contrib/zbar"]
+	path = contrib/zbar
+	url = https://github.com/mchehab/zbar
