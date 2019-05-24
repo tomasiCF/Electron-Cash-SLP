@@ -122,7 +122,7 @@ class PayToEdit(ScanQRTextEdit):
         if len(lines) == 1:
             data = lines[0]
             if ':' in data and '?' in data and len(data) > 35:
-                try: 
+                try:
                     self.scan_f(data)
                 except AddressError as e:
                     self.errors.append((0, str(e)))
@@ -286,10 +286,11 @@ class PayToEdit(ScanQRTextEdit):
         self.c.complete(cr)
 
     def qr_input(self):
-        data = super(PayToEdit,self).qr_input()
-        if data and (data.startswith(networks.net.CASHADDR_PREFIX + ":") or data.startswith(networks.net.SLPADDR_PREFIX + ":")):
-            self.scan_f(data)
-            # TODO: update fee
+        def _on_qr_success(result):
+            if result and (result.startswith(networks.net.CASHADDR_PREFIX + ":") or result.startswith(networks.net.SLPADDR_PREFIX + ":")):
+                self.scan_f(result)
+                # TODO: update fee
+        super(PayToEdit,self).qr_input(_on_qr_success)
 
     def resolve(self):
         self.is_alias = False
