@@ -3,7 +3,6 @@
 # python setup.py sdist --format=zip,gztar
 
 from setuptools import setup
-import setuptools.cmd.sdist
 import os
 import sys
 import platform
@@ -60,46 +59,6 @@ if platform.system() in ['Linux', 'FreeBSD', 'DragonFly']:
         # App stream (store) metadata
         (os.path.join(share_dir, 'metainfo/'), ['org.electroncash.ElectronCash.appdata.xml']),
     ]
-
-class MakeAllBeforeSdist(setuptools.command.sdist.sdist):
-    """Does some custom stuff before calling super().run()."""
-
-    user_options = setuptools.command.sdist.sdist.user_options + [
-        ("disable-secp", None, "Disable libsecp256k1 complilation (default)."),
-        ("enable-secp", None, "Enable libsecp256k1 complilation."),
-        ("disable-zbar", None, "Disable libzbar complilation (default)."),
-        ("enable-zbar", None, "Enable libzbar complilation.")
-    ]
-
-    def initialize_options(self):
-        self.disable_secp = None
-        self.enable_secp = None
-        self.disable_zbar = None
-        self.enable_zbar = None
-        super().initialize_options()
-
-    def finalize_options(self):
-        if self.enable_secp is None:
-            self.enable_secp = False
-        self.enable_secp = not self.disable_secp and self.enable_secp
-        if self.enable_zbar is None:
-            self.enable_zbar = False
-        self.enable_zbar = not self.disable_zbar and self.enable_zbar
-        super().finalize_options()
-
-    def run(self):
-        """Run command."""
-        #self.announce("Running make_locale...")
-        #0==os.system("contrib/make_locale") or sys.exit("Could not make locale, aborting")
-        #self.announce("Running make_packages...")
-        #0==os.system("contrib/make_packages") or sys.exit("Could not make locale, aborting")
-        if self.enable_secp:
-            self.announce("Running make_secp...")
-            0==os.system("contrib/make_secp") or sys.exit("Could not build libsecp256k1")
-        if self.enable_zbar:
-            self.announce("Running make_zbar...")
-            0==os.system("contrib/make_zbar") or sys.exit("Could not build libzbar")
-        super().run()
 
 setup(
     name="Electron Cash SLP",
