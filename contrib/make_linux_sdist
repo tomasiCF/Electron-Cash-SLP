@@ -14,6 +14,7 @@ pushd "$contrib"/..
 "$contrib"/make_locale && \
     "$contrib"/make_packages && \
     "$contrib"/make_secp && \
+    "$contrib"/make_zbar && \
     python3 setup.py sdist --format=zip,gztar || fail "Failed."
 
 info "Linux source distribution (including compiled libseck256k1) has been placed in dist/"
