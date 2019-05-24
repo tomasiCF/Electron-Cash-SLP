@@ -3,6 +3,7 @@
 # python setup.py sdist --format=zip,gztar
 
 from setuptools import setup
+import setuptools.cmd.sdist
 import os
 import sys
 import platform
