@@ -35,3 +35,4 @@ xcuserdata/
 # osx build files
 libsecp256k1.0.dylib
 libusb-1.0.dylib
+libzbar.0.dylib
