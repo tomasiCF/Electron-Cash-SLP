@@ -1175,7 +1175,7 @@ class Abstract_Wallet(PrintError):
     """
     def slp_check_validation(self, tx_hash, tx):
         tti = self.tx_tokinfo[tx_hash]
-        try: 
+        try:
             is_new = self.token_types[tti['token_id']]['decimals'] == "?"
         except:
             is_new = False
@@ -1926,15 +1926,19 @@ class Abstract_Wallet(PrintError):
             except UserCancelled:
                 continue
 
-    def get_unused_addresses(self):
+    def get_unused_addresses(self, *, for_change=False, frozen_ok=True):
+        for_change = bool(for_change)  # coerce to bool
         # fixme: use slots from expired requests
-        domain = self.get_receiving_addresses()
-        return [addr for addr in domain
-                if not self.get_address_history(addr)
-                and addr not in self.receive_requests]
+        with self.lock, self.transaction_lock:
+            domain = self.get_receiving_addresses() if not for_change else (self.get_change_addresses() or self.get_receiving_addresses())
+            return [addr for addr in domain
+                    if not self.get_address_history(addr)
+                    and addr not in self.receive_requests
+                    and (frozen_ok or addr not in self.frozen_addresses)]
 
-    def get_unused_address(self):
-        addrs = self.get_unused_addresses()
+    def get_unused_address(self, *, for_change=False, frozen_ok=True):
+        for_change = bool(for_change)  # coerce to bool
+        addrs = self.get_unused_addresses(for_change=for_change, frozen_ok=frozen_ok)
         if addrs:
             return addrs[0]
 
