@@ -542,10 +542,11 @@ class DigitalBitbox_KeyStore(Hardware_KeyStore):
 
             # Build pubkeyarray from outputs
             for _type, address, amount in tx.outputs():
-                assert _type == TYPE_ADDRESS
+                if not _type == TYPE_ADDRESS:
+                    self.give_error(_("Only address outputs are supported by {}").format(self.name))
                 info = tx.output_info.get(address)
                 if info is not None:
-                    index, xpubs, m = info
+                    index, xpubs, m, script_type = info
                     changePath = self.get_derivation() + "/%d/%d" % index
                     changePubkey = self.derive_pubkey(index[0], index[1])
                     pubkeyarray_i = {'pubkey': changePubkey, 'keypath': changePath}
@@ -557,7 +558,7 @@ class DigitalBitbox_KeyStore(Hardware_KeyStore):
             if p2pkhTransaction:
                 class CustomTXSerialization(Transaction):
                     @classmethod
-                    def input_script(self, txin, estimate_size=False):
+                    def input_script(self, txin, estimate_size=False, sign_schnorr=False):
                         if txin['type'] == 'p2pkh':
                             return Transaction.get_preimage_script(txin)
                         if txin['type'] == 'p2sh':

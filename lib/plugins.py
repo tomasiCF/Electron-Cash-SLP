@@ -799,7 +799,11 @@ class DeviceMgr(ThreadJob, PrintError):
             if info.label == keystore.label:
                 return info
         msg = _("Please select which {} device to use:").format(plugin.device)
-        descriptions = [info.label + ' (%s)'%(_("initialized") if info.initialized else _("wiped")) for info in infos]
+        descriptions = [info.label + ' (%s, %s)' % (_("initialized") if info.initialized else _("wiped"),
+                                                    str( (info.device and info.device.path)
+                                                         or 'unknown transport' )[:20]
+                                                    )
+                        for info in infos]
         c = handler.query_choice(msg, descriptions)
         if c is None:
             raise UserCancelled()
@@ -859,10 +863,11 @@ class DeviceMgr(ThreadJob, PrintError):
                     connected[client] = pair
                 else:
                     disconnected_ids.append(pair[1])
-            self.clients = connected
 
-        # Unpair disconnected devices
-        for id_ in disconnected_ids:
-            self.unpair_id(id_)
+            # Unpair disconnected devices
+            for id_ in disconnected_ids:
+                self.unpair_id(id_)
+
+            self.clients = connected
 
         return devices
