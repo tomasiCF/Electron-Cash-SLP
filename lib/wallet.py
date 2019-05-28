@@ -1863,12 +1863,19 @@ class Abstract_Wallet(PrintError):
             if isinstance(k, BIP32_KeyStore):
                 for txin in tx.inputs():
                     for x_pubkey in txin['x_pubkeys']:
-                        _, addr = xpubkey_to_address(x_pubkey)
-                        try:
-                            c, index = self.get_address_index(addr)
-                        except:
-                            continue
-                        if index is not None:
+                        if not x_pubkey[0:2] in ['02', '03', '04']:
+                            _, addr = xpubkey_to_address(x_pubkey)
+                            try:
+                                c, index = self.get_address_index(addr)
+                            except:
+                                continue
+                        else:
+                            c, index = k.scan_for_pubkey_index(x_pubkey)
+                            if c == 0:
+                                addr = self.receiving_addresses[index]
+                            elif c == 1:
+                                addr = self.change_addresses[index]
+                        if index is not None: 
                             k.set_wallet_advice(addr, [c,index])
             if k.can_sign(tx):
                 return True
