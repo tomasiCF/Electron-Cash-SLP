@@ -335,6 +335,8 @@ class Xpub:
         return retval  # None or the derivation based on wallet advice..
 
     def get_pubkey_derivation(self, x_pubkey):
+        if x_pubkey[0:2] in ['02', '03', '04']:
+            return self.get_pubkey_derivation_based_on_wallet_advice(x_pubkey)
         if x_pubkey[0:2] == 'fd':
             return self.get_pubkey_derivation_based_on_wallet_advice(x_pubkey)
         if x_pubkey[0:2] != 'ff':
