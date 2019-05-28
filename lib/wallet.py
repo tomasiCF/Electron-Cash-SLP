@@ -1549,6 +1549,7 @@ class Abstract_Wallet(PrintError):
             coin_chooser = coinchooser.CoinChooserPrivacy()
             tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, mandatory_coins=mandatory_coins)
         else:
+            inputs.extend(mandatory_coins)
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
