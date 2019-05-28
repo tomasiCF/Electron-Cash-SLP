@@ -122,6 +122,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet = wallet
         self.config = config = gui_object.config
         self.is_slp_wallet = "slp_" in self.wallet.storage.get('wallet_type', '')
+        self.non_slp_wallet_warning_shown = False
 
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
@@ -524,7 +525,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return is_old_bad
 
     def _warn_slp_prefers_slp_wallets_if_not_slp_wallet(self):
-        if not self.is_slp_wallet:
+        if not self.is_slp_wallet and not self.non_slp_wallet_warning_shown:
             msg = '\n\n'.join([
                 _("WARNING: SLP Tokens Disabled."),
                 _("SLP tokens were detected in this older style wallet file and this version does not allow use of SLP tokens for your protection."),
@@ -534,6 +535,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 _("If you want to recover the SLP tokens in this wallet file you need to install version 3.4.6 of this software and follow the instructions provided above.")
             ])
             self.show_warning(msg, title=_("SLP Tokens Detected in a Non-SLP Wallet"))
+            self.non_slp_wallet_warning_shown = True
 
     def open_wallet(self):
         try:
