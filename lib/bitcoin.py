@@ -425,7 +425,7 @@ SCRIPT_TYPES = {
 
 def serialize_privkey(secret, compressed, txin_type, *, net=None):
     if net is None: net = networks.net
-    prefix = bytes([(SCRIPT_TYPES[txin_type]+net.WIF_PREFIX)&255])
+    prefix = bytes([(net.WIF_PREFIX)&255])
     suffix = b'\01' if compressed else b''
     vchIn = prefix + secret + suffix
     return EncodeBase58Check(vchIn)
