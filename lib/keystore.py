@@ -68,7 +68,13 @@ class KeyStore(PrintError):
                     continue
                 derivation = self.get_pubkey_derivation(x_pubkey)
                 if not derivation:
-                    continue
+                    try:
+                        if x_pubkey[0:2] in ['02', '03', '04']:
+                            derivation = self.wallet_advice.get(txin['address'])
+                    except:
+                        pass
+                    if not derivation:
+                        continue
                 keypairs[x_pubkey] = derivation
         return keypairs
 
@@ -270,6 +276,15 @@ class Xpub:
             else:
                 self.xpub_receive = xpub
         return self.get_pubkey_from_xpub(xpub, (n,))
+
+    def scan_for_pubkey_index(self, pubkey, depth=100):
+        for i in range(depth):
+            if self.derive_pubkey(0, i) == pubkey:
+                return (0, i)
+        for i in range(depth):
+            if self.derive_pubkey(1, i) == pubkey:
+                return (1, i)
+        return (None, None)
 
     @classmethod
     def get_pubkey_from_xpub(self, xpub, sequence):
