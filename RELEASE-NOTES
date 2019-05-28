@@ -89,3 +89,16 @@ Electron Cash - SLP Token Edition
 - Fix bug in wizard dialog for restore seed
 - Minor tweaks and fixes to SLP related UI
 - Ported various improvements from mainline Electron Cash latest master branch
+
+3.4.13 Updates & Features
+-----
+- Send BCH amount and SLP amount simultaneously
+- Now tokens are now added to the Tokens tab automatically (distinguished with red text with "right-click to add" note)
+- Added minting baton indication column in the Tokens tab
+- Completed multi-payment support for simpleledger per URI spec, send tab only, doesn't include tokenflags
+- Enable SLP for "slp_imported_privkey" and "slp_imported_addr" wallet types
+- Fixed bug causing transaction to hang after uploading a Token Document
+- Added support for signing multisig transactions without "x_pubkey" format, also can sign multisig from non-multisig wallet
+- Various other fixes were ported from mainline Electron Cash
+- Improved isolated of SLP gui from non-SLP type wallets
+- Fixed gui window size issue with high resolution monitors (e.g., Microsoft Surface)
