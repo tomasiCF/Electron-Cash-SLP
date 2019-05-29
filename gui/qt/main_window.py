@@ -2588,10 +2588,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return self.wallet.get_spendable_coins(None, self.config, isInvoice)
 
     def get_slp_coins(self, isInvoice = False):
-        if self.pay_from:
-            return self.pay_from
-        else:
-            return self.wallet.get_slp_spendable_coins(self.slp_token_id, None, self.config, isInvoice)
+        return self.wallet.get_slp_spendable_coins(self.slp_token_id, None, self.config, isInvoice)
 
     def spend_coins(self, coins):
         self.set_pay_from(coins)
