@@ -2303,6 +2303,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payment_request_error_signal.emit()
 
     def pay_to_URI(self, URI):
+        self.do_clear()
         if not URI:
             return
         try:
@@ -2363,6 +2364,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 elif 'bch' in amounts:
                     self.amount_e.setAmount(amounts['bch']['amount'])
                     self.amount_e.textEdited.emit("")
+                    self.slp_extra_bch_cb.setChecked(True)
+                    self.slp_extra_bch_cb.clicked.emit()
             else:
                 self.show_error("Unsupported URI prefix: " + scheme)
 
