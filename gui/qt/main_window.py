@@ -2025,7 +2025,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 outputs.append((TYPE_ADDRESS, change_addr, 546))
 
         # add normal BCH amounts
-        if not self.payment_request:
+        if not self.payment_request and self.amount_e.get_amount():
             outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
 
         """ Only Allow OP_RETURN if SLP is disabled. """
