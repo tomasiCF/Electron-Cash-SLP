@@ -37,18 +37,12 @@ from .util import format_satoshis_plain
 DEFAULT_EXPLORER = "Bitcoin.com"
 
 mainnet_block_explorers = {
+    'simpleledger.info': ('https://simpleledger.info',
+                    Address.FMT_SLPADDR,
+                    {'tx': '#tx', 'addr': '#address'}),
     'Bitcoin.com': ('https://explorer.bitcoin.com/bch',
-                    Address.FMT_CASHADDR,
-                    {'tx': 'tx', 'addr': 'address'}),
-    'Blockchair.com': ('https://blockchair.com/bitcoin-cash',
-                       Address.FMT_CASHADDR,
-                       {'tx': 'transaction', 'addr': 'address'}),
-    'BTC.com': ('https://bch.btc.com',
-                       Address.FMT_CASHADDR,
-                       {'tx': '', 'addr': ''}),
-    'ViaBTC.com': ('https://www.viabtc.com/bch',
-                   Address.FMT_CASHADDR,
-                   {'tx': 'tx', 'addr': 'address'})
+                    Address.FMT_SLPADDR,
+                    {'tx': 'tx', 'addr': 'address'})
 }
 
 DEFAULT_EXPLORER_TESTNET = 'Bitcoin.com'

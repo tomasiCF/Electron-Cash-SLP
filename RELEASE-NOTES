@@ -96,6 +96,7 @@ Electron Cash - SLP Token Edition
 - Now tokens are now added to the Tokens tab automatically (distinguished with red text with "right-click to add" note)
 - Added minting baton indication column in the Tokens tab
 - Completed multi-payment support for simpleledger per URI spec, send tab only, doesn't include tokenflags
+- Added https://simpleledger.info to block explorers list, removed non SLP-enabled explorers from list 
 - Enable SLP for "slp_imported_privkey" and "slp_imported_addr" wallet types
 - Fixed bug causing transaction to hang after uploading a Token Document
 - Added support for signing multisig transactions without "x_pubkey" format, also can sign multisig from non-multisig wallet
