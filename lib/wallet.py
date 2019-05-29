@@ -1144,8 +1144,8 @@ class Abstract_Wallet(PrintError):
         else:
             raise RuntimeError(slpMsg.transaction_type)
 
-        # On receiving a new SEND always add entry to token_types if wallet hasn't seen tokenId yet
-        if slpMsg.transaction_type == 'SEND':
+        # On receiving a new SEND or MINT always add entry to token_types if wallet hasn't seen tokenId yet
+        if slpMsg.transaction_type in [ 'SEND', 'MINT' ]:
             tokenid = slpMsg.op_return_fields['token_id_hex']
             new_token = True
             for k, v in self.tx_tokinfo.items():
