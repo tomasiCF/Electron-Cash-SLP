@@ -110,6 +110,17 @@ class UTXOList(MyTreeWidget):
         return { x.data(0, Qt.UserRole) : x.data(0, Qt.UserRole+1) # dict of "name" -> frozen flags string (eg: "ac")
                 for x in self.selectedItems() }
 
+    def are_any_slp_coins(self, coins):
+        for coin in coins:
+            addrdict = self.wallet._slp_txo.get(coin['address'], {})
+            try:
+                addrdict[coin['prevout_hash']][int(coin['prevout_n'])]
+            except KeyError:
+                pass
+            else:
+                return True
+        return False
+        
     def create_menu(self, position):
         selected = self.get_selected()
         if not selected:
@@ -119,8 +130,8 @@ class UTXOList(MyTreeWidget):
         if not coins:
             return
         spendable_coins = list(filter(lambda x: not selected.get(self.get_name(x), ''), coins))
-        # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins
-        menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins)).setEnabled(bool(spendable_coins))
+        # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins (or if has SLP coins)
+        menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins)).setEnabled(bool(spendable_coins) and not self.are_any_slp_coins(spendable_coins))
         if len(selected) == 1:
             # "Copy ..."
             item = self.itemAt(position)

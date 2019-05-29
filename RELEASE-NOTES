@@ -103,3 +103,4 @@ Electron Cash - SLP Token Edition
 - Various other fixes were ported from mainline Electron Cash
 - Improved isolated of SLP gui from non-SLP type wallets
 - Fixed gui window size issue with high resolution monitors (e.g., Microsoft Surface)
+- Prevent spending of individual coins that are holding SLP tokens
