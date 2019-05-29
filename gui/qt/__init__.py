@@ -33,7 +33,10 @@ except Exception:
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+try:
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+except:
+    pass
 
 from electroncash.i18n import _, set_language
 from electroncash.plugins import run_hook
