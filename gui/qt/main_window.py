@@ -1361,10 +1361,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payto_e.check_text()
         self.slp_amount_e.setText("")
         if self.slp_token_id is None:
+            self.amount_e.setDisabled(False)
+            self.amount_label.setDisabled(False)
+            self.max_button.setDisabled(False)
+            self.fiat_send_e.setDisabled(False)	
+            self.slp_extra_bch_cb.setHidden(True)
             self.slp_amount_e.setDisabled(True)
             self.slp_max_button.setDisabled(True)
             self.slp_amount_label.setDisabled(True)
         else:
+            self.slp_extra_bch_cb.setHidden(False)
+            self.slp_extra_bch_cb.setChecked(False)
+            self.slp_extra_bch_cb.clicked.emit()
             self.slp_amount_e.setDisabled(False)
             self.slp_max_button.setDisabled(False)
             self.slp_amount_label.setDisabled(False)
@@ -1372,6 +1380,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_amount_e.set_token(tok['name'][:6],tok['decimals'])
         self.update_status()
         self.do_update_fee()
+
+    def on_slp_extra_bch(self):		
+        if self.slp_extra_bch_cb.isChecked():		
+            self.amount_e.setDisabled(False)		
+            self.amount_label.setDisabled(False)		
+            self.max_button.setDisabled(False)		
+            self.fiat_send_e.setDisabled(False)		
+        else:		
+            self.amount_e.setText('')
+            self.max_button.setChecked(False)
+            self.amount_e.setDisabled(True)		
+            self.amount_label.setDisabled(True)		
+            self.max_button.setDisabled(True)		
+            self.fiat_send_e.setDisabled(True)
 
     def create_send_tab(self):
         # A 4-column grid layout.  All the stretch is in the last column.
@@ -1524,6 +1546,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             hbox.addWidget(self.slp_max_button)
             grid.addLayout(hbox, 7, 1)
 
+            self.slp_extra_bch_cb = QCheckBox(_('Also send BCH?'))		
+            self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)	
+            self.slp_extra_bch_cb.setHidden(True)	
+            grid.addWidget(self.slp_extra_bch_cb, 7, 2)		
 
             msg = _('Select the SLP token to send.')
             self.slp_token_type_label = HelpLabel(_('Token Type'), msg)
