@@ -1771,7 +1771,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
 
                 outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
-                if not outputs:
+                if not outputs or not self.payto_e.payto_address:
                     _type, addr = self.get_payto_or_dummy()
                     outputs = [(_type, addr, amount)]
 
