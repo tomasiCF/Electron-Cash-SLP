@@ -319,8 +319,9 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         def on_signed(result):
             callback(True)
+
         def on_failed(exc_info):
-            self.on_error(exc_info)
+            self.main_window.on_error(exc_info)
             callback(False)
 
         if self.main_window.tx_external_keypairs:
