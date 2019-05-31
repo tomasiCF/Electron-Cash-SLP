@@ -1419,6 +1419,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.token_type_combo.setItemDelegate(QStyledItemDelegate(self.token_type_combo))
             self.token_type_combo.setFixedWidth(200)
             self.token_type_combo.currentIndexChanged.connect(self.on_slptok)
+            self.token_type_combo.currentIndexChanged.connect(self.update_buttons_on_seed)  # update 'CoinText' button, etc
 
         msg = _('Recipient of the funds.') + '\n\n'\
               + _('You may enter a Bitcoin Cash address, a label from your list of contacts (a list of completions will be proposed), or an alias (email-like address that forwards to a Bitcoin Cash address)') + ".\n\n" \
@@ -1571,14 +1572,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.preview_button = EnterButton(_("&Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
         self.send_button = EnterButton(_("&Send"), self.do_send)
+        self.cointext_button = EnterButton(_("Coin&Text"), self.do_cointext)
+        self.cointext_button.setToolTip(_('Process CoinText, transforming it into a BIP70 payment request.'))
         self.clear_button = EnterButton(_("&Clear"), self.do_clear)
         buttons = QHBoxLayout()
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
+        buttons.addWidget(self.cointext_button)
         buttons.addStretch(1)
         grid.addLayout(buttons, 11, 1, 1, 3)
 
+        self.payto_e.textChanged.connect(self.update_buttons_on_seed)  # hide/unhide cointext button, etc
 
         self.amount_e.shortcut.connect(self.spend_max)
         self.payto_e.textChanged.connect(self.update_fee)
@@ -2064,14 +2069,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fee = self.fee_e.get_amount() if freeze_fee else None
         return outputs, fee, label, coins, change_addr, selected_slp_coins
 
-    def read_send_tab_for_cointext(self):
-        ''' A bit of a hack. This is called in do_send and if it returns True,
-        it means there was a valid Cointext and the send tab processing code
-        should immediately do nothing.
-
-        If False, if means no cointext in payto, so proceed with do_send callpath
-        as always. '''
-        if self.payto_e.cointext and not self.payment_request and self.wallet.network:
+    def do_cointext(self):
+        ''' This is called by the cointext button 'clicked' signal and it
+        initiates the processing of the cointext URL.  This should only be
+        called if self.payto_e.cointext is not None, otherwise it will do
+        nothing. '''
+        if self.payto_e.cointext and not self.payment_request:
+            if self.gui_object.warn_if_no_network(self):
+                return
             phone = self.payto_e.cointext
             sats = self.amount_e.get_amount()
             if sats:
@@ -2099,8 +2104,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                               get_cointext_pr, on_success, on_error)
             else:
                 self.show_error(_('CoinText: Please specify an amount'))
-            return True
-        return False
 
     def do_preview(self):
         self.do_send(preview = True)
@@ -2109,13 +2112,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if run_hook('abort_send', self):
             return
 
-        if self.read_send_tab_for_cointext():
-            # Send tab had cointext URL -- try and parse it and make it into
-            # a payment request which will complete sometime later.  Abort for
-            # now.
-            return
-
         r = self.read_send_tab(preview=preview)
+
         if not r:
             return
         outputs, fee, tx_desc, coins, change_addrs, slp_coins = r
@@ -2308,6 +2306,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def prepare_for_payment_request(self):
         self.show_send_tab()
+        self.payto_e.cointext = None
         self.payto_e.is_pr = True
         for e in [self.payto_e, self.amount_e, self.message_e]:
             e.setFrozen(True)
@@ -2888,7 +2887,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def update_buttons_on_seed(self):
         self.seed_button.setVisible(self.wallet.has_seed())
         self.password_button.setVisible(self.wallet.can_change_password())
-        self.send_button.setVisible(not self.wallet.is_watching_only())
+        is_cointext = bool(self.payto_e.cointext) and self.token_type_combo.currentIndex() == 0
+        self.send_button.setVisible(not self.wallet.is_watching_only() and not is_cointext)
+        self.preview_button.setVisible(not is_cointext)
+        self.cointext_button.setVisible(is_cointext)
 
     def change_password_dialog(self):
         from .password_dialog import ChangePasswordDialog
