@@ -37,6 +37,10 @@ from electroncash import networks
 from . import util
 
 RE_ALIAS = '^(.*?)\s*\<([0-9A-Za-z:]{26,})\>$'
+RE_COINTEXT = r'^\s*cointext:([-+ 0-9]+)\s*$'
+
+RX_ALIAS = re.compile(RE_ALIAS)
+RX_COINTEXT = re.compile(RE_COINTEXT, re.I)
 
 frozen_style = "PayToEdit { border:none;}"
 normal_style = "PayToEdit { }"
@@ -72,6 +76,8 @@ class PayToEdit(ScanQRTextEdit):
         self.update_size()
         self.payto_address = None
         self.address_string_for_slp_check = ''
+        self.cointext = None
+
         self.previous_payto = ''
 
     def setFrozen(self, b):
@@ -98,9 +104,17 @@ class PayToEdit(ScanQRTextEdit):
         except:
             return bitcoin.TYPE_SCRIPT, ScriptOutput.from_string(x)
 
+    def parse_cointext(self, txt):
+        ''' Returns a non-empty string which is the phone number in a cointext:
+        style pseudo-url, if x matches the cointext re (eg: cointext:NUMBERS),
+        otherwise returns None. '''
+        m = RX_COINTEXT.match(txt)
+        if m: return ''.join(x for x in m[1].strip() if x.isdigit()) or None
+        return None
+
     def parse_address(self, line):
         r = line.strip()
-        m = re.match(RE_ALIAS, r)
+        m = RX_ALIAS.match(r)
         address = m.group(2) if m else r
         return Address.from_string(address)
 
@@ -119,6 +133,7 @@ class PayToEdit(ScanQRTextEdit):
         outputs = []
         total = 0
         self.payto_address = None
+        self.cointext = None
         if len(lines) == 1:
             data = lines[0]
             if ':' in data and '?' in data and len(data) > 35:
@@ -140,7 +155,11 @@ class PayToEdit(ScanQRTextEdit):
                 self.address_string_for_slp_check = data
             except:
                 self.address_string_for_slp_check = ''
-            if self.payto_address:
+                try:
+                    self.cointext = self.parse_cointext(data)
+                except:
+                    pass
+            if self.payto_address or self.cointext:
                 self.win.lock_amount(False)
                 return
 
