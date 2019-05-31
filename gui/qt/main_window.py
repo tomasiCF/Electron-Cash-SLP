@@ -548,6 +548,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         filename, __ = QFileDialog.getOpenFileName(self, "Select your wallet file", wallet_folder)
         if not filename:
             return
+        if filename.lower().endswith('.txn'):
+            # they did File -> Open on a .txn, just do that.
+            self.do_process_from_file(fileName=filename)
+            return
         self.gui_object.new_window(filename)
 
 
@@ -3229,8 +3233,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self._qr_dialog = None
             self.show_error(str(e))
 
-    def read_tx_from_file(self):
-        fileName = self.getOpenFileName(_("Select your transaction file"), "*.txn")
+    def read_tx_from_file(self, *, fileName = None):
+        fileName = fileName or self.getOpenFileName(_("Select your transaction file"), "*.txn")
         if not fileName:
             return
         try:
@@ -3256,10 +3260,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
-    def do_process_from_file(self):
+    def do_process_from_file(self, *, fileName = None):
         from electroncash.transaction import SerializationError
         try:
-            tx = self.read_tx_from_file()
+            tx = self.read_tx_from_file(fileName=fileName)
             if tx:
                 self.show_transaction(tx)
         except SerializationError as e:
