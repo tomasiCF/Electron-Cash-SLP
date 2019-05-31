@@ -1421,7 +1421,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.token_type_combo.currentIndexChanged.connect(self.on_slptok)
 
         msg = _('Recipient of the funds.') + '\n\n'\
-              + _('You may enter a Bitcoin Cash address, a label from your list of contacts (a list of completions will be proposed), or an alias (email-like address that forwards to a Bitcoin Cash address)')
+              + _('You may enter a Bitcoin Cash address, a label from your list of contacts (a list of completions will be proposed), or an alias (email-like address that forwards to a Bitcoin Cash address)') + ".\n\n" \
+              + _('You may also enter cointext:(NUMBER) to send a CoinText.')
         payto_label = HelpLabel(_('Pay &to'), msg)
         payto_label.setBuddy(self.payto_e)
         grid.addWidget(payto_label, 1, 0)
@@ -2451,6 +2452,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.not_enough_funds = False
         self.op_return_toolong = False
         self.payment_request = None
+        self.payto_e.cointext = None
         self.payto_e.is_pr = False
         self.opreturn_rawhex_cb.setChecked(False)
         self.set_pay_from([])
