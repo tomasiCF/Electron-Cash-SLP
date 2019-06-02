@@ -867,12 +867,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # cache the icons to save on CPU overhead per update_status call
             icon_dict.update({
                 "status_disconnected" : QIcon(":icons/status_disconnected.png"),
-                "status_waiting" : QIcon(":icons/status_waiting.png"),
-                "status_lagging" : QIcon(":icons/status_lagging.png"),
+                "status_waiting" : QIcon(":icons/status_waiting.svg"),
+                "status_lagging" : QIcon(":icons/status_lagging.svg"),
                 "status_lagging_fork" : QIcon(":icons/status_lagging_fork.png"),
-                "status_connected" : QIcon(":icons/status_connected.png"),
+                "status_connected" : QIcon(":icons/status_connected.svg"),
                 "status_connected_fork" : QIcon(":icons/status_connected_fork.png"),
-                "status_connected_proxy" : QIcon(":icons/status_connected_proxy.png"),
+                "status_connected_proxy" : QIcon(":icons/status_connected_proxy.svg"),
                 "status_connected_proxy_fork" : QIcon(":icons/status_connected_proxy_fork.png"),
                 "seed_ok" : QIcon(":icons/seed.png"),
                 "seed_warning" : QIcon(":icons/seed_warning.png")
@@ -2870,7 +2870,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         )
         sb.addPermanentWidget(self.addr_converter_button)
 
-        sb.addPermanentWidget(StatusBarButton(QIcon(":icons/preferences.png"), _("Preferences"), self.settings_dialog ) )
+        sb.addPermanentWidget(StatusBarButton(QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog ) )
         self.seed_button = StatusBarButton(QIcon(":icons/seed.png"), _("Seed"), self.show_seed_dialog )
         sb.addPermanentWidget(self.seed_button)
         weakSelf = Weak(self)
@@ -2881,7 +2881,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.setStatusBar(sb)
 
     def update_lock_icon(self):
-        icon = QIcon(":icons/lock.png") if self.wallet.has_password() else QIcon(":icons/unlock.png")
+        icon = QIcon(":icons/lock.svg") if self.wallet.has_password() else QIcon(":icons/unlock.svg")
         self.password_button.setIcon(icon)
 
     def update_buttons_on_seed(self):
