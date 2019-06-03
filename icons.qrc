@@ -34,7 +34,7 @@
     <file>icons/status_connected_fork.png</file>
     <file>icons/status_connected_proxy.svg</file>
     <file>icons/status_connected_proxy_fork.png</file>
-    <file>icons/status_disconnected.png</file>
+    <file>icons/status_disconnected.svg</file>
     <file>icons/status_waiting.svg</file>
     <file>icons/status_lagging.svg</file>
     <file>icons/status_lagging_fork.png</file>

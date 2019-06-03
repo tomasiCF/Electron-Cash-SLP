@@ -866,7 +866,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not icon_dict:
             # cache the icons to save on CPU overhead per update_status call
             icon_dict.update({
-                "status_disconnected" : QIcon(":icons/status_disconnected.png"),
+                "status_disconnected" : QIcon(":icons/status_disconnected.svg"),
                 "status_waiting" : QIcon(":icons/status_waiting.svg"),
                 "status_lagging" : QIcon(":icons/status_lagging.svg"),
                 "status_lagging_fork" : QIcon(":icons/status_lagging_fork.png"),
@@ -2875,7 +2875,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         sb.addPermanentWidget(self.seed_button)
         weakSelf = Weak(self)
         gui_object = self.gui_object
-        self.status_button = StatusBarButton(QIcon(":icons/status_disconnected.png"), _("Network"), lambda: gui_object.show_network_dialog(weakSelf))
+        self.status_button = StatusBarButton(QIcon(":icons/status_disconnected.svg"), _("Network"), lambda: gui_object.show_network_dialog(weakSelf))
         sb.addPermanentWidget(self.status_button)
         run_hook('create_status_bar', sb)
         self.setStatusBar(sb)
