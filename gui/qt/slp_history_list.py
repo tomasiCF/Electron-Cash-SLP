@@ -40,14 +40,14 @@ from collections import defaultdict
 TX_ICONS = [
     "warning.png",
     "warning.png",
-    "unconfirmed.png",
-    "unconfirmed.png",
-    "clock1.png",
-    "clock2.png",
-    "clock3.png",
-    "clock4.png",
-    "clock5.png",
-    "confirmed.png",
+    "unconfirmed.svg",
+    "unconfirmed.svg",
+    "clock1.ico",
+    "clock2.ico",
+    "clock3.ico",
+    "clock4.ico",
+    "clock5.ico",
+    "confirmed.svg",
 ]
 
 
@@ -166,10 +166,10 @@ class HistoryList(MyTreeWidget):
             icontooltip = _("Unknown token ID")
         elif validity == 0:
             # For in-progress validation, always show gears regardless of confirmation status.
-            icon=QIcon(":icons/unconfirmed.png")
+            icon=QIcon(":icons/unconfirmed.svg")
             icontooltip = _("SLP unvalidated")
         elif validity in (None,2,3):
-            icon=QIcon(":icons/expired.png")
+            icon=QIcon(":icons/expired.svg")
             if validity is None:
                 icontooltip = "non-SLP (tokens burned!)"
             else:
@@ -232,7 +232,7 @@ class HistoryList(MyTreeWidget):
             menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = token_id))
         elif self.wallet.token_types.get(token_id)['decimals'] == '?':
             menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = token_id, allow_overwrite=True))
-            
+
         menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
         if column in self.editable_columns:
             # We grab a fresh reference to the current item, as it has been deleted in a reported issue.
