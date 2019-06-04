@@ -1145,21 +1145,37 @@ class Abstract_Wallet(PrintError):
             raise RuntimeError(slpMsg.transaction_type)
 
         # On receiving a new SEND or MINT always add entry to token_types if wallet hasn't seen tokenId yet
-        if slpMsg.transaction_type in [ 'SEND', 'MINT' ]:
-            tokenid = slpMsg.op_return_fields['token_id_hex']
-            new_token = True
-            for k, v in self.tx_tokinfo.items():
-                try:
-                    if v['token_id'] == tokenid:
-                        new_token = False
-                except KeyError:
-                    pass
-            if new_token:
-                tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
-                        'decimals': "?",
-                        'name': 'unknown-' + slpMsg.op_return_fields['token_id_hex'][:3]
-                        }
-                self.token_types[slpMsg.op_return_fields['token_id_hex']] = tty
+        if slpMsg.transaction_type in [ 'SEND', 'MINT', 'GENESIS' ]:
+            if slpMsg.transaction_type == 'GENESIS':
+                tokenid = tx_hash
+                new_token = True
+                for k, v in self.tx_tokinfo.items():
+                    try:
+                        if v['token_id'] == tokenid:
+                            new_token = False
+                    except KeyError:
+                        pass
+                if new_token:
+                    tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
+                            'decimals': "?",
+                            'name': 'unknown-' + tokenid[:3]
+                            }
+                    self.token_types[tokenid] = tty
+            else:
+                tokenid = slpMsg.op_return_fields['token_id_hex']
+                new_token = True
+                for k, v in self.tx_tokinfo.items():
+                    try:
+                        if v['token_id'] == tokenid:
+                            new_token = False
+                    except KeyError:
+                        pass
+                if new_token:
+                    tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
+                            'decimals': "?",
+                            'name': 'unknown-' + slpMsg.op_return_fields['token_id_hex'][:3]
+                            }
+                    self.token_types[slpMsg.op_return_fields['token_id_hex']] = tty
 
         # Always add entry to tx_tokinfo
         tti = { 'type':'SLP%d'%(slpMsg.token_type,),
