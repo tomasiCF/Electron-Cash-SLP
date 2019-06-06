@@ -191,8 +191,11 @@ class CoinChooserBase(PrintError):
         def sufficient_funds(buckets):
             '''Given a list of buckets, return True if it has enough
             value to pay for the transaction'''
-            total_input = sum(bucket.value for bucket in buckets)
-            total_size = sum(bucket.size for bucket in buckets) + base_size
+            mandatory_coins_bucket = self.bucketize_coins(mandatory_coins, sign_schnorr=sign_schnorr)
+            mandatory_input = sum(coin.value for coin in mandatory_coins_bucket)
+            mandatory_input_size = sum(coin.size for coin in mandatory_coins_bucket)
+            total_input = sum(bucket.value for bucket in buckets) + mandatory_input
+            total_size = sum(bucket.size for bucket in buckets) + mandatory_input_size + base_size
             return total_input >= spent_amount + fee_estimator(total_size)
 
         # Collect the coins into buckets, choose a subset of the buckets
