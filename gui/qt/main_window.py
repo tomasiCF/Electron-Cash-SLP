@@ -1860,9 +1860,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.fee_e.setAmount(fee)
 
             if self.max_button.isChecked():
-                amount = tx.output_value() - len(token_outputs_amts) * 546
-                if not self.slp_amount_e.get_amount():
-                    amount = tx.output_value()
+                amount = tx.output_value()
+                if self.is_slp_wallet:
+                    amount = tx.output_value() - len(token_outputs_amts) * 546
                 self.amount_e.setAmount(amount)
             if fee is not None:
                 fee_rate = fee / tx.estimated_size()
@@ -2894,7 +2894,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def update_buttons_on_seed(self):
         self.seed_button.setVisible(self.wallet.has_seed())
         self.password_button.setVisible(self.wallet.can_change_password())
-        is_cointext = bool(self.payto_e.cointext) and self.token_type_combo.currentIndex() == 0
+        is_cointext = bool(self.payto_e.cointext)
+        if is_cointext and self.slp_token_id: 
+            self.token_type_combo.setCurrentIndex(0)
         self.send_button.setVisible(not self.wallet.is_watching_only() and not is_cointext)
         self.preview_button.setVisible(not is_cointext)
         self.cointext_button.setVisible(is_cointext)
