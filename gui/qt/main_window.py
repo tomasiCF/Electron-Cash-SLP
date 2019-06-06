@@ -1797,82 +1797,84 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.fee_e.setAmount(None)
             self.not_enough_funds = False
             self.statusBar().showMessage('')
-        else:
-            fee = self.fee_e.get_amount() if freeze_fee else None
-            try:
-                selected_slp_coins = []
-                if self.slp_token_id:
-                    amt = self.slp_amount_e.get_amount() or 0
-                    if self.slp_amount_e.text() == '!':
-                        self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id)[3])
-                    slp_coins = self.get_slp_coins()
-                    total_amt_added = 0
-                    for coin in slp_coins:
-                        if total_amt_added < amt:
-                            selected_slp_coins.append(coin)
-                            total_amt_added+=coin['token_value']
-                    token_outputs_amts.append(amt)
-                    token_change = total_amt_added - amt
-                    if token_change > 0:
-                        token_outputs_amts.append(token_change)
-                    slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
-                    outputs.append(slp_op_return_msg)
-                    for amt in token_outputs_amts:
-                        outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
+        fee = self.fee_e.get_amount() if freeze_fee else None
+        try:
+            selected_slp_coins = []
+            if self.slp_token_id:
+                amt = self.slp_amount_e.get_amount() or 0
+                valid_bal = self.wallet.get_slp_token_balance(self.slp_token_id)[3]
+                if amt > valid_bal:
+                    raise NotEnoughFundsSlp()
+                if self.slp_amount_e.text() == '!':
+                    self.slp_amount_e.setAmount(valid_bal)
+                slp_coins = self.get_slp_coins()
+                total_amt_added = 0
+                for coin in slp_coins:
+                    if total_amt_added < amt:
+                        selected_slp_coins.append(coin)
+                        total_amt_added+=coin['token_value']
+                token_outputs_amts.append(amt)
+                token_change = total_amt_added - amt
+                if token_change > 0:
+                    token_outputs_amts.append(token_change)
+                slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
+                outputs.append(slp_op_return_msg)
+                for amt in token_outputs_amts:
+                    outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
 
-                outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
-                if not outputs or not self.payto_e.payto_address:
-                    _type, addr = self.get_payto_or_dummy()
-                    outputs = [(_type, addr, amount)]
+            outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
+            if not outputs or not self.payto_e.payto_address:
+                _type, addr = self.get_payto_or_dummy()
+                outputs = [(_type, addr, amount)]
 
-                if not self.slp_token_id:
-                    opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
-                    if (opreturn_message != '' and opreturn_message is not None):
-                        if self.opreturn_rawhex_cb.isChecked():
-                            outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
-                        else:
-                            outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
+            if not self.slp_token_id:
+                opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
+                if (opreturn_message != '' and opreturn_message is not None):
+                    if self.opreturn_rawhex_cb.isChecked():
+                        outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
+                    else:
+                        outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
 
-                tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
-                if self.is_slp_wallet and self.slp_token_id:
-                    self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]))
-                self.not_enough_funds = False
-                self.op_return_toolong = False
-            except NotEnoughFunds:
-                self.not_enough_funds = True
-                if not freeze_fee:
-                    self.fee_e.setAmount(None)
-                return
-            except NotEnoughFundsSlp:
-                self.not_enough_funds_slp = True
-                if not freeze_fee:
-                    self.fee_e.setAmount(None)
-                return
-            except NotEnoughUnfrozenFundsSlp:
-                self.not_enough_unfrozen_funds_slp = True
-                if not freeze_fee:
-                    self.fee_e.setAmount(None)
-                return
-            except OPReturnTooLarge:
-                self.op_return_toolong = True
-                return
-            except OPReturnError as e:
-                self.statusBar().showMessage(str(e))
-                return
-            except BaseException:
-                return
-
+            tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
+            if self.is_slp_wallet and self.slp_token_id:
+                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]))
+            self.not_enough_funds = False
+            self.op_return_toolong = False
+        except NotEnoughFunds:
+            self.not_enough_funds = True
             if not freeze_fee:
-                fee = None if self.not_enough_funds else tx.get_fee()
-                self.fee_e.setAmount(fee)
+                self.fee_e.setAmount(None)
+            return
+        except NotEnoughFundsSlp:
+            self.not_enough_funds_slp = True
+            if not freeze_fee:
+                self.fee_e.setAmount(None)
+            return
+        except NotEnoughUnfrozenFundsSlp:
+            self.not_enough_unfrozen_funds_slp = True
+            if not freeze_fee:
+                self.fee_e.setAmount(None)
+            return
+        except OPReturnTooLarge:
+            self.op_return_toolong = True
+            return
+        except OPReturnError as e:
+            self.statusBar().showMessage(str(e))
+            return
+        except BaseException:
+            return
 
-            if self.max_button.isChecked():
-                amount = tx.output_value()
-                if self.is_slp_wallet:
-                    amount = tx.output_value() - len(token_outputs_amts) * 546
-                self.amount_e.setAmount(amount)
-            if fee is not None:
-                fee_rate = fee / tx.estimated_size()
+        if not freeze_fee:
+            fee = None if self.not_enough_funds else tx.get_fee()
+            self.fee_e.setAmount(fee)
+
+        if self.max_button.isChecked():
+            amount = tx.output_value()
+            if self.is_slp_wallet:
+                amount = tx.output_value() - len(token_outputs_amts) * 546
+            self.amount_e.setAmount(amount)
+        if fee is not None:
+            fee_rate = fee / tx.estimated_size()
         self.fee_slider_mogrifier(self.get_custom_fee_text(fee_rate))
 
     def fee_slider_mogrifier(self, text = None):
