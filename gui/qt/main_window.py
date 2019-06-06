@@ -3819,7 +3819,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             m = int(amt * 1000.0) if amt is not None else None
             self.config.set_key('customfee', m)
             self.fee_slider.update()
-            self.fee_slider_mogrifier()
+            if self.fee_custom_lbl.text() == '':
+                self.fee_slider_mogrifier(self.get_custom_fee_text())
+            else:
+                self.fee_slider_mogrifier()
 
         customfee_e = BTCSatsByteEdit()
         customfee_e.setAmount(self.config.custom_fee_rate() / 1000.0 if self.config.has_custom_fee_rate() else None)
