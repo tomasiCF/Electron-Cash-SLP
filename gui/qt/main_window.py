@@ -1382,6 +1382,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_amount_e.setDisabled(True)
             self.slp_max_button.setDisabled(True)
             self.slp_amount_label.setDisabled(True)
+            self.message_opreturn_e.setEnabled(True)
+            self.opreturn_rawhex_cb.setEnabled(True)
+            self.opreturn_label.setEnabled(True)
         else:
             self.slp_extra_bch_cb.setHidden(False)
             self.slp_extra_bch_cb.setChecked(False)
@@ -1391,6 +1394,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_amount_label.setDisabled(False)
             tok = self.wallet.token_types[self.slp_token_id]
             self.slp_amount_e.set_token(tok['name'][:6],tok['decimals'])
+            self.message_opreturn_e.setEnabled(False)
+            self.message_opreturn_e.setText('')
+            self.opreturn_rawhex_cb.setEnabled(False)
+            self.opreturn_label.setEnabled(False)
         self.update_status()
         self.do_update_fee()
 
@@ -1818,7 +1825,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     _type, addr = self.get_payto_or_dummy()
                     outputs = [(_type, addr, amount)]
 
-                if not self.is_slp_wallet:
+                if not self.slp_token_id:
                     opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
                     if (opreturn_message != '' and opreturn_message is not None):
                         if self.opreturn_rawhex_cb.isChecked():
@@ -2046,7 +2053,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
 
         """ Only Allow OP_RETURN if SLP is disabled. """
-        if not self.is_slp_wallet:
+        if not self.slp_token_id:
             try:
                 # handle op_return if specified and enabled
                 opreturn_message = self.message_opreturn_e.text()
@@ -4069,14 +4076,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         enable_opreturn = bool(self.config.get('enable_opreturn'))
         opret_cb = QCheckBox(_('Enable OP_RETURN output'))
-        if not self.is_slp_wallet:
-            opret_cb.setToolTip(_('Enable posting messages with OP_RETURN.'))
-            opret_cb.setChecked(enable_opreturn)
-            opret_cb.stateChanged.connect(on_opret)
-        else:
-            opret_cb.setToolTip(_('(Disabled in SLP wallets) Enable posting messages with OP_RETURN.'))
-            opret_cb.setChecked(False)
-            opret_cb.setDisabled(True)
+        opret_cb.setToolTip(_('Enable posting messages with OP_RETURN.'))
+        opret_cb.setChecked(enable_opreturn)
+        opret_cb.stateChanged.connect(on_opret)
         tx_widgets.append((opret_cb,None))
 
         # Schnorr
