@@ -1495,7 +1495,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.max_button = EnterButton(_("&Max"), self.spend_max)
         self.max_button.setCheckable(True)
         hbox.addWidget(self.max_button)
-        hbox.addStretch(1)
         grid.addLayout(hbox, 5, 1)
 
 
@@ -1506,9 +1505,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.amount_e.frozen.connect(
             lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
 
-        hbox = QHBoxLayout()
-        hbox.addStretch(1)
-        grid.addLayout(hbox, 5, 4)
 
         msg = _('Bitcoin Cash transactions are in general not free. A transaction fee is paid by the sender of the funds.') + '\n\n'\
               + _('The amount of fee can be decided freely by the sender. However, transactions with low fees take more time to be processed.') + '\n\n'\
@@ -1572,11 +1568,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             grid.addWidget(self.token_type_combo, 8, 1)
 
 
-
         grid.addWidget(self.fee_e_label, 9, 0)
-        grid.addWidget(self.fee_slider, 9, 1)
-        grid.addWidget(self.fee_custom_lbl, 9, 1)
-        grid.addWidget(self.fee_e, 9, 2)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.fee_slider)
+        hbox.addWidget(self.fee_custom_lbl)
+        hbox.addWidget(self.fee_e)
+        hbox.addStretch(1)
+        grid.addLayout(hbox, 9, 1)
 
         self.preview_button = EnterButton(_("&Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
