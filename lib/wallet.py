@@ -720,7 +720,7 @@ class Abstract_Wallet(PrintError):
                     for idx, txo in txdict.items():
                         if txo['qty'] == 'MINT_BATON' and txo['token_id'] == slpTokenId:
                             try:
-                                coins = self.get_slp_utxos(slpTokenId, domain = None, exclude_frozen = False, mature = False, confirmed_only = False, slp_include_baton=True)
+                                coins = self.get_slp_utxos(slpTokenId, domain = None, exclude_frozen = False, confirmed_only = False, slp_include_baton=True)
                                 baton_utxo = [ utxo for utxo in coins if utxo['prevout_hash'] == txid and utxo['prevout_n'] == idx and self.tx_tokinfo[txid]['validity'] == 1][0]
                             except IndexError:
                                 continue
@@ -893,34 +893,31 @@ class Abstract_Wallet(PrintError):
         confirmed_only = config.get('confirmed_only', False)
         if (isInvoice):
             confirmed_only = True
-        return self.get_slp_utxos(slpTokenId, domain=domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only)
+        return self.get_slp_utxos(slpTokenId, domain=domain, exclude_frozen=True, confirmed_only=confirmed_only)
 
-    def get_slp_token_balance(self, slpTokenId):
+    def get_slp_coins(self, slpTokenId, domain, config, isInvoice = False):
+        confirmed_only = config.get('confirmed_only', False)
+        if (isInvoice):
+            confirmed_only = True
+        return self.get_slp_utxos(slpTokenId, domain=domain, exclude_frozen=False, confirmed_only=confirmed_only)
+
+    def get_slp_token_balance(self, slpTokenId, config):
         valid_token_bal = 0
         unvalidated_token_bal = 0
         invalid_token_bal = 0
         unfrozen_valid_token_bal = 0
-        with self.lock, self.transaction_lock:
-            for addr, addrdict in self._slp_txo.items():
-                _, spent = self.get_addr_io(addr)
-                for txid, txdict in addrdict.items():
-                    for idx, txo in txdict.items():
-                        if not isinstance(txo.get('qty',None), int): # Ignore baton / non-inputs
-                            continue
-                        # ignore spent txos
-                        if (txid + ":" + str(idx)) in spent:
-                            continue
-                        # add to balance if token_id matches
-                        if slpTokenId == txo['token_id']:
-                            validity = self.tx_tokinfo[txid]['validity']
-                            if validity == 1: # Valid DAG
-                                valid_token_bal += txo['qty']
-                                if addr not in self.frozen_addresses:
-                                    unfrozen_valid_token_bal += txo['qty']
-                            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton)
-                                invalid_token_bal += txo['qty']
-                            elif validity == 0: # Unknown DAG status (should be in processing queue)
-                                unvalidated_token_bal += txo['qty']
+        slp_coins = self.get_slp_coins(slpTokenId, None, config)
+        for coin in slp_coins:
+            txid = coin['prevout_hash']
+            validity = self.tx_tokinfo[txid]['validity']
+            if validity == 1: # Valid DAG
+                valid_token_bal += coin['token_value']
+                if not coin['is_frozen_coin'] and coin['address'] not in self.frozen_addresses:
+                    unfrozen_valid_token_bal += coin['token_value']
+            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton)
+                invalid_token_bal += coin['token_value']
+            elif validity == 0: # Unknown DAG status (should be in processing queue)
+                unvalidated_token_bal += coin['token_value']
         return (valid_token_bal, unvalidated_token_bal, invalid_token_bal, unfrozen_valid_token_bal, valid_token_bal - unfrozen_valid_token_bal)
 
     def get_utxos(self, *, domain = None, exclude_frozen = False, mature = False, confirmed_only = False, exclude_slp = True):
@@ -943,7 +940,7 @@ class Abstract_Wallet(PrintError):
                 continue
         return coins
 
-    def get_slp_utxos(self, slpTokenId, *, domain = None, exclude_frozen = False, mature = False, confirmed_only = False, slp_include_invalid=False, slp_include_baton=False):
+    def get_slp_utxos(self, slpTokenId, *, domain = None, exclude_frozen = False, confirmed_only = False, slp_include_invalid=False, slp_include_baton=False):
         ''' Note that exclude_frozen = True checks for BOTH address-level and coin-level frozen status. '''
         coins = []
         if domain is None:
@@ -956,8 +953,6 @@ class Abstract_Wallet(PrintError):
                 if exclude_frozen and x['is_frozen_coin']:
                     continue
                 if confirmed_only and x['height'] <= 0:
-                    continue
-                if mature and x['coinbase'] and x['height'] + COINBASE_MATURITY > self.get_local_height():
                     continue
                 coins.append(x)
                 continue
@@ -1488,12 +1483,11 @@ class Abstract_Wallet(PrintError):
     def dust_threshold(self):
         return dust_threshold(self.network)
 
-    def check_sufficient_slp_balance(self, slpMessage):
+    def check_sufficient_slp_balance(self, slpMessage, config):
         if "slp_" in self.storage.get('wallet_type', ''):
             if slpMessage.transaction_type == 'SEND':
                 total_token_out = sum(slpMessage.op_return_fields['token_output'])
-                valid_token_balance = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'])[0]
-                valid_unfrozen_token_balance = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'])[3]
+                valid_token_balance, _, _, valid_unfrozen_token_balance, _ = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'], config)
                 if total_token_out > valid_token_balance:
                     raise NotEnoughFundsSlp()
                 elif total_token_out > valid_unfrozen_token_balance:

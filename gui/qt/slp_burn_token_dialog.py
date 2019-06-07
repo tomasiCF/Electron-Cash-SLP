@@ -139,13 +139,13 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
 
     def burn_max(self):
         #self.max_button.setChecked(True)
-        self.token_qty_e.setAmount(self.wallet.get_slp_token_balance(self.token_id_e.text())[3])
+        self.token_qty_e.setAmount(self.wallet.get_slp_token_balance(self.token_id_e.text(), self.main_window.config)[3])
 
     def do_preview(self):
         self.burn_token(preview = True)
 
     def burn_token(self, preview=False):
-        unfrozen_token_qty = self.wallet.get_slp_token_balance(self.token_id_e.text())[3]
+        unfrozen_token_qty = self.wallet.get_slp_token_balance(self.token_id_e.text(), self.main_window.config)[3]
         burn_amt = self.token_qty_e.get_amount()
         if burn_amt == None or burn_amt == 0:
             self.show_message(_("Invalid token quantity entered."))
@@ -163,7 +163,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         outputs = []
         slp_coins = self.wallet.get_slp_utxos(
             self.token_id_e.text(), 
-            domain=None, exclude_frozen=True, mature=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
+            domain=None, exclude_frozen=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
             slp_include_invalid=self.token_burn_invalid_cb.isChecked(), slp_include_baton=self.token_burn_baton_cb.isChecked())
 
         try:

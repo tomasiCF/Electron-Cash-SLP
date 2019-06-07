@@ -914,7 +914,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 except (AttributeError, KeyError):
                     pass
                 else:
-                    bal = format_satoshis_nofloat(self.wallet.get_slp_token_balance(token_id)[0],
+                    bal = format_satoshis_nofloat(self.wallet.get_slp_token_balance(token_id, { 'user_config': { 'confirmed_only': False } })[0],
                                                   decimal_point=d['decimals'],)
                     text += "%s Token Balance: %s; "%(d['name'], bal)
                 c, u, x = self.wallet.get_balance()
@@ -1633,7 +1633,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     text += ' (' + self.format_amount(c+u+x).strip() + ' ' + self.base_unit() + ' ' +_("are frozen") + ')'
                 slp = self.wallet.get_slp_locked_balance()
                 if slp > 0:
-                    text += " (" + self.format_amount(slp).strip() + " locked in tokens)"
+                    text += " (" + self.format_amount(slp).strip() + " BCH held in tokens)"
                 extra = run_hook("not_enough_funds_extra", self)
                 if isinstance(extra, str) and extra:
                     text += " ({})".format(extra)
@@ -1667,20 +1667,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         def entry_changed_slp():
             if self.token_type_combo.currentData():
                 text = ""
-                if self.not_enough_funds_slp:
-                    amt_color = ColorScheme.RED
-                    text = "Not enough " + \
-                            self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
-                                format_satoshis_plain_nofloat(
-                                    self.wallet.get_slp_token_balance(self.slp_token_id)[0],
-                                    self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens available)"
-                elif self.not_enough_unfrozen_funds_slp:
-                    amt_color = ColorScheme.RED
-                    text = "Not enough unfrozen " + \
-                            self.wallet.token_types.get(self.slp_token_id)['name'] + " tokens (" + \
-                                format_satoshis_plain_nofloat(
-                                    self.wallet.get_slp_token_balance(self.slp_token_id)[4],
-                                    self.wallet.token_types.get(self.slp_token_id)['decimals']) + " tokens frozen)"
+                name = self.wallet.token_types.get(self.slp_token_id)['name']
+                decimals = self.wallet.token_types.get(self.slp_token_id)['decimals']
+                if self.not_enough_funds_slp or self.not_enough_unfrozen_funds_slp:
+                    bal_avail, _, _, _, frozen_amt = self.wallet.get_slp_token_balance(self.slp_token_id, { 'user_config': { 'confirmed_only': False }})
+                    if self.not_enough_funds_slp:
+                        amt_color = ColorScheme.RED
+                        text = "Not enough " + \
+                                name + " tokens (" + \
+                                format_satoshis_plain_nofloat(bal_avail, decimals) + " valid"
+                        if self.config.get('confirmed_only', False):
+                            conf_bal_avail = self.wallet.get_slp_token_balance(self.slp_token_id, self.config)[0]
+                            unconf_bal = bal_avail - conf_bal_avail
+                            if unconf_bal > 0:
+                                text += ", " + format_satoshis_plain_nofloat(unconf_bal, decimals) + " unconfirmed)"
+                            else: 
+                                text += ")"
+                        else: 
+                            text += ")"
+                    elif self.not_enough_unfrozen_funds_slp:
+                        amt_color = ColorScheme.RED
+                        text = "Not enough unfrozen " + name + " tokens (" + \
+                                format_satoshis_plain_nofloat(bal_avail, decimals) + " valid, " + \
+                                format_satoshis_plain_nofloat(frozen_amt, decimals) + " frozen)"
                 elif self.slp_amount_e.isModified():
                     amt_color = ColorScheme.DEFAULT
                 else:
@@ -1726,7 +1735,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.do_update_fee()
 
     def slp_spend_max(self):
-        self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id)[0])
+        self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id, self.config)[3])
         self.update_fee()
 
     def update_fee(self):
@@ -1786,6 +1795,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         '''
         outputs = []
         token_outputs_amts = []
+        self.not_enough_funds = False
         self.not_enough_funds_slp = False
         self.not_enough_unfrozen_funds_slp = False
         freeze_fee = (self.fee_e.isModified()
@@ -1795,37 +1805,47 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if amount is None:
             if not freeze_fee:
                 self.fee_e.setAmount(None)
-            self.not_enough_funds = False
             self.statusBar().showMessage('')
         fee = self.fee_e.get_amount() if freeze_fee else None
+
         try:
             selected_slp_coins = []
             if self.slp_token_id:
                 amt = self.slp_amount_e.get_amount() or 0
-                valid_bal = self.wallet.get_slp_token_balance(self.slp_token_id)[3]
+                valid_bal, _, _, unfrozen_bal, _ = self.wallet.get_slp_token_balance(self.slp_token_id, self.config)
                 if amt > valid_bal:
                     raise NotEnoughFundsSlp()
+                if valid_bal >= amt > unfrozen_bal:
+                    raise NotEnoughUnfrozenFundsSlp()
                 if self.slp_amount_e.text() == '!':
-                    self.slp_amount_e.setAmount(valid_bal)
-                slp_coins = self.get_slp_coins()
+                    self.slp_amount_e.setAmount(unfrozen_bal)
+                slp_coins = sorted(self.get_slp_coins(), key=lambda k: k['token_value'])
                 total_amt_added = 0
                 for coin in slp_coins:
                     if total_amt_added < amt:
                         selected_slp_coins.append(coin)
                         total_amt_added+=coin['token_value']
-                token_outputs_amts.append(amt)
-                token_change = total_amt_added - amt
-                if token_change > 0:
-                    token_outputs_amts.append(token_change)
-                slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
-                outputs.append(slp_op_return_msg)
+                    else:
+                        break
+                if total_amt_added > 0:
+                    token_outputs_amts.append(amt)
+                    token_change = total_amt_added - amt
+                    if token_change > 0:
+                        token_outputs_amts.append(token_change)
+                    slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
+                    outputs.append(slp_op_return_msg)
                 for amt in token_outputs_amts:
                     outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
 
-            outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
-            if not outputs or not self.payto_e.payto_address:
+            bch_output = self.payto_e.get_outputs(self.max_button.isChecked())
+            if len(bch_output) > 0 and bch_output[0][2]:
+                outputs.extend(bch_output)
+            elif self.slp_token_id and amount and len(bch_output) < 1:
                 _type, addr = self.get_payto_or_dummy()
-                outputs = [(_type, addr, amount)]
+                outputs.append((_type, addr, amount))
+            if not outputs:
+                _type, addr = self.get_payto_or_dummy()
+                outputs.append((_type, addr, amount))
 
             if not self.slp_token_id:
                 opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
@@ -1837,7 +1857,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
             if self.is_slp_wallet and self.slp_token_id:
-                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]))
+                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
             self.not_enough_funds = False
             self.op_return_toolong = False
         except NotEnoughFunds:
@@ -1866,7 +1886,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         if not freeze_fee:
             fee = None if self.not_enough_funds else tx.get_fee()
-            self.fee_e.setAmount(fee)
+            if not self.slp_token_id or len(token_outputs_amts) > 0:
+                self.fee_e.setAmount(fee)
 
         if self.max_button.isChecked():
             amount = tx.output_value()
@@ -1965,7 +1986,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     return
                 """ Guard against bad address encoding """
                 if not self.payto_e.payto_address:
-                    self.show_error(_("The SLP address provided is not encoded properly."))
+                    self.show_error(_("Enter SLP address."))
                     return
                 """ Require SLPADDR prefix in 'Pay To' field. """
                 if networks.net.SLPADDR_PREFIX not in self.payto_e.address_string_for_slp_check:
@@ -1984,12 +2005,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         if total_amt_added < amt:
                             selected_slp_coins.append(coin)
                             total_amt_added+=coin['token_value']
-                token_outputs_amts.append(amt)
-                token_change = total_amt_added - amt
-                if token_change > 0:
-                    token_outputs_amts.append(token_change)
-                slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
-                outputs.append(slp_op_return_msg)
+                        else:
+                            break
+                if total_amt_added > 0:
+                    token_outputs_amts.append(amt)
+                    token_change = total_amt_added - amt
+                    if token_change > 0:
+                        token_outputs_amts.append(token_change)
+                    slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
+                    outputs = [ slp_op_return_msg ]
             except OPReturnTooLarge as e:
                 self.show_error(str(e))
                 return
@@ -2136,7 +2160,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         if self.is_slp_wallet and self.token_type_combo.currentData():
             try:
-                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(outputs[0][1]))
+                self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(outputs[0][1]), self.config)
             except NotEnoughFundsSlp:
                 self.show_message(_("Token balance too low."))
                 return
