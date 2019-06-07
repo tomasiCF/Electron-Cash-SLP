@@ -104,3 +104,13 @@ Electron Cash - SLP Token Edition
 - Improved isolated of SLP gui from non-SLP type wallets
 - Fixed gui window size issue with high resolution monitors (e.g., Microsoft Surface)
 - Prevent spending of individual coins that are holding SLP tokens
+
+3.4.14 Updates & Features
+-----
+- Fixed a critical bug for SLP with "Spend from confirmed coins only" selected in the preferences, having this option enabled could easily cause tokens to be burned
+- Other bug fixes including: SLP fee calculations improved, incorrect password after completing token creation would cause crash
+- Auto-detect receipt of Genesis minting batons or coins
+- Disable change address options in preferences
+- Allow OP_RETURN entry in SLP wallets, but disable when a token is selected
+- Reordered Send Tab amount input fields and moved token selector above amount inputs
+- Ported many goodies from the [EC 4.0.6 release](https://github.com/Electron-Cash/Electron-Cash/releases/tag/4.0.6) including: CoinText support (SLP sending is not supported), automatic high resolution scaling
