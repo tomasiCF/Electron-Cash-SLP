@@ -1873,7 +1873,7 @@ class Abstract_Wallet(PrintError):
                                 addr = self.receiving_addresses[index]
                             elif c == 1:
                                 addr = self.change_addresses[index]
-                        if index is not None: 
+                        if index is not None:
                             k.set_wallet_advice(addr, [c,index])
             if k.can_sign(tx):
                 return True

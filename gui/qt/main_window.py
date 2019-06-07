@@ -1429,6 +1429,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payto_e = PayToEdit(self)
         self.payto_e.parent=self
 
+        self.slp_send_tab_widgets = []
         if self.is_slp_wallet:
             self.slp_amount_e = SLPAmountEdit('tokens', 0)
             self.token_type_combo = QComboBox()
@@ -1438,6 +1439,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.token_type_combo.setFixedWidth(200)
             self.token_type_combo.currentIndexChanged.connect(self.on_slptok)
             self.token_type_combo.currentIndexChanged.connect(self.update_buttons_on_seed)  # update 'CoinText' button, etc
+            self.slp_send_tab_widgets += [
+                self.slp_amount_e, self.token_type_combo
+            ]
 
         msg = _('Recipient of the funds.') + '\n\n'\
               + _('You may enter a Bitcoin Cash address, a label from your list of contacts (a list of completions will be proposed), or an alias (email-like address that forwards to a Bitcoin Cash address)') + ".\n\n" \
@@ -1519,6 +1523,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)
             self.slp_extra_bch_cb.setHidden(True)
             grid.addWidget(self.slp_extra_bch_cb, 6, 2)
+
+            self.slp_send_tab_widgets += [
+                self.slp_max_button, self.slp_extra_bch_cb
+            ]
 
         msg = _('BCH amount to be sent.') + '\n\n' \
               + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
@@ -1815,7 +1823,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.fee_e.setAmount(None)
                 self.statusBar().showMessage('')
                 return
-        
+
         try:
             selected_slp_coins = []
             if self.slp_token_id:
@@ -1862,7 +1870,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
                     else:
                         outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
-            
+
             fee = self.fee_e.get_amount() if freeze_fee else None
             tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
             if self.slp_token_id:
@@ -2380,6 +2388,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payto_e.is_pr = True
         for e in [self.payto_e, self.amount_e, self.message_e]:
             e.setFrozen(True)
+
+        # Note: the below loop freezes all SLP widgets if present in the send
+        # tab; redo this when BIP70 supports SLP token sends. -Calin
+        for e in self.slp_send_tab_widgets:
+            e.setDisabled(True)
+
+        if self.is_slp_wallet:
+            # force SLP token type to 0 for payment requests
+            self.token_type_combo.setCurrentIndex(0)
+
         self.max_button.setDisabled(True)
         self.payto_e.setText(_("please wait..."))
         return True
@@ -2542,8 +2560,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.is_slp_wallet:
             self.not_enough_funds_slp = False
             self.not_enough_unfrozen_funds_slp = False
+            for e in self.slp_send_tab_widgets:
+                e.setDisabled(False)
             self.slp_amount_e.setText('')
             self.token_type_combo.setCurrentIndex(0)
+            self.on_slptok() # resets parts of the send tab to initial state
         run_hook('do_clear', self)
 
     def set_frozen_state(self, addrs, freeze):
