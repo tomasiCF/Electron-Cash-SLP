@@ -347,6 +347,7 @@ class Abstract_Wallet(PrintError):
     def add_token_type(self, token_id, entry):
         with self.lock, self.transaction_lock:
             self.token_types[token_id] = dict(entry)
+            self.storage.put('token_types', self.token_types)
             for tx_hash, tti in self.tx_tokinfo.items():
                 # Fire up validation on unvalidated txes of matching token_id
                 try:
@@ -1152,7 +1153,7 @@ class Abstract_Wallet(PrintError):
                         new_token = False
                 except KeyError:
                     pass
-            if new_token:
+            if new_token and tokenid not in self.token_types:
                 tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
                         'decimals': "?",
                         'name': 'unknown-' + tokenid[:3]
