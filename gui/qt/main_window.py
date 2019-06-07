@@ -1736,7 +1736,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def slp_spend_max(self):
         self.slp_amount_e.setAmount(self.wallet.get_slp_token_balance(self.slp_token_id, self.config)[3])
-        self.update_fee()
+        self.do_update_fee()
 
     def update_fee(self):
         self.require_fee_update = True
@@ -1802,16 +1802,24 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                       and (self.fee_e.text() or self.fee_e.hasFocus()))
         amount = '!' if self.max_button.isChecked() else self.amount_e.get_amount()
         fee_rate = None
-        if amount is None:
-            if not freeze_fee:
-                self.fee_e.setAmount(None)
-            self.statusBar().showMessage('')
-        fee = self.fee_e.get_amount() if freeze_fee else None
-
+        if self.is_slp_wallet:
+            slp_amount = self.slp_amount_e.get_amount()
+            if amount is None and slp_amount is None:
+                if not freeze_fee:
+                    self.fee_e.setAmount(None)
+                self.statusBar().showMessage('')
+                return
+        else:
+            if amount is None:
+                if not freeze_fee:
+                    self.fee_e.setAmount(None)
+                self.statusBar().showMessage('')
+                return
+        
         try:
             selected_slp_coins = []
             if self.slp_token_id:
-                amt = self.slp_amount_e.get_amount() or 0
+                amt = slp_amount or 0
                 valid_bal, _, _, unfrozen_bal, _ = self.wallet.get_slp_token_balance(self.slp_token_id, self.config)
                 if amt > valid_bal:
                     raise NotEnoughFundsSlp()
@@ -1854,9 +1862,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
                     else:
                         outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
-
+            
+            fee = self.fee_e.get_amount() if freeze_fee else None
             tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
-            if self.is_slp_wallet and self.slp_token_id:
+            if self.slp_token_id:
                 self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
             self.not_enough_funds = False
             self.op_return_toolong = False
