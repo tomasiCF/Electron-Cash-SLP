@@ -4042,34 +4042,46 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         updatecheck_cb.stateChanged.connect(on_set_updatecheck)
         gui_widgets.append((updatecheck_cb, None))
 
-
+        self.force_use_single_change_addr = True
         usechange_cb = QCheckBox(_('Use change addresses'))
-        usechange_cb.setChecked(self.wallet.use_change)
-        def on_usechange(x):
-            usechange_result = x == Qt.Checked
-            if self.wallet.use_change != usechange_result:
-                self.wallet.use_change = usechange_result
-                self.wallet.storage.put('use_change', self.wallet.use_change)
-                multiple_cb.setEnabled(self.wallet.use_change)
-        usechange_cb.stateChanged.connect(on_usechange)
-        usechange_cb.setToolTip(_('Using change addresses makes it more difficult for other people to track your transactions.'))
+        if self.force_use_single_change_addr:
+            usechange_cb.setChecked(True)
+            usechange_cb.setEnabled(False)
+            if isinstance(self.force_use_single_change_addr, str):
+                usechange_cb.setToolTip(self.force_use_single_change_addr)
+        else:
+            usechange_cb.setChecked(self.wallet.use_change)
+            usechange_cb.setToolTip(_('Using change addresses makes it more difficult for other people to track your transactions.'))
+            def on_usechange(x):
+                usechange_result = x == Qt.Checked
+                if self.wallet.use_change != usechange_result:
+                    self.wallet.use_change = usechange_result
+                    self.wallet.storage.put('use_change', self.wallet.use_change)
+                    multiple_cb.setEnabled(self.wallet.use_change)
+            usechange_cb.stateChanged.connect(on_usechange)
         tx_widgets.append((usechange_cb, None))
 
-        def on_multiple(x):
-            multiple = x == Qt.Checked
-            if self.wallet.multiple_change != multiple:
-                self.wallet.multiple_change = multiple
-                self.wallet.storage.put('multiple_change', multiple)
         multiple_change = self.wallet.multiple_change
         multiple_cb = QCheckBox(_('Use multiple change addresses'))
-        multiple_cb.setEnabled(self.wallet.use_change)
-        multiple_cb.setToolTip('\n'.join([
-            _('In some cases, use up to 3 change addresses in order to break '
-              'up large coin amounts and obfuscate the recipient address.'),
-            _('This may result in higher transactions fees.')
-        ]))
-        multiple_cb.setChecked(multiple_change)
-        multiple_cb.stateChanged.connect(on_multiple)
+        if self.force_use_single_change_addr:
+            multiple_cb.setEnabled(False)
+            multiple_cb.setChecked(False)
+            if isinstance(self.force_use_single_change_addr, str):
+                multiple_cb.setToolTip(self.force_use_single_change_addr)
+        else:
+            multiple_cb.setEnabled(self.wallet.use_change)
+            multiple_cb.setToolTip('\n'.join([
+                _('In some cases, use up to 3 change addresses in order to break '
+                  'up large coin amounts and obfuscate the recipient address.'),
+                _('This may result in higher transactions fees.')
+            ]))
+            multiple_cb.setChecked(multiple_change)
+            def on_multiple(x):
+                multiple = x == Qt.Checked
+                if self.wallet.multiple_change != multiple:
+                    self.wallet.multiple_change = multiple
+                    self.wallet.storage.put('multiple_change', multiple)
+            multiple_cb.stateChanged.connect(on_multiple)
         tx_widgets.append((multiple_cb, None))
 
         def fmt_docs(key, klass):
