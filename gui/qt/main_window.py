@@ -123,6 +123,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.config = config = gui_object.config
         self.is_slp_wallet = "slp_" in self.wallet.storage.get('wallet_type', '')
         self.non_slp_wallet_warning_shown = False
+        self.force_use_single_change_addr = _('Change addresses behavior is not customizable for SLP wallets') if self.is_slp_wallet else False
 
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
@@ -1681,9 +1682,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             unconf_bal = bal_avail - conf_bal_avail
                             if unconf_bal > 0:
                                 text += ", " + format_satoshis_plain_nofloat(unconf_bal, decimals) + " unconfirmed)"
-                            else: 
+                            else:
                                 text += ")"
-                        else: 
+                        else:
                             text += ")"
                     elif self.not_enough_unfrozen_funds_slp:
                         amt_color = ColorScheme.RED
@@ -2928,7 +2929,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.seed_button.setVisible(self.wallet.has_seed())
         self.password_button.setVisible(self.wallet.can_change_password())
         is_cointext = bool(self.payto_e.cointext)
-        if is_cointext and self.slp_token_id: 
+        if is_cointext and self.slp_token_id:
             self.token_type_combo.setCurrentIndex(0)
         self.send_button.setVisible(not self.wallet.is_watching_only() and not is_cointext)
         self.preview_button.setVisible(not is_cointext)
@@ -4042,7 +4043,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         updatecheck_cb.stateChanged.connect(on_set_updatecheck)
         gui_widgets.append((updatecheck_cb, None))
 
-        self.force_use_single_change_addr = True
         usechange_cb = QCheckBox(_('Use change addresses'))
         if self.force_use_single_change_addr:
             usechange_cb.setChecked(True)
