@@ -1490,29 +1490,56 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.from_list, 4, 1, 1, -1)
         self.set_pay_from([])
 
+        if self.is_slp_wallet:
+            msg = _('Token Amount to be sent.') + '\n\n' \
+                + _("To enable make sure 'Address Mode' is set to SLP.") + '\n\n' \
+                + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
+                + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
+                + _('Keyboard shortcut: type "!" to send all your coins.')
+            self.slp_amount_label = HelpLabel(_('Token Amount'), msg)
+
+            msg = _('Select the SLP token to send.')
+            self.slp_token_type_label = HelpLabel(_('Token Type'), msg)
+            grid.addWidget(self.slp_token_type_label, 5, 0)
+            grid.addWidget(self.token_type_combo, 5, 1)
+
+            grid.addWidget(self.slp_amount_label, 6, 0)
+            hbox = QHBoxLayout()
+            self.amount_e.setMinimumWidth(195)
+            self.slp_amount_e.setMinimumWidth(195)
+            self.slp_amount_e.textEdited.connect(self.update_fee)
+            hbox.addWidget(self.slp_amount_e)
+
+            self.slp_max_button = EnterButton(_("Max"), self.slp_spend_max)
+            hbox.addWidget(self.slp_max_button)
+            grid.addLayout(hbox, 6, 1)
+
+            self.slp_extra_bch_cb = QCheckBox(_('Also send BCH?'))
+            self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)
+            self.slp_extra_bch_cb.setHidden(True)
+            grid.addWidget(self.slp_extra_bch_cb, 6, 2)
+
         msg = _('BCH amount to be sent.') + '\n\n' \
               + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
               + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
               + _('Keyboard shortcut: type "!" to send all your coins.')
         self.amount_label = HelpLabel(_('BCH &Amount'), msg)
         self.amount_label.setBuddy(self.amount_e)
-        grid.addWidget(self.amount_label, 5, 0)
+        grid.addWidget(self.amount_label, 7, 0)
         hbox = QHBoxLayout()
         hbox.addWidget(self.amount_e)
 
         self.max_button = EnterButton(_("&Max"), self.spend_max)
         self.max_button.setCheckable(True)
         hbox.addWidget(self.max_button)
-        grid.addLayout(hbox, 5, 1)
-
+        grid.addLayout(hbox, 7, 1)
 
         self.fiat_send_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_send_e.setVisible(False)
-        grid.addWidget(self.fiat_send_e, 5, 2)
+        grid.addWidget(self.fiat_send_e, 7, 2)
         self.amount_e.frozen.connect(
             lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
-
 
         msg = _('Bitcoin Cash transactions are in general not free. A transaction fee is paid by the sender of the funds.') + '\n\n'\
               + _('The amount of fee can be decided freely by the sender. However, transactions with low fees take more time to be processed.') + '\n\n'\
@@ -1546,35 +1573,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # we go back to auto-calculate mode and put a fee back.
         self.fee_e.editingFinished.connect(self.update_fee)
         self.connect_fields(self, self.amount_e, self.fiat_send_e, self.fee_e)
-
-        if self.is_slp_wallet:
-            msg = _('Token Amount to be sent.') + '\n\n' \
-                + _("To enable make sure 'Address Mode' is set to SLP.") + '\n\n' \
-                + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
-                + _('Note that if you have frozen some of your addresses, the available funds will be lower than your total balance.') + '\n\n' \
-                + _('Keyboard shortcut: type "!" to send all your coins.')
-            self.slp_amount_label = HelpLabel(_('Token Amount'), msg)
-            grid.addWidget(self.slp_amount_label, 7, 0)
-            hbox = QHBoxLayout()
-            self.amount_e.setMinimumWidth(195)
-            self.slp_amount_e.setMinimumWidth(195)
-            self.slp_amount_e.textEdited.connect(self.update_fee)
-            hbox.addWidget(self.slp_amount_e)
-
-            self.slp_max_button = EnterButton(_("Max"), self.slp_spend_max)
-            hbox.addWidget(self.slp_max_button)
-            grid.addLayout(hbox, 7, 1)
-
-            self.slp_extra_bch_cb = QCheckBox(_('Also send BCH?'))
-            self.slp_extra_bch_cb.clicked.connect(self.on_slp_extra_bch)
-            self.slp_extra_bch_cb.setHidden(True)
-            grid.addWidget(self.slp_extra_bch_cb, 7, 2)
-
-            msg = _('Select the SLP token to send.')
-            self.slp_token_type_label = HelpLabel(_('Token Type'), msg)
-            grid.addWidget(self.slp_token_type_label, 8, 0)
-            grid.addWidget(self.token_type_combo, 8, 1)
-
 
         grid.addWidget(self.fee_e_label, 9, 0)
         hbox = QHBoxLayout()
