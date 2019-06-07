@@ -64,6 +64,7 @@ from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
+from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
 
 from .util import *
 
@@ -2108,6 +2109,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fee = self.fee_e.get_amount() if freeze_fee else None
         return outputs, fee, label, coins, change_addr, selected_slp_coins
 
+    _cointext_popup_kill_tab_changed_connection = None
     def do_cointext(self):
         ''' This is called by the cointext button 'clicked' signal and it
         initiates the processing of the cointext URL.  This should only be
@@ -2134,6 +2136,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             return
                         self.print_error("CoinText RESULT", repr(pr))
                         self.prepare_for_payment_request()
+                        def show_popup():
+                            show_it = partial(
+                                        ShowPopupLabel,
+                                        text=_("Please review payment before sending CoinText"),
+                                        target=self.send_button, timeout=15000.0,
+                                        name="CoinTextPopup",
+                                        pointer_position=PopupWidget.TopSide, activation_hides=True
+                            )
+                            if not self._cointext_popup_kill_tab_changed_connection:
+                                # this ensures that if user changes tabs, the popup dies
+                                # ... it is only connected once per instance lifetime
+                                self._cointext_popup_kill_tab_changed_connection = self.tabs.currentChanged.connect(lambda: KillPopupLabel("CoinTextPopup"))
+                            QTimer.singleShot(0, show_it)
+                        pr.request_ok_callback = show_popup
                         self.on_pr(pr)
                 def on_error(exc):
                     self.print_error("CoinText EXCEPTION", repr(exc))
@@ -2377,6 +2393,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.message_e.setText(pr.get_memo())
         # signal to set fee
         self.amount_e.textEdited.emit("")
+        # New! Payment requests have an optional (may not be there!) attribute
+        # 'request_ok_callback' which takes 0 args and is called on request ok
+        # This facility was needed to do the CoinTextPopup label properly.
+        cb = getattr(self.payment_request, 'request_ok_callback', None)
+        if callable(cb):
+            cb()
 
     def payment_request_error(self):
         request_error = self.payment_request and self.payment_request.error
@@ -2486,6 +2508,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             e.setText('')
             e.setFrozen(False)
         self.max_button.setDisabled(False)
+        KillPopupLabel("CoinTextPopup")  # just in case it was alive
         self.max_button.setChecked(False)
         self.not_enough_funds = False
         self.op_return_toolong = False
