@@ -2165,7 +2165,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                         target=self.send_button, timeout=15000.0,
                                         name="CoinTextPopup",
                                         pointer_position=PopupWidget.LeftSide,
-                                        activation_hides=True, track_target=True
+                                        activation_hides=True, track_target=True,
+                                        dark_mode = ColorScheme.dark_scheme
                             )
                             if not self._cointext_popup_kill_tab_changed_connection:
                                 # this ensures that if user changes tabs, the popup dies
