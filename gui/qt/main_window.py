@@ -1054,7 +1054,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.receive_address_e, 0, 1, 1, -1)
 
         if self.is_slp_wallet:
-            self.show_slp_addr_btn = QPushButton(_('Show SLP Address'))
+            self.show_slp_addr_btn = QPushButton(_('Show Token Address'))
             self.show_slp_addr_btn.clicked.connect(self.addr_toggle_slp)
             grid.addWidget(self.show_slp_addr_btn, 1, 1)
 
@@ -1156,7 +1156,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if Address.FMT_UI == Address.FMT_SLPADDR:
                         self.main_window.show_slp_addr_btn.setText("Show BCH Address")
                     else:
-                        self.main_window.show_slp_addr_btn.setText("Show SLP Address")
+                        self.main_window.show_slp_addr_btn.setText("Show Token Address")
                 else:
                     self.main_window.toggle_cashaddr(1, True)
 
@@ -1369,7 +1369,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if Address.FMT_UI == Address.FMT_SLPADDR:
                 self.show_slp_addr_btn.setText("Show BCH Address")
             else:
-                self.show_slp_addr_btn.setText("Show SLP Address")
+                self.show_slp_addr_btn.setText("Show Token Address")
 
     def on_slptok(self):
         self.slp_token_id = self.token_type_combo.currentData()
