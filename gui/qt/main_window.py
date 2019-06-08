@@ -2197,9 +2197,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
         outputs, fee, tx_desc, coins, change_addrs, slp_coins = r
 
-        if self.is_slp_wallet and self.token_type_combo.currentData():
+        if self.slp_token_id:
             try:
                 self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(outputs[0][1]), self.config)
+            except slp.SlpInvalidOutputMessage:
+                self.show_message(_("No token outputs available.\n\nIf you have unconfirmed tokens wait 1 confirmation or turn off 'Spend only confirmed coins' in preferences, and try again."))
+                return
             except NotEnoughFundsSlp:
                 self.show_message(_("Token balance too low."))
                 return
