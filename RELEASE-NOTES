@@ -109,6 +109,7 @@ Electron Cash - SLP Token Edition
 -----
 - Fixed a critical bug for SLP with "Spend from confirmed coins only" selected in the preferences, having this option enabled could easily cause tokens to be burned
 - Other bug fixes including: SLP fee calculations improved, incorrect password after completing token creation would cause crash
+- Use separate change addresses in transactions having both BCH and SLP change when possible
 - Auto-detect receipt of Genesis minting batons or coins
 - Disable change address options in preferences
 - Allow OP_RETURN entry in SLP wallets, but disable when a token is selected

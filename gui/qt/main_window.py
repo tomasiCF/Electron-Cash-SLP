@@ -1851,7 +1851,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
                     outputs.append(slp_op_return_msg)
                 for amt in token_outputs_amts:
-                    outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
+                    # just grab a dummy address for this fee calculation - safe for imported_privkey wallets
+                    outputs.append((TYPE_ADDRESS, self.wallet.get_addresses()[0], 546))
 
             bch_output = self.payto_e.get_outputs(self.max_button.isChecked())
             if len(bch_output) > 0 and bch_output[0][2]:
@@ -2071,8 +2072,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         coins = self.get_coins(isInvoice=isInvoice)
 
         """ SLP: Add an additional token change output """
-        change_addr = None
         if self.slp_token_id:
+            change_addr = None
             if len(token_outputs_amts) > 1 and len(outputs) - 1 < len(token_outputs_amts):
                 """ start of logic copied from wallet.py """
                 addrs = self.wallet.get_change_addresses()[-self.wallet.gap_limit_for_change:]
@@ -2085,10 +2086,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if not change_addrs:
                         import random
                         change_addrs = [random.choice(addrs)]
+                        change_addr = change_addrs[0]
+                    elif len(change_addrs) > 1: 
+                        change_addr = change_addrs[1]
+                    else: 
+                        change_addr = change_addrs[0]
                 else:
-                    change_addrs = [coins[0]['address']]
-                """ end of logic copied from wallet.py """
-                change_addr = change_addrs[0]
+                    change_addr = coins[0]['address']
                 outputs.append((TYPE_ADDRESS, change_addr, 546))
 
         # add normal BCH amounts
@@ -2124,7 +2128,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         freeze_fee = self.fee_e.isVisible() and self.fee_e.isModified() and (self.fee_e.text() or self.fee_e.hasFocus())
         fee = self.fee_e.get_amount() if freeze_fee else None
-        return outputs, fee, label, coins, change_addr, selected_slp_coins
+        return outputs, fee, label, coins, selected_slp_coins
 
     _cointext_popup_kill_tab_changed_connection = None
     def do_cointext(self):
@@ -2195,7 +2199,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         if not r:
             return
-        outputs, fee, tx_desc, coins, change_addrs, slp_coins = r
+        outputs, fee, tx_desc, coins, slp_coins = r
 
         if self.slp_token_id:
             try:
@@ -2211,7 +2215,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 return
 
         try:
-            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
+            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, mandatory_coins=slp_coins)
         except NotEnoughFunds:
             self.show_message(_("Insufficient BCH balance"))
             return
