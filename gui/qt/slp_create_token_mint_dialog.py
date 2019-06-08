@@ -191,7 +191,7 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
             self.show_message(_("No baton exists for this token."))
             return
 
-        desired_fee_rate, orig_fee = 1.0, 0  # sats/B, sats
+        desired_fee_rate = 1.0  # sats/B, just init this value for paranoia
         try:
             tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
             desired_fee_rate = tx.get_fee() / tx.estimated_size()  # remember the fee coin chooser & wallet gave us as a fee rate so we may use it below after adding baton to adjust fee downward to this rate.
