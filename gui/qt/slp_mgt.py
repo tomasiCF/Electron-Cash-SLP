@@ -78,7 +78,10 @@ class SlpMgt(MyTreeWidget):
             self.editItem(item, column)
         else:
             token_id = item.data(0, Qt.UserRole)
-            SlpAddTokenDialog(self.parent, token_id_hex = token_id, token_name=item.text(1) )
+            if('unknown-' in item.text(1)):
+                SlpAddTokenDialog(self.parent, token_id_hex = token_id, allow_overwrite=True)
+            else:
+                SlpAddTokenDialog(self.parent, token_id_hex = token_id, token_name=item.text(1))
 
     def create_menu(self, position):
         menu = QMenu()
@@ -138,7 +141,7 @@ class SlpMgt(MyTreeWidget):
                 balancestr = format_satoshis_nofloat(calculated_balance, decimal_point=decimals, num_zeros=decimals)
                 balancestr += ' '*(9-decimals)
             else:
-                balancestr = "right-click to add"
+                balancestr = "double-click to add"
 
             try:
                 self.parent.wallet.get_slp_token_baton(token_id)

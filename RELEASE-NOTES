@@ -111,6 +111,7 @@ Electron Cash - SLP Token Edition
 - Other bug fixes including: SLP fee calculations improved, incorrect password after completing token creation would cause crash
 - Use separate change addresses in transactions having both BCH and SLP change when possible
 - Auto-detect receipt of Genesis minting batons or coins
+- Auto-name newly received tokens within Add Token Dialog after double-click (this was already implemented for right-click > Add token)
 - Disable change address options in preferences
 - Allow OP_RETURN entry in SLP wallets, but disable when a token is selected
 - Reordered Send Tab amount input fields and moved token selector above amount inputs
