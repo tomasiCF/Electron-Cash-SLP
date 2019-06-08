@@ -5,6 +5,7 @@ from functools import partial
 import json
 import threading
 import html
+import traceback
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -333,11 +334,10 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         from electroncash.transaction import tx_from_str
         try:
             txt_tx = tx_from_str(txt)
-            tx = Transaction(txt_tx)
+            tx = Transaction(txt_tx, sign_schnorr=self.wallet.is_schnorr_enabled())
             tx.deserialize()
             return tx
         except:
-            import traceback
             traceback.print_exc(file=sys.stdout)
             self.show_critical(_("Electron Cash was unable to parse your transaction"))
             return

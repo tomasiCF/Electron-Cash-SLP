@@ -4,6 +4,8 @@ from functools import partial
 import json
 import threading
 import sys
+import traceback
+import math
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -16,7 +18,7 @@ from electroncash.plugins import run_hook
 
 from .util import *
 
-from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee
+from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, PrintError
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpNoMintingBatonFound, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildMintOpReturnOutput_V1
 
@@ -27,7 +29,7 @@ from electroncash import networks
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
-class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
+class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
 
     def __init__(self, main_window, token_id_hex):
         # We want to be a top-level window
@@ -179,7 +181,7 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
         # IMPORTANT: set wallet.sedn_slpTokenId to None to guard tokens during this transaction
         self.main_window.token_type_combo.setCurrentIndex(0)
         assert self.main_window.slp_token_id == None
-        
+
         coins = self.main_window.get_coins()
         fee = None
 
@@ -189,8 +191,10 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
             self.show_message(_("No baton exists for this token."))
             return
 
+        desired_fee_rate, orig_fee = 1.0, 0  # sats/B, sats
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None)
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
+            desired_fee_rate = tx.get_fee() / tx.estimated_size()  # remember the fee coin chooser & wallet gave us as a fee rate so we may use it below after adding baton to adjust fee downward to this rate.
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return
@@ -213,7 +217,33 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin):
         for txin in tx._inputs:
             self.main_window.wallet.add_input_info(txin)
 
-        # TODO: adjust change amount (based on amount added from baton)
+        def tx_adjust_change_amount_based_on_baton_amount(tx, desired_fee_rate):
+            ''' adjust change amount (based on amount added from baton) '''
+            if len(tx._outputs) not in (3,4):
+                # no change, or a tx shape we don't know about
+                self.print_error(f"Unkown tx shape, not adjusting fee!")
+                return
+            chg = tx._outputs[-1]  # change is always the last output due to BIP_LI01 sorting
+            assert len(chg) == 3, "Expected tx output to be of length 3"
+            if not self.main_window.wallet.is_mine(chg[1]):
+                self.print_error(f"Unkown change address {chg[1]}, not adjusting fee!")
+                return
+            chg_amt = chg[2]
+            if chg_amt <= 546:
+                # if change is 546, then the BIP_LI01 sorting doesn't guarantee
+                # change output is at the end.. so we don't know which was
+                # changed based on the heuristics this code relies on.. so..
+                # Abort! Abort!
+                self.print_error("Could not determine change output, not adjusting fee!")
+                return
+            curr_fee, curr_size = tx.get_fee(), tx.estimated_size()
+            fee_rate = curr_fee / curr_size
+            diff = math.ceil((fee_rate - desired_fee_rate) * curr_size)
+            if diff > 0:
+                tx._outputs[-1] = (chg[0], chg[1], chg[2] + diff)  # adjust the output
+                self.print_error(f"Added {diff} sats to change to maintain fee rate of {desired_fee_rate:0.2f}, new fee: {tx.get_fee()}")
+
+        tx_adjust_change_amount_based_on_baton_amount(tx, desired_fee_rate)
 
         if preview:
             show_transaction(tx, self.main_window, None, False, self)

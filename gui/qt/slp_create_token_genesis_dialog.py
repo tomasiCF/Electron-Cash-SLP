@@ -111,7 +111,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         try:
             slpAddr = self.wallet.get_unused_address().to_slpaddr()
             self.token_pay_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
-        except: 
+        except:
             pass
         row += 1
 
@@ -227,7 +227,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             if len(token_document_hash_hex) != 64:
                 self.show_message(_("Token document hash must be a 32 byte hexidecimal string or left empty."))
                 return
-                    
+
         outputs = []
         try:
             slp_op_return_msg = buildGenesisOpReturnOutput_V1(ticker, token_name, token_document_url, token_document_hash_hex, decimals, mint_baton_vout, init_mint_qty)
@@ -263,7 +263,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None)
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return

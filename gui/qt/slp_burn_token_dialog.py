@@ -38,7 +38,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.app = main_window.app
 
         self.baton_txo = None
-        try: 
+        try:
             self.baton_txo = self.main_window.wallet.get_slp_token_baton(token_id_hex)
         except SlpNoMintingBatonFound:
             pass
@@ -108,7 +108,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.token_burn_baton_cb.setChecked(False)
         self.token_burn_baton_cb.setDisabled(True)
         grid.addWidget(self.token_burn_baton_cb, row, 0)
-        if self.baton_txo != None: 
+        if self.baton_txo != None:
             self.token_burn_baton_cb.setDisabled(False)
 
         self.token_burn_invalid_cb = cb = QCheckBox(_("Burn invalid SLP transactions for this token"))
@@ -162,7 +162,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
 
         outputs = []
         slp_coins = self.wallet.get_slp_utxos(
-            self.token_id_e.text(), 
+            self.token_id_e.text(),
             domain=None, exclude_frozen=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
             slp_include_invalid=self.token_burn_invalid_cb.isChecked(), slp_include_baton=self.token_burn_baton_cb.isChecked())
 
@@ -186,7 +186,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt])
                     outputs.append(slp_op_return_msg)
                     outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
-            else:  
+            else:
                 for coin in slp_coins:
                     if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
                         selected_slp_coins.append(coin)
@@ -198,7 +198,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             traceback.print_exc(file=sys.stdout)
             self.show_message(str(e))
             return
-    
+
         if self.token_burn_baton_cb.isChecked():
             for coin in slp_coins:
                 if coin['token_value'] == "MINT_BATON" and coin['token_validation_state'] == 1:
@@ -216,7 +216,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         fixed_fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins)
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return

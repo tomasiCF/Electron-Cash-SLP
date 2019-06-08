@@ -1,5 +1,5 @@
 """
-Creates and parses transactions that hold file data chunk at vout0 OP_RETURN.  Multi-chunk uploads are handled using 
+Creates and parses transactions that hold file data chunk at vout0 OP_RETURN.  Multi-chunk uploads are handled using
     vout1 as a pointer to the location of the next file chunk.  Visit http://bitcoinfiles.com for more info.
 
 Multi-part file chunks are committed to the blockchain as transactions using the following sequence:
@@ -77,7 +77,7 @@ def make_bitcoinfile_metadata_opreturn(version: int, chunk_count: int, data: byt
     # fileext
     if fileext is None or fileext is '':
         pushes.append(b'')
-    else: 
+    else:
         pushes.append(fileext.encode('utf-8'))
 
     # filesize
@@ -98,7 +98,7 @@ def make_bitcoinfile_metadata_opreturn(version: int, chunk_count: int, data: byt
     # previous sha256 filehash
     if prev_filehash is None or prev_filehash is '':
         pushes.append(b'')
-    else: 
+    else:
         hashbytes = bytes.fromhex(prev_filehash)
         if len(hashbytes) not in (0, 32):
             raise BfpSerializingError()
@@ -107,7 +107,7 @@ def make_bitcoinfile_metadata_opreturn(version: int, chunk_count: int, data: byt
     # external URI
     if fileuri is None or fileuri is '':
         pushes.append(b'')
-    else: 
+    else:
         pushes.append(fileuri.encode('utf-8'))
 
     # file chunk data
@@ -117,7 +117,7 @@ def make_bitcoinfile_metadata_opreturn(version: int, chunk_count: int, data: byt
         if not isinstance(data, (bytes, bytearray)):
             raise BfpSerializingError()
         pushes.append(data)
-        
+
     return chunksToOpreturnOutput(pushes)
 
 # utility for creation: use smallest push except not any of: op_0, op_1negate, op_1 to op_16
@@ -233,7 +233,7 @@ def getUploadTxn(wallet, prev_tx, chunk_index, chunk_count, chunk_data, config, 
         address = file_receiver if file_receiver != None else address
         assert isinstance(address, Address)
         askedoutputs = [ op_return, (TYPE_ADDRESS, address, dust_output) ]
-        
+
     # Check for scenarios where Metadata message should not be used
     else:
         op_return = make_bitcoinfile_chunk_opreturn(chunk_data)
@@ -244,13 +244,13 @@ def getUploadTxn(wallet, prev_tx, chunk_index, chunk_count, chunk_data, config, 
     fee = None
     change_addr = None
 
-    tx = wallet.make_unsigned_transaction_for_bitcoinfiles(coins, askedoutputs, config, fee, change_addr)
+    tx = wallet.make_unsigned_transaction_for_bitcoinfiles(coins, askedoutputs, config, fee, change_addr, sign_schnorr=wallet.is_schnorr_enabled())
 
     # unfortunately, the outputs might be in wrong order due to BIPLI01
     # output sorting, so we remake it.
     outputs = tx.outputs()
     outputs = askedoutputs + [o for o in outputs if o not in askedoutputs]
-    tx = Transaction.from_io(tx.inputs(), outputs, tx.locktime)
+    tx = Transaction.from_io(tx.inputs(), outputs, tx.locktime, sign_schnorr=wallet.is_schnorr_enabled())
     return tx, is_metadata_txn
 
 def chunk_can_fit_in_final_opreturn(final_op_return_no_chunk, chunk_data_length:int = 0):
@@ -265,7 +265,7 @@ def chunk_can_fit_in_final_opreturn(final_op_return_no_chunk, chunk_data_length:
 def get_push_data_length(data_count):
     if data_count > 75:
         return data_count + 1
-    else: 
+    else:
         return data_count + 2
 
 def estimate_miner_fee(p2pkh_input_count, p2pkh_output_count, opreturn_size, feerate = 1):
@@ -273,7 +273,7 @@ def estimate_miner_fee(p2pkh_input_count, p2pkh_output_count, opreturn_size, fee
     return bytecount * feerate
 
 def getFundingTxn(wallet, address, amount, config):
-    
+
     assert wallet.txin_type == 'p2pkh'
 
     askedoutputs = [ (TYPE_ADDRESS, address, amount), ]
@@ -287,7 +287,7 @@ def getFundingTxn(wallet, address, amount, config):
         coins = wallet.get_spendable_coins(domain, config)
         fee = None
         change_addr = None
-        tx = wallet.make_unsigned_transaction(coins, askedoutputs, config, fee, change_addr)
+        tx = wallet.make_unsigned_transaction(coins, askedoutputs, config, fee, change_addr, sign_schnorr=wallet.is_schnorr_enabled())
     except util.NotEnoughFunds as e:
         raise e
     finally:
@@ -298,7 +298,7 @@ def getFundingTxn(wallet, address, amount, config):
     # output sorting, so we remake it.
     outputs = tx.outputs()
     outputs = askedoutputs + [o for o in outputs if o not in askedoutputs]
-    tx = Transaction.from_io(tx.inputs(), outputs, tx.locktime)
+    tx = Transaction.from_io(tx.inputs(), outputs, tx.locktime, sign_schnorr=wallet.is_schnorr_enabled())
 
     return tx
 
@@ -327,7 +327,7 @@ def calculateUploadCost(file_size, metadata, fee_rate = 1):
     if not chunk_can_fit_in_final_opreturn(final_op_return_no_chunk, last_chunk_size):
         # add fees for an extra chunk transaction input/output
         byte_count += 149 + 35
-        # opcode cost for chunk op_return 
+        # opcode cost for chunk op_return
         byte_count += 16
 
     # output p2pkh
@@ -401,7 +401,7 @@ class BfpMessage:
             bfpMsg.op_return_fields['prev_file_sha256'] = chunks[7]
             if len(bfpMsg.op_return_fields['prev_file_sha256']) not in (0, 32):
                 raise BfpInvalidOutputMessage('Previous hash is incorrect length for sha256')
-            
+
             bfpMsg.op_return_fields['uri'] = chunks[8]
             bfpMsg.op_return_fields['chunk_data'] = chunks[9]
         else:
