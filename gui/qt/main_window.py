@@ -1872,7 +1872,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
 
             fee = self.fee_e.get_amount() if freeze_fee else None
-            tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=selected_slp_coins)
+            tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, mandatory_coins=selected_slp_coins)
             if self.slp_token_id:
                 self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
             self.not_enough_funds = False
@@ -2208,7 +2208,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 return
 
         try:
-            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, sign_schnorr=self.wallet.is_schnorr_enabled(), mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
+            tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, change_addrs, mandatory_coins=slp_coins) # , mandatory_outputs=slp_outputs)
         except NotEnoughFunds:
             self.show_message(_("Insufficient BCH balance"))
             return
@@ -4567,7 +4567,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if fee > max_fee:
             self.show_error(_('Max fee exceeded'))
             return
-        new_tx = self.wallet.cpfp(parent_tx, fee, sign_schnorr=self.wallet.is_schnorr_enabled())
+        new_tx = self.wallet.cpfp(parent_tx, fee)
         if new_tx is None:
             self.show_error(_('CPFP no longer valid'))
             return

@@ -244,7 +244,7 @@ def getUploadTxn(wallet, prev_tx, chunk_index, chunk_count, chunk_data, config, 
     fee = None
     change_addr = None
 
-    tx = wallet.make_unsigned_transaction_for_bitcoinfiles(coins, askedoutputs, config, fee, change_addr, sign_schnorr=wallet.is_schnorr_enabled())
+    tx = wallet.make_unsigned_transaction_for_bitcoinfiles(coins, askedoutputs, config, fee, change_addr)
 
     # unfortunately, the outputs might be in wrong order due to BIPLI01
     # output sorting, so we remake it.
@@ -287,7 +287,7 @@ def getFundingTxn(wallet, address, amount, config):
         coins = wallet.get_spendable_coins(domain, config)
         fee = None
         change_addr = None
-        tx = wallet.make_unsigned_transaction(coins, askedoutputs, config, fee, change_addr, sign_schnorr=wallet.is_schnorr_enabled())
+        tx = wallet.make_unsigned_transaction(coins, askedoutputs, config, fee, change_addr)
     except util.NotEnoughFunds as e:
         raise e
     finally:

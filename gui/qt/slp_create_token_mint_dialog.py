@@ -193,7 +193,7 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
 
         desired_fee_rate = 1.0  # sats/B, just init this value for paranoia
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None)
             desired_fee_rate = tx.get_fee() / tx.estimated_size()  # remember the fee coin chooser & wallet gave us as a fee rate so we may use it below after adding baton to adjust fee downward to this rate.
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))

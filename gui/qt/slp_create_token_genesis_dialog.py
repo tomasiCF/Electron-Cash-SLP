@@ -263,7 +263,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return

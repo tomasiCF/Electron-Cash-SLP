@@ -216,7 +216,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         fixed_fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins, sign_schnorr=self.main_window.wallet.is_schnorr_enabled())
+            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return
