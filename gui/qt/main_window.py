@@ -2236,21 +2236,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         # confirmation dialog
         if self.slp_token_id:
+            slp_amt_str = format_satoshis_plain_nofloat(self.slp_amount_e.get_amount(), self.wallet.token_types.get(self.slp_token_id)['decimals'])
+            slp_name = self.wallet.token_types[self.slp_token_id]['name']
             msg = [
                 _("BCH amount to be sent") + ": " + self.format_amount_and_units(amount),
-                "Token amount to be sent" + ": " + str(self.slp_amount_e.get_amount()) + " " + self.wallet.token_types[self.slp_token_id]['name'],
-                _("Mining fee") + ": " + self.format_amount_and_units(fee),
+                "\nToken amount to be sent" + ": " + slp_amt_str + " " + slp_name,
+                _("\nMining fee") + ": " + self.format_amount_and_units(fee),
             ]
         else:
             msg = [
-                _("Amount to be sent") + ": " + self.format_amount_and_units(amount),
-                _("Mining fee") + ": " + self.format_amount_and_units(fee),
+                _("\nAmount to be sent") + ": " + self.format_amount_and_units(amount),
+                _("\nMining fee") + ": " + self.format_amount_and_units(fee),
             ]
 
         x_fee = run_hook('get_tx_extra_fee', self.wallet, tx)
         if x_fee:
             x_fee_address, x_fee_amount = x_fee
-            msg.append( _("Additional fees") + ": " + self.format_amount_and_units(x_fee_amount) )
+            msg.append( _("\nAdditional fees") + ": " + self.format_amount_and_units(x_fee_amount) )
 
         confirm_rate = 2 * self.config.max_fee_rate()
 
@@ -2259,19 +2261,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         #    msg.append(_('Warning') + ': ' + _("The fee for this transaction seems unusually high."))
 
         if (fee < (tx.estimated_size())):
-            msg.append(_('Warning') + ': ' + _("You're using a fee less than 1000 sats/kb.  It may take a very long time to confirm."))
+            msg.append(_('\nWarning') + ': ' + _("You're using a fee less than 1000 sats/kb.  It may take a very long time to confirm."))
 
         if self.config.get('enable_opreturn') and self.message_opreturn_e.text():
-            msg.append(_("You are using an OP_RETURN message. This gets permanently written to the blockchain."))
+            msg.append(_("\nYou are using an OP_RETURN message. This gets permanently written to the blockchain."))
 
         if self.wallet.has_password():
             msg.append("")
-            msg.append(_("Enter your password to proceed"))
+            msg.append(_("\nEnter your password to proceed"))
             password = self.password_dialog('\n'.join(msg))
             if not password:
                 return
         else:
-            msg.append(_('Proceed?'))
+            msg.append(_('\nProceed?'))
             password = None
             if not self.question('\n'.join(msg)):
                 return
