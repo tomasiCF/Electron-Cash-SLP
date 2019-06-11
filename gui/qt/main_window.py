@@ -1021,9 +1021,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.slp_history_list = l = HistoryList(self)
         return self.create_list_tab(l)
 
-    def show_address(self, addr):
+    def show_address(self, addr, *, parent=None):
+        parent = parent or self
         from . import address_dialog
-        d = address_dialog.AddressDialog(self, addr)
+        d = address_dialog.AddressDialog(self,  addr, windowParent=parent)
         d.exec_()
 
     def show_transaction(self, tx, tx_desc = None):
@@ -3517,15 +3518,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
-    def do_process_from_txid(self):
-        if self.gui_object.warn_if_no_network(self):
+    def do_process_from_txid(self, *, txid=None, parent=None):
+        parent = parent or self
+        if self.gui_object.warn_if_no_network(parent):
             return
         from electroncash import transaction
-        txid, ok = QInputDialog.getText(self, _('Lookup transaction'), _('Transaction ID') + ':')
+        ok = txid is not None
+        if not ok:
+            txid, ok = QInputDialog.getText(parent, _('Lookup transaction'), _('Transaction ID') + ':')
         if ok and txid:
             ok, r = self.network.get_raw_tx_for_txid(txid, timeout=10.0)
             if not ok:
-                self.show_message(_("Error retrieving transaction") + ":\n" + r)
+                parent.show_message(_("Error retrieving transaction") + ":\n" + r)
                 return
             tx = transaction.Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
             self.show_transaction(tx)
