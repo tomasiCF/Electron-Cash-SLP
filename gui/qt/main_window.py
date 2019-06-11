@@ -1151,10 +1151,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_qr.setCursor(QCursor(Qt.PointingHandCursor))
 
         self.receive_buttons = buttons = QHBoxLayout()
-        buttons.addStretch(1)
         buttons.addWidget(self.save_request_button)
         buttons.addWidget(self.new_request_button)
-        grid.addLayout(buttons, 6, 1, 1, 2)
+        buttons.addStretch(1)
+        grid.addLayout(buttons, 6, 2, 1, -1)
 
         self.receive_requests_label = QLabel(_('Re&quests'))
 
@@ -1174,7 +1174,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox2 = QVBoxLayout()
         vbox2.setContentsMargins(0,0,0,0)
         vbox2.setSpacing(4)
-        vbox2.addWidget(self.receive_qr)
+        vbox2.addWidget(self.receive_qr, Qt.AlignHCenter|Qt.AlignTop)
         self.receive_qr.setToolTip(_('Receive request QR code (click for details)'))
         but = QPushButton(_('Copy &URI'))
         def on_copy_uri():
