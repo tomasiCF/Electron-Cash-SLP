@@ -27,7 +27,6 @@ import re
 import sys, time, threading
 import os, json, traceback
 import shutil
-import webbrowser
 import csv
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 import base64
@@ -720,9 +719,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         help_menu = menubar.addMenu(_("&Help"))
         help_menu.addAction(_("&About"), self.show_about)
         help_menu.addAction(_("&Check for updates..."), lambda: self.gui_object.show_update_checker(self))
-        help_menu.addAction(_("&Official website"), lambda: webbrowser.open("https://electroncash.org"))
+        help_menu.addAction(_("&Official website"), lambda: webopen("https://electroncash.org"))
         help_menu.addSeparator()
-        help_menu.addAction(_("Documentation"), lambda: webbrowser.open("http://electroncash.readthedocs.io/")).setShortcut(QKeySequence.HelpContents)
+        help_menu.addAction(_("Documentation"), lambda: webopen("http://electroncash.readthedocs.io/")).setShortcut(QKeySequence.HelpContents)
         help_menu.addAction(_("&Report Bug"), self.show_report_bug)
         help_menu.addSeparator()
         help_menu.addAction(_("&Donate to server"), self.donate_to_server)

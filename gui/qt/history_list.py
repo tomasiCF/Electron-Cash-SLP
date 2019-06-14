@@ -23,8 +23,6 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import webbrowser
-
 from .util import *
 import electroncash.web as web
 from electroncash.i18n import _
@@ -43,7 +41,6 @@ TX_ICONS = [
     "clock5.svg",
     "confirmed.svg",
 ]
-
 
 class HistoryList(MyTreeWidget):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
@@ -224,5 +221,6 @@ class HistoryList(MyTreeWidget):
         if pr_key:
             menu.addAction(self.invoiceIcon, _("View invoice"), lambda: self.parent.show_invoice(pr_key))
         if tx_URL:
-            menu.addAction(_("View on block explorer"), lambda: webbrowser.open(tx_URL))
+            menu.addAction(_("View on block explorer"), lambda: webopen(tx_URL))
+
         menu.exec_(self.viewport().mapToGlobal(position))
