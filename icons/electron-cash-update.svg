@@ -41,12 +41,12 @@
      id="namedview3804"
      showgrid="false"
      inkscape:zoom="0.72458122"
-     inkscape:cx="594.86637"
-     inkscape:cy="588.37964"
+     inkscape:cx="365.76852"
+     inkscape:cy="445.81457"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
-     inkscape:current-layer="Layer_1" />
+     inkscape:current-layer="g4742" />
   <defs
      id="defs3791">
     <style
@@ -59,19 +59,19 @@
      inkscape:label="Logo_Group"
      transform="translate(-0.00250977,252.19458)">
     <path
-       style="fill:#0056c0"
+       style="fill:#5cbd6d;fill-opacity:1"
        inkscape:connector-curvature="0"
        id="path3795"
        d="m 689.31751,778.16651 c 93.5,-65.6 154.6,-174.2 154.6,-297.106 0,-122.906 -61.098,-231.607 -154.6,-297.207 h 272.7 v 594.313 z"
        class="cls-1" />
     <path
-       style="fill:#0056c0"
+       style="fill:#5cbd6d;fill-opacity:1"
        inkscape:connector-curvature="0"
        id="path3797"
        d="m 118.40251,480.96051 c 0,122.9 61.1,231.5 154.6,297.106 H 0.00250977 v -594.213 H 273.00851 c -93.506,65.6 -154.606,174.2 -154.606,297.107 z"
        class="cls-1" />
     <circle
-       style="fill:#0056c0"
+       style="fill:#5cbd6d;fill-opacity:1"
        id="circle3799"
        r="296.905"
        cy="480.81653"
