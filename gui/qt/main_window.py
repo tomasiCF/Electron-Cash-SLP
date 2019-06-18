@@ -2630,6 +2630,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.opreturn_label.setHidden(True)
 
     def do_clear(self):
+        ''' Clears the send tab, reseting its UI state to its initiatial state.'''
         for e in [self.payto_e, self.message_e, self.amount_e, self.fiat_send_e, self.fee_e, self.message_opreturn_e]:
             e.setText('')
             e.setFrozen(False)
@@ -2840,6 +2841,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def paytomany(self):
         self.show_send_tab()
+        self.do_clear()
         self.payto_e.paytomany()
         msg = '\n'.join([
             _('Enter a list of outputs in the \'Pay to\' field.'),
