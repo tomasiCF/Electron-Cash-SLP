@@ -191,7 +191,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_optional_tab(tabs, self.addresses_tab, QIcon(":icons/tab_addresses.png"), _("&Addresses"), "addresses")
         add_optional_tab(tabs, self.utxo_tab, QIcon(":icons/tab_coins.png"), _("Co&ins"), "utxo")
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
-        add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.png"), _("Address Converter"), "converter", True)
+        add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.svg"), _("Address Converter"), "converter", True)
         add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console")
         if self.is_slp_wallet:
             add_optional_tab(tabs, self.slp_mgt_tab, QIcon(":icons/tab_slp_icon.png"), _("Tokens"), "tokens")
@@ -3946,11 +3946,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def cashaddr_icon(self):
         if self.config.get('addr_format', 0) == 1:
-            return QIcon(":icons/tab_converter.png")
+            return QIcon(":icons/tab_converter.svg")
         elif self.config.get('addr_format', 0)==2:
-            return QIcon(":icons/tab_converter_slp.png")
+            return QIcon(":icons/tab_converter_slp.svg")
         else:
-            return QIcon(":icons/tab_converter_bw.png")
+            return QIcon(":icons/tab_converter_bw.svg")
 
 
     def update_cashaddr_icon(self):
