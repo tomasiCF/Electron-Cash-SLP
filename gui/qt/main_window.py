@@ -3140,7 +3140,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_lock_icon(self):
         icon = QIcon(":icons/lock.svg") if self.wallet.has_password() else QIcon(":icons/unlock.svg")
-        tip = _('Wallet password') + ' - '
+        tip = _('Wallet Password') + ' - '
         tip +=  _('Enabled') if self.wallet.has_password() else _('Disabled')
         self.password_button.setIcon(icon)
         self.password_button.setStatusTip(tip)
@@ -3980,7 +3980,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return QIcon(":icons/tab_converter_slp.svg")
         else:
             return QIcon(":icons/tab_converter_bw.svg")
-
 
     def update_cashaddr_icon(self):
         self.addr_converter_button.setIcon(self.cashaddr_icon())
