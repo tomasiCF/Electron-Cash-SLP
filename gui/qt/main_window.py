@@ -868,6 +868,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         btc_e.textChanged.connect(partial(edit_changed, btc_e))
         fiat_e.is_last_edited = False
 
+    _network_status_tip_dict = dict()
     def update_status(self):
         if not self.wallet:
             return
@@ -876,21 +877,37 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not icon_dict:
             # cache the icons to save on CPU overhead per update_status call
             icon_dict.update({
-                "status_disconnected" : QIcon(":icons/status_disconnected.svg"),
-                "status_waiting" : QIcon(":icons/status_waiting.svg"),
-                "status_lagging" : QIcon(":icons/status_lagging.svg"),
-                "status_lagging_fork" : QIcon(":icons/status_lagging_fork.svg"),
-                "status_connected" : QIcon(":icons/status_connected.svg"),
-                "status_connected_fork" : QIcon(":icons/status_connected_fork.svg"),
-                "status_connected_proxy" : QIcon(":icons/status_connected_proxy.svg"),
+                "status_disconnected"         : QIcon(":icons/status_disconnected.svg"),
+                "status_waiting"              : QIcon(":icons/status_waiting.svg"),
+                "status_lagging"              : QIcon(":icons/status_lagging.svg"),
+                "status_lagging_fork"         : QIcon(":icons/status_lagging_fork.svg"),
+                "status_connected"            : QIcon(":icons/status_connected.svg"),
+                "status_connected_fork"       : QIcon(":icons/status_connected_fork.svg"),
+                "status_connected_proxy"      : QIcon(":icons/status_connected_proxy.svg"),
                 "status_connected_proxy_fork" : QIcon(":icons/status_connected_proxy_fork.svg"),
                 "seed_ok" : QIcon(":icons/seed.png"),
                 "seed_warning" : QIcon(":icons/seed_warning.png")
             })
+        status_tip_dict = ElectrumWindow._network_status_tip_dict
+        if not status_tip_dict:
+            # Since we're caching stuff, might as well cache this too
+            status_tip_dict.update({
+                "status_disconnected"         : _('Network Status') + " - " + _("Offline"),
+                "status_waiting"              : _('Network Status') + " - " + _("Updating..."),
+                "status_lagging"              : _('Network Status') + " - " + '',
+                "status_lagging_fork"         : _('Network Status') + " - " + _("Chain fork(s) detected"),
+                "status_connected"            : _('Network Status') + " - " + _("Connected"),
+                "status_connected_fork"       : _('Network Status') + " - " + _("Chain fork(s) detected"),
+                "status_connected_proxy"      : _('Network Status') + " - " + _("Connected via proxy"),
+                "status_connected_proxy_fork" : _('Network Status') + " - " + _("Connected via proxy") + "; " + _("Chain fork(s) detected"),
+            })
 
+
+        status_tip = ''
         if self.network is None or not self.network.is_running():
             text = _("Offline")
             icon = icon_dict["status_disconnected"]
+            status_tip = status_tip_dict['status_disconnected']
 
         elif self.network.is_connected():
             server_height = self.network.get_server_height()
@@ -902,9 +919,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if not self.wallet.up_to_date or server_height == 0:
                 text = _("Synchronizing...")
                 icon = icon_dict["status_waiting"]
+                status_tip = status_tip_dict["status_waiting"]
             elif server_lag > 1:
                 text = _("Server is lagging ({} blocks)").format(server_lag)
-                icon = icon_dict["status_lagging"] if num_chains <= 1 else icon_dict["status_lagging_fork"]
+                if num_chains <= 1:
+                    icon = icon_dict["status_lagging"]
+                    status_tip = status_tip_dict["status_lagging"] + text
+                else:
+                    icon = icon_dict["status_lagging_fork"]
+                    status_tip = status_tip_dict["status_lagging_fork"] + "; " + text
             else:
                 text = ""
                 if not self.is_slp_wallet:
@@ -935,8 +958,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     text += " " + ( _("[%d unverified TXs]") % n_unverif )
                 if not self.network.proxy:
                     icon = icon_dict["status_connected"] if num_chains <= 1 else icon_dict["status_connected_fork"]
+                    status_tip = status_tip_dict["status_connected"] if num_chains <= 1 else status_tip_dict["status_connected_fork"]
                 else:
                     icon = icon_dict["status_connected_proxy"] if num_chains <= 1 else icon_dict["status_connected_proxy_fork"]
+                    status_tip = status_tip_dict["status_connected_proxy"] if num_chains <= 1 else status_tip_dict["status_connected_proxy_fork"]
 
                 # Provide extra warning and instructions to user if he/she has tokens in a non-SLP wallet type.
                 if not self.is_slp_wallet:
@@ -946,12 +971,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             text = _("Not connected")
             icon = icon_dict["status_disconnected"]
+            status_tip = status_tip_dict["status_disconnected"]
 
         self.tray.setToolTip("%s (%s)" % (text, self.wallet.basename()))
         self.balance_label.setText(text)
         addr_format = self.config.get('addr_format', 1)
         self.setAddrFormatText(addr_format)
         self.status_button.setIcon( icon )
+        self.status_button.setStatusTip( status_tip )
         if self.wallet.has_seed():
             if self.wallet.storage.get('wallet_seed_needs_backup'):
                 self.seed_button.setIcon(icon_dict["seed_warning"])
