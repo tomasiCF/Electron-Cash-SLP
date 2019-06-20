@@ -85,6 +85,7 @@ class StatusBarButton(QPushButton):
         self.clicked.connect(self.onPress)
         self.func = func
         self.setIconSize(QSize(25,25))
+        self.setCursor(Qt.PointingHandCursor)
 
     def onPress(self, checked=False):
         '''Drops the unwanted PyQt5 "checked" argument'''
@@ -3112,7 +3113,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_lock_icon(self):
         icon = QIcon(":icons/lock.svg") if self.wallet.has_password() else QIcon(":icons/unlock.svg")
+        tip = _('Wallet password') + ' - '
+        tip +=  _('Enabled') if self.wallet.has_password() else _('Disabled')
         self.password_button.setIcon(icon)
+        self.password_button.setStatusTip(tip)
 
     def update_buttons_on_seed(self):
         self.seed_button.setVisible(self.wallet.has_seed())
