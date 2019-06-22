@@ -70,6 +70,7 @@ setup(
     packages=[
         'electroncash',
         'electroncash.qrreaders',
+        'electroncash.utils',
         'electroncash_gui',
         'electroncash_gui.qt',
         'electroncash_gui.qt.qrreader',
