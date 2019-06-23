@@ -315,7 +315,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             show = not self.config.get('show_{}_tab'.format(tab.tab_name), False)
         self.config.set_key('show_{}_tab'.format(tab.tab_name), show)
-        item_text = (_("Hide") if show else _("Show")) + " " + tab.tab_description
+        item_format = _("Hide {tab_description}") if show else _("Show {tab_description}")
+        item_text = item_format.format(tab_description=tab.tab_description)
         tab.menu_action.setText(item_text)
         if show:
             # Find out where to place the tab
@@ -680,7 +681,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         def add_toggle_action(view_menu, tab):
             is_shown = self.tabs.indexOf(tab) > -1
-            item_name = (_("Hide") if is_shown else _("Show")) + " " + tab.tab_description
+            item_format = _("Hide {tab_description}") if is_shown else _("Show {tab_description}")
+            item_name = item_format.format(tab_description=tab.tab_description)
             tab.menu_action = view_menu.addAction(item_name, lambda: self.toggle_tab(tab))
 
         view_menu = menubar.addMenu(_("&View"))
@@ -736,6 +738,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = self.network.get_donation_address()
         if d:
             host = self.network.get_parameters()[0]
+            # The message is intentionally untranslated, leave it like that
             self.pay_to_URI('{}:{}?message=donation for {}'
                             .format(networks.net.CASHADDR_PREFIX, d, host))
         else:
@@ -3641,7 +3644,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.computing_privkeys_signal.disconnect()
                 self.show_privkeys_signal.disconnect()
 
-        self.computing_privkeys_signal.connect(lambda: e.setText("Please wait... %d/%d"%(len(private_keys),len(addresses))))
+        self.computing_privkeys_signal.connect(lambda: e.setText(_("Please wait... {num}/{total}").format(num=len(private_keys),total=len(addresses))))
         self.show_privkeys_signal.connect(show_privkeys)
         d.finished.connect(on_dialog_closed)
         threading.Thread(target=privkeys_thread).start()
@@ -4098,8 +4101,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         msg = _('OpenAlias record, used to receive coins and to sign payment requests.') + '\n\n'\
               + _('The following alias providers are available:') + '\n'\
-              + '\n'.join(['https://cryptoname.co/', 'http://xmr.link']) + '\n\n'\
-              + 'For more information, see http://openalias.org'
+              + '\n'.join(['https://cryptoname.co/', 'http://xmr.link/']) + '\n\n'\
+              + _('For more information, see http://openalias.org')
         alias_label = HelpLabel(_('OpenAlias') + ':', msg)
         alias = self.config.get('alias','')
         alias_e = QLineEdit(alias)
@@ -4189,7 +4192,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_widgets.append((block_ex_label, block_ex_combo))
 
         qr_combo = QComboBox()
-        qr_combo.addItem("Default","default")
+        qr_combo.addItem(_("Default"),"default")
         system_cameras = []
         try:
             from PyQt5.QtMultimedia import QCameraInfo
