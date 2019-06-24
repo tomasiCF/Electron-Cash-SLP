@@ -303,8 +303,10 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
                 self.upload_cost_label.setText(str(cost))
                 if(self.org_addr_cb.isChecked and self.file_org_addr_e.text() != ''):
                     addr = Address.from_string(self.file_org_addr_e.text())
-                else:
+                elif self.parent.wallet.get_unused_address():
                     addr = self.parent.wallet.get_unused_address()
+                else: 
+                    addr = self.parent.wallet.get_addresses()[0]
 
                 # # IMPORTANT: set wallet.send_slpTokenId to None to guard tokens during this transaction
                 self.main_window.token_type_combo.setCurrentIndex(0)
