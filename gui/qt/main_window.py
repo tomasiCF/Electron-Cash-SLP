@@ -70,6 +70,7 @@ from .util import *
 
 import electroncash.slp as slp
 from electroncash import slp_validator_0x01
+from electroncash.slp_coinchooser import SlpCoinChooser
 from .amountedit import SLPAmountEdit
 from electroncash.util import format_satoshis_nofloat
 from .slp_create_token_genesis_dialog import SlpCreateTokenGenesisDialog
@@ -1904,8 +1905,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         '''Recalculate the fee.  If the fee was manually input, retain it, but
         still build the TX to see if there are enough funds.
         '''
-        outputs = []
-        token_outputs_amts = []
+        bch_outputs = []
+        token_output_amts = []
         self.not_enough_funds = False
         self.not_enough_funds_slp = False
         self.not_enough_unfrozen_funds_slp = False
@@ -1931,52 +1932,34 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             selected_slp_coins = []
             if self.slp_token_id:
                 amt = slp_amount or 0
-                valid_bal, _, _, unfrozen_bal, _ = self.wallet.get_slp_token_balance(self.slp_token_id, self.config)
-                if amt > valid_bal:
-                    raise NotEnoughFundsSlp()
-                if valid_bal >= amt > unfrozen_bal:
-                    raise NotEnoughUnfrozenFundsSlp()
-                if self.slp_amount_e.text() == '!':
-                    self.slp_amount_e.setAmount(unfrozen_bal)
-                slp_coins = sorted(self.get_slp_coins(), key=lambda k: k['token_value'])
-                total_amt_added = 0
-                for coin in slp_coins:
-                    if total_amt_added < amt:
-                        selected_slp_coins.append(coin)
-                        total_amt_added+=coin['token_value']
-                    else:
-                        break
-                if total_amt_added > 0:
-                    token_outputs_amts.append(amt)
-                    token_change = total_amt_added - amt
-                    if token_change > 0:
-                        token_outputs_amts.append(token_change)
-                    slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
-                    outputs.append(slp_op_return_msg)
-                for amt in token_outputs_amts:
-                    # just grab a dummy address for this fee calculation - safe for imported_privkey wallets
-                    outputs.append((TYPE_ADDRESS, self.wallet.get_addresses()[0], 546))
+                selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, self.slp_token_id, amt, self.config)
+                if slp_op_return_msg:
+                    bch_outputs = [ slp_op_return_msg ]
+                    token_output_amts = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
+                    for amt in token_output_amts:
+                        # just grab a dummy address for this fee calculation - safe for imported_privkey wallets
+                        bch_outputs.append((TYPE_ADDRESS, self.wallet.get_addresses()[0], 546))
 
-            bch_output = self.payto_e.get_outputs(self.max_button.isChecked())
-            if len(bch_output) > 0 and bch_output[0][2]:
-                outputs.extend(bch_output)
-            elif self.slp_token_id and amount and len(bch_output) < 1:
+            bch_payto_outputs = self.payto_e.get_outputs(self.max_button.isChecked())
+            if bch_payto_outputs and bch_payto_outputs[0][2]:
+                bch_outputs.extend(bch_payto_outputs)
+            elif self.slp_token_id and amount and not bch_payto_outputs:
                 _type, addr = self.get_payto_or_dummy()
-                outputs.append((_type, addr, amount))
-            if not outputs:
+                bch_outputs.append((_type, addr, amount))
+            if not bch_outputs:
                 _type, addr = self.get_payto_or_dummy()
-                outputs.append((_type, addr, amount))
+                bch_outputs.append((_type, addr, amount))
 
             if not self.slp_token_id:
                 opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
                 if (opreturn_message != '' and opreturn_message is not None):
                     if self.opreturn_rawhex_cb.isChecked():
-                        outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
+                        bch_outputs.insert(0, self.output_for_opreturn_rawhex(opreturn_message))
                     else:
-                        outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
+                        bch_outputs.insert(0, self.output_for_opreturn_stringdata(opreturn_message))
 
             fee = self.fee_e.get_amount() if freeze_fee else None
-            tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), outputs, self.config, fee, mandatory_coins=selected_slp_coins)
+            tx = self.wallet.make_unsigned_transaction(self.get_coins(isInvoice = False), bch_outputs, self.config, fee, mandatory_coins=selected_slp_coins)
             if self.slp_token_id:
                 self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
             self.not_enough_funds = False
@@ -2007,13 +1990,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         if not freeze_fee:
             fee = None if self.not_enough_funds else tx.get_fee()
-            if not self.slp_token_id or len(token_outputs_amts) > 0:
+            if not self.slp_token_id or len(token_output_amts) > 0:
                 self.fee_e.setAmount(fee)
 
         if self.max_button.isChecked():
             amount = tx.output_value()
             if self.is_slp_wallet:
-                amount = tx.output_value() - len(token_outputs_amts) * 546
+                amount = tx.output_value() - len(token_output_amts) * 546
             self.amount_e.setAmount(amount)
         if fee is not None:
             fee_rate = fee / tx.estimated_size()
@@ -2092,11 +2075,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return request_password
 
     def read_send_tab(self, preview=False):
-        outputs = []
-        token_outputs_amts = []
+        bch_outputs = []
         selected_slp_coins = []
         opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
-        if self.is_slp_wallet and self.token_type_combo.currentData():
+        if self.slp_token_id:
             if self.slp_amount_e.get_amount() == 0 or self.slp_amount_e.get_amount() is None:
                 self.show_message(_("No SLP token amount provided."))
                 return
@@ -2114,27 +2096,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.show_error(_("Address provided is not in SLP Address format.\n\nThe address should be encoded using 'simpleledger:' or 'slptest:' URI prefix."))
                     return
                 amt = self.slp_amount_e.get_amount()
-                slp_coins =  sorted(self.get_slp_coins(), key=lambda k: k['token_value'])
-                total_amt_added = 0
-                for coin in slp_coins:
-                    if coin['token_value'] >= amt:
-                        selected_slp_coins.append(coin)
-                        total_amt_added+=coin['token_value']
-                        break
-                if total_amt_added < amt:
-                    for coin in slp_coins:
-                        if total_amt_added < amt:
-                            selected_slp_coins.append(coin)
-                            total_amt_added+=coin['token_value']
-                        else:
-                            break
-                if total_amt_added > 0:
-                    token_outputs_amts.append(amt)
-                    token_change = total_amt_added - amt
-                    if token_change > 0:
-                        token_outputs_amts.append(token_change)
-                    slp_op_return_msg = slp.buildSendOpReturnOutput_V1(self.slp_token_id, token_outputs_amts)
-                    outputs = [ slp_op_return_msg ]
+                selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, self.slp_token_id, amt, self.config)
+                if slp_op_return_msg:
+                    bch_outputs = [ slp_op_return_msg ]
             except OPReturnTooLarge as e:
                 self.show_error(str(e))
                 return
@@ -2154,7 +2118,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.show_error('BIP-70 Payment requests are not yet working for SLP tokens.')
                 return
             isInvoice = True
-            outputs.extend(self.payment_request.get_outputs())
+            bch_outputs.extend(self.payment_request.get_outputs())
         else:
             errors = self.payto_e.get_errors()
             if errors:
@@ -2162,7 +2126,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 return
             if self.slp_token_id:
                 _type, _addr = self.payto_e.payto_address
-                outputs.append((_type, _addr, 546))
+                bch_outputs.append((_type, _addr, 546))
 
             if self.payto_e.is_alias and self.payto_e.validated is False:
                 alias = self.payto_e.toPlainText()
@@ -2177,7 +2141,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         """ SLP: Add an additional token change output """
         if self.slp_token_id:
             change_addr = None
-            if len(token_outputs_amts) > 1 and len(outputs) - 1 < len(token_outputs_amts):
+            token_outputs = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
+            if len(token_outputs) > 1 and len(bch_outputs) - 1 < len(token_outputs):
                 """ start of logic copied from wallet.py """
                 addrs = self.wallet.get_change_addresses()[-self.wallet.gap_limit_for_change:]
                 if self.wallet.use_change and addrs:
@@ -2196,11 +2161,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         change_addr = change_addrs[0]
                 else:
                     change_addr = coins[0]['address']
-                outputs.append((TYPE_ADDRESS, change_addr, 546))
+                bch_outputs.append((TYPE_ADDRESS, change_addr, 546))
 
         # add normal BCH amounts
         if not self.payment_request and self.amount_e.get_amount():
-            outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
+            bch_outputs.extend(self.payto_e.get_outputs(self.max_button.isChecked()))
 
         """ Only Allow OP_RETURN if SLP is disabled. """
         if not self.slp_token_id:
@@ -2209,9 +2174,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 opreturn_message = self.message_opreturn_e.text()
                 if opreturn_message:
                     if self.opreturn_rawhex_cb.isChecked():
-                        outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
+                        bch_outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
                     else:
-                        outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
+                        bch_outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
             except OPReturnTooLarge as e:
                 self.show_error(str(e))
                 return
@@ -2220,18 +2185,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 return
 
 
-        if not outputs:
+        if not bch_outputs:
             self.show_error(_('Enter receiver address (No BCH outputs).'))
             return
 
-        for _type, addr, amount in outputs:
+        for _type, addr, amount in bch_outputs:
             if amount is None:
                 self.show_error(_('Invalid Amount'))
                 return
 
         freeze_fee = self.fee_e.isVisible() and self.fee_e.isModified() and (self.fee_e.text() or self.fee_e.hasFocus())
         fee = self.fee_e.get_amount() if freeze_fee else None
-        return outputs, fee, label, coins, selected_slp_coins
+        return bch_outputs, fee, label, coins, selected_slp_coins
 
     _cointext_popup_kill_tab_changed_connection = None
     def do_cointext(self):
