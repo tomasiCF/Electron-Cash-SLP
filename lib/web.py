@@ -39,10 +39,10 @@ DEFAULT_EXPLORER = "Bitcoin.com"
 mainnet_block_explorers = {
     'simpleledger.info': ('https://simpleledger.info',
                     Address.FMT_SLPADDR,
-                    {'tx': '#tx', 'addr': '#address'}),
+                    {'tx': '#tx', 'addr': '#address', 'block': 'block'}),
     'Bitcoin.com': ('https://explorer.bitcoin.com/bch',
                     Address.FMT_SLPADDR,
-                    {'tx': 'tx', 'addr': 'address'})
+                    {'tx': 'tx', 'addr': 'address', 'block': 'block'})
 }
 
 DEFAULT_EXPLORER_TESTNET = 'Bitcoin.com'
@@ -50,7 +50,7 @@ DEFAULT_EXPLORER_TESTNET = 'Bitcoin.com'
 testnet_block_explorers = {
     'Bitcoin.com'   : ('https://explorer.bitcoin.com/tbch',
                        Address.FMT_LEGACY,  # For some reason testnet expects legacy and fails on bchtest: addresses.
-                       {'tx': 'tx', 'addr': 'address'}),
+                       {'tx': 'tx', 'addr': 'address', 'block' : 'block'}),
 }
 
 def BE_info():
