@@ -229,7 +229,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             return
 
         if preview:
-            show_transaction(tx, self.main_window, None, False, self)
+            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=selected_slp_coins)
             return
 
         msg = []
@@ -251,7 +251,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     show_transaction(tx, self.main_window, None, False, self)
                     self.main_window.do_clear()
                 else:
-                    self.main_window.broadcast_transaction(tx, tx_desc)
+                    self.main_window.broadcast_transaction(tx, tx_desc, slp_coins_to_burn=selected_slp_coins)
 
         self.main_window.sign_tx_with_password(tx, sign_done, password)
 

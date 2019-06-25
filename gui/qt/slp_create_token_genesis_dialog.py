@@ -19,7 +19,7 @@ from .util import *
 from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildGenesisOpReturnOutput_V1
-
+from electroncash.slp_wallet import SlpWallet
 from .amountedit import SLPAmountEdit
 from .transaction_dialog import show_transaction
 
@@ -345,6 +345,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             # non-GUI thread
             status = False
             msg = "Failed"
+            assert SlpWallet.check_tx_slp(self.wallet, tx)
             status, msg =  self.network.broadcast_transaction(tx)
             return status, msg
 
