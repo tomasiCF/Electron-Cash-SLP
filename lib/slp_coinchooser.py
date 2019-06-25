@@ -38,3 +38,4 @@ class SlpCoinChooser:
             assert slp_op_return_msg
 
         return (selected_slp_coins, slp_op_return_msg)
+        
