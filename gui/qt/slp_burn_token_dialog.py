@@ -3,7 +3,7 @@ import datetime
 from functools import partial
 import json
 import threading
-import sys
+import sys, traceback
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
