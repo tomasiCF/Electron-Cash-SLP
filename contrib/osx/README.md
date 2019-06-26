@@ -1,6 +1,8 @@
 Building Mac OS binaries
 ========================
 
+✗ _This script does not produce reproducible output (yet!)._
+
 This guide explains how to build Electrum binaries for macOS systems.
 We build our binaries on El Capitan (10.11.6) as building it on High Sierra
 makes the binaries incompatible with older versions.
@@ -18,14 +20,14 @@ The above ensures that you pull in the OSX helper app, CalinsQRReader.
 ## 2. Use the provided script to begin building.
 
     1) Remove .egg from previous build:
-        - rm -rf ~/Library/Python/3.6/lib/python/site-packages/Electron_Cash_SLP-3.X.X-py3.6.egg
+        - rm -rf ~/Library/Python/3.6/lib/python/site-packages/Electron_Cash_SLP-*.egg
 
     2) Remove items from previous build:
-        - rm -rf ~/Library/Python/3.6 ~/.pyenv ~/Library/Caches/pip ~/Library/Application Support/pyinstaller
+        - rm -rf ~/Library/Python/3.6 ~/.pyenv ~/Library/Caches/pip ~/Library/"Application Support"/pyinstaller
 
     3) Build:
         - ./make_osx
-    
+
     Or, if you wish to sign the app when building, provide an Apple developer identity installed on the system for signing:
 
         - ./make_osx "Developer ID Application: MY NAME (123456789)"
