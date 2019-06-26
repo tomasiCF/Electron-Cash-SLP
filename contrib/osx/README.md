@@ -34,4 +34,4 @@ The above ensures that you pull in the OSX helper app, CalinsQRReader.
 
 ## 2. Done
 
-You should see Electron-Cash.app and Electron-Cash-macosx-3.x.x.dmg in ../dist/. If you provided an identity for signing, these files can even be distributed to other Macs and they will run there without warnings from GateKeeper.
+You should see Electron-Cash-SLP.app and Electron-Cash-SLP-macosx-3.x.x.dmg in ../dist/. If you provided an identity for signing, these files can even be distributed to other Macs and they will run there without warnings from GateKeeper.
