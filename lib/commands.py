@@ -299,6 +299,7 @@ class Commands:
     def broadcast(self, tx):
         """Broadcast a transaction to the network. """
         tx = Transaction(tx)
+        assert SlpWallet.check_tx_slp(self.wallet, tx)
         return self.network.broadcast_transaction(tx)
 
     @command('')

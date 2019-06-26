@@ -25,6 +25,7 @@ from electroncash.transaction import Transaction
 from electroncash import bitcoinfiles
 
 from .transaction_dialog import show_transaction
+from electroncash.slp_wallet import SlpWallet
 
 from electroncash.bitcoinfiles import *
 
@@ -439,6 +440,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             # Broadcast all transaction to the nexwork
             for tx in self.tx_batch:
                 tx_desc = None
+                assert SlpWallet.check_tx_slp(self.wallet, tx)
                 status, msg = self.network.broadcast_transaction(tx)
                 # print(status)
                 # print(msg)

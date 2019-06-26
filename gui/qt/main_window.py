@@ -71,6 +71,7 @@ from .util import *
 import electroncash.slp as slp
 from electroncash import slp_validator_0x01
 from electroncash.slp_coinchooser import SlpCoinChooser
+from electroncash.slp_wallet import SlpWallet
 from .amountedit import SLPAmountEdit
 from electroncash.util import format_satoshis_nofloat
 from .slp_create_token_genesis_dialog import SlpCreateTokenGenesisDialog
@@ -2387,7 +2388,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         WaitingDialog(self, _('Signing transaction...'), task,
                       on_signed, on_failed)
 
-    def broadcast_transaction(self, tx, tx_desc):
+    def broadcast_transaction(self, tx, tx_desc, *, slp_coins_to_burn=None):
 
         def broadcast_thread():
             # non-GUI thread
@@ -2407,6 +2408,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.payment_request = None
                     status = True
             else:
+                assert SlpWallet.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
                 status, msg =  self.network.broadcast_transaction(tx)
             return status, msg
 

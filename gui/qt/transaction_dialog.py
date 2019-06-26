@@ -51,8 +51,8 @@ else:
     # On Linux & macOS it looks fine so we go with the more fancy unicode
     SCHNORR_SIGIL = "ⓢ"
 
-def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False, window_to_close_on_broadcast=None):
-    d = TxDialog(tx, parent, desc, prompt_if_unsaved, window_to_close_on_broadcast)
+def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False, window_to_close_on_broadcast=None, *, slp_coins_to_burn=None):
+    d = TxDialog(tx, parent, desc, prompt_if_unsaved, window_to_close_on_broadcast, slp_coins_to_burn=slp_coins_to_burn)
     dialogs.append(d)
     d.show()
     return d
@@ -62,7 +62,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
     throttled_update_sig = pyqtSignal()  # connected to self.throttled_update -- emit from thread to do update in main thread
     dl_done_sig = pyqtSignal()  # connected to an inner function to get a callback in main thread upon dl completion
 
-    def __init__(self, tx, parent, desc, prompt_if_unsaved, window_to_close_on_broadcast=None):
+    def __init__(self, tx, parent, desc, prompt_if_unsaved, window_to_close_on_broadcast=None, *, slp_coins_to_burn=None):
         '''Transactions in the wallet will show their description.
         Pass desc to give a description for txs not yet in the wallet.
         '''
@@ -83,6 +83,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._dl_pct = None
         self._closed = False
         self.tx_height = None
+        self.slp_coins_to_burn=slp_coins_to_burn
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -228,7 +229,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             self.window_to_close_on_broadcast.close()
         self.main_window.push_top_level_window(self)
         try:
-            self.main_window.broadcast_transaction(self.tx, self.desc)
+            self.main_window.broadcast_transaction(self.tx, self.desc, slp_coins_to_burn=self.slp_coins_to_burn)
         finally:
             self.main_window.pop_top_level_window(self)
         self.saved = True
