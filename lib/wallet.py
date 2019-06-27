@@ -1999,14 +1999,21 @@ class Abstract_Wallet(PrintError):
             return
         out = copy.copy(r)
         addr_text = addr.to_ui_string()
-        amount_text = format_satoshis(r['amount'])
+        if r.get('token_id', None):
+            amount_text = str(r['amount'])
+        else:
+            amount_text = format_satoshis(r['amount'])
         if addr.FMT_UI == addr.FMT_CASHADDR:
             out['URI'] = '{}:{}?amount={}'.format(networks.net.CASHADDR_PREFIX,
                                                   addr_text, amount_text)
         elif addr.FMT_UI == addr.FMT_SLPADDR:
-            token_id = "<fill tokenId here>"
-            out['URI'] = '{}:{}?amount={}&token={}'.format(networks.net.SLPADDR_PREFIX,
-                                                           addr_text, amount_text, token_id)
+            if r.get('token_id', None):
+                token_id = r['token_id']
+                out['URI'] = '{}:{}?amount={}-{}'.format(networks.net.SLPADDR_PREFIX,
+                                                         addr_text, amount_text, token_id)
+            else:
+                out['URI'] = '{}:{}?amount={}'.format(networks.net.SLPADDR_PREFIX,
+                                                      addr_text, amount_text)
         status, conf = self.get_request_status(addr)
         out['status'] = status
         if conf is not None:
@@ -2062,20 +2069,31 @@ class Abstract_Wallet(PrintError):
         return status, conf
 
     def make_payment_request(self, addr, amount, message, expiration=None, *,
-                             op_return=None, op_return_raw=None):
+                             op_return=None, op_return_raw=None, token_id=None):
         assert isinstance(addr, Address)
         if op_return and op_return_raw:
             raise ValueError("both op_return and op_return_raw cannot be specified as arguments to make_payment_request")
         timestamp = int(time.time())
         _id = bh2u(Hash(addr.to_storage_string() + "%d" % timestamp))[0:10]
-        d = {
-            'time': timestamp,
-            'amount': amount,
-            'exp': expiration,
-            'address': addr,
-            'memo': message,
-            'id': _id
-        }
+        if token_id:
+            d = {
+                'time': timestamp,
+                'token_id': token_id,
+                'amount': amount,
+                'exp': expiration,
+                'address': addr,
+                'memo': message,
+                'id': _id
+            }
+        else:
+            d = {
+                'time': timestamp,
+                'amount': amount,
+                'exp': expiration,
+                'address': addr,
+                'memo': message,
+                'id': _id
+            }
         if op_return:
             d['op_return'] = op_return
         if op_return_raw:

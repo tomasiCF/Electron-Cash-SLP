@@ -262,7 +262,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_token_type_combo(self):
         self.token_type_combo.clear()
+        self.receive_token_type_combo.clear()
         self.token_type_combo.addItem(QIcon(':icons/tab_coins.png'), 'None', None)
+        self.receive_token_type_combo.addItem(QIcon(':icons/tab_coins.png'), 'None', None)
 
         try:
             token_types = self.wallet.token_types
@@ -273,6 +275,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             for token_id, i in sorted_items:
                 if i['decimals'] != '?':
                     self.token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
+                    self.receive_token_type_combo.addItem(QIcon(':icons/tab_slp_icon.png'),i['name'], token_id)
 
     def on_history(self, event, *args):
         # NB: event should always be 'on_history'
@@ -1060,11 +1063,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = show_transaction(tx, self, tx_desc)
         self._tx_dialogs.add(d)
 
-    def addr_toggle_slp(self):
+    def addr_toggle_slp(self, force_slp=False):
+
+        def present_slp():
+            self.toggle_cashaddr(2, True)
+            self.receive_slp_token_type_label.setDisabled(False)
+            self.receive_slp_amount_e.setDisabled(False)
+            self.receive_slp_amount_label.setDisabled(False)
+
+        if force_slp:
+            present_slp()
+            return
+
         if Address.FMT_UI == Address.FMT_SLPADDR:
             self.toggle_cashaddr(1, True)
+            self.receive_token_type_combo.setCurrentIndex(0)
         else:
-            self.toggle_cashaddr(2, True)
+            present_slp()
 
     def on_toggled_opreturn(self, b):
         ''' toggles opreturn-related widgets for both the receive and send
@@ -1130,17 +1145,48 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.receive_opreturn_label,
         ]
 
+        msg = _('Select the SLP token to Request.')
+        self.receive_token_type_combo = QComboBox()
+        if ColorScheme.dark_scheme and sys.platform == 'darwin':
+            # Hack/Workaround to QDarkStyle bugs; see https://github.com/ColinDuquesnoy/QDarkStyleSheet/issues/169#issuecomment-494647801
+            self.receive_token_type_combo.setItemDelegate(QStyledItemDelegate(self.receive_token_type_combo))
+        self.receive_token_type_combo.setFixedWidth(200)
+        self.receive_token_type_combo.currentIndexChanged.connect(self.on_slptok_receive)
+        #self.receive_token_type_combo.currentIndexChanged.connect(self.update_buttons_on_seed)  # update 'CoinText' button, etc
+        self.receive_slp_token_type_label = HelpLabel(_('Token Type'), msg)
+        grid.addWidget(self.receive_slp_token_type_label, 4, 0)
+        grid.addWidget(self.receive_token_type_combo, 4, 1)
+
+        self.receive_slp_amount_e = SLPAmountEdit('tokens', 0)
+        self.receive_slp_amount_e.setFixedWidth(self.receive_token_type_combo.width())
+        self.receive_slp_amount_label = QLabel(_('Req. token amount'))
+        grid.addWidget(self.receive_slp_amount_label, 5, 0)
+        grid.addWidget(self.receive_slp_amount_e, 5, 1)
+        self.receive_slp_amount_e.textChanged.connect(self.update_receive_qr)
+
         self.receive_amount_e = BTCAmountEdit(self.get_decimal_point)
-        label = QLabel(_('Requested &amount'))
-        label.setBuddy(self.receive_amount_e)
-        grid.addWidget(label, 4, 0)
-        grid.addWidget(self.receive_amount_e, 4, 1)
+        self.receive_amount_e.setFixedWidth(self.receive_token_type_combo.width())
+        self.receive_amount_label = QLabel(_('Requested &amount'))
+        self.receive_amount_label.setBuddy(self.receive_amount_e)
+        grid.addWidget(self.receive_amount_label, 6, 0)
+        grid.addWidget(self.receive_amount_e, 6, 1)
         self.receive_amount_e.textChanged.connect(self.update_receive_qr)
+
+        if Address.FMT_UI != Address.FMT_SLPADDR:
+            self.receive_token_type_combo.setDisabled(True)
+            self.receive_slp_token_type_label.setDisabled(True)
+            self.receive_slp_amount_e.setDisabled(True)
+            self.receive_slp_amount_label.setDisabled(True)
+        else:
+            self.receive_token_type_combo.setDisabled(False)
+            self.receive_slp_token_type_label.setDisabled(False)
+            self.receive_slp_amount_e.setDisabled(False)
+            self.receive_slp_amount_label.setDisabled(False)
 
         self.fiat_receive_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_receive_e.setVisible(False)
-        grid.addWidget(self.fiat_receive_e, 4, 2, Qt.AlignLeft)
+        grid.addWidget(self.fiat_receive_e, 6, 2, Qt.AlignLeft)
         self.connect_fields(self, self.receive_amount_e, self.fiat_receive_e, None)
 
         self.expires_combo = QComboBox()
@@ -1155,12 +1201,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         ])
         label = HelpLabel(_('Request &expires'), msg)
         label.setBuddy(self.expires_combo)
-        grid.addWidget(label, 5, 0)
-        grid.addWidget(self.expires_combo, 5, 1)
+        grid.addWidget(label, 7, 0)
+        grid.addWidget(self.expires_combo, 7, 1)
         self.expires_label = QLineEdit('')
         self.expires_label.setReadOnly(1)
         self.expires_label.hide()
-        grid.addWidget(self.expires_label, 5, 1)
+        grid.addWidget(self.expires_label, 7, 1)
 
         self.save_request_button = QPushButton(_('&Save'))
         self.save_request_button.clicked.connect(self.save_payment_request)
@@ -1182,7 +1228,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.save_request_button)
         buttons.addWidget(self.new_request_button)
         buttons.addStretch(1)
-        grid.addLayout(buttons, 6, 2, 1, -1)
+        grid.addLayout(buttons, 8, 1, 1, -1)
 
         self.receive_requests_label = QLabel(_('Re&quests'))
 
@@ -1303,7 +1349,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def save_payment_request(self):
         if not self.receive_address:
             self.show_error(_('No receiving address'))
-        amount = self.receive_amount_e.get_amount()
+        if self.receive_token_type_combo.currentData() is not None:
+            amount = float(self.receive_slp_amount_e.text())
+        else:
+            amount = self.receive_amount_e.get_amount()
         message = self.receive_message_e.text()
         if not message and not amount:
             self.show_error(_('No message or amount'))
@@ -1318,8 +1367,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if self.receive_opreturn_rawhex_cb.isChecked():
                 arg = 'op_return_raw'
             kwargs[arg] = opr
-        req = self.wallet.make_payment_request(self.receive_address, amount,
-                                               message, expiration, **kwargs)
+        if self.receive_token_type_combo.currentData() is not None:
+            tokenid = self.receive_token_type_combo.currentData()
+            req = self.wallet.make_payment_request(self.receive_address, amount,
+                                    message, expiration, token_id=tokenid, **kwargs)
+        else: 
+            req = self.wallet.make_payment_request(self.receive_address, amount,
+                                                message, expiration, **kwargs)
         self.wallet.add_payment_request(req, self.config)
         self.sign_payment_request(self.receive_address)
         self.request_list.update()
@@ -1351,6 +1405,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.saved = True
 
     def new_payment_request(self):
+        self.receive_token_type_combo.setCurrentIndex(0)
+        self.receive_slp_amount_e.setText("")
         addr = self.wallet.get_unused_address(frozen_ok=False)
         if addr is None:
             if not self.wallet.is_deterministic():
@@ -1450,7 +1506,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.update_receive_address_widget()
 
     def update_receive_qr(self):
-        amount = self.receive_amount_e.get_amount()
+        if self.receive_token_type_combo.currentData() is not None:
+            amount = self.receive_slp_amount_e.text() if self.receive_slp_amount_e.text() is not '' else None
+            token_id = self.receive_token_type_combo.currentData()
+        else:
+            amount = self.receive_amount_e.get_amount()
+            token_id = None
         message = self.receive_message_e.text()
         self.save_request_button.setEnabled((amount is not None) or (message != ""))
         kwargs = {}
@@ -1467,9 +1528,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # legacy address if no other params present in receive request.
         if Address.FMT_UI == Address.FMT_LEGACY and not kwargs and not amount and not message:
             uri = self.receive_address.to_ui_string()
-        else:
+        elif not token_id:
             # Otherwise proceed as normal, prepending bitcoincash: to URI
             uri = web.create_URI(self.receive_address, amount, message, **kwargs)
+        else: 
+            uri = web.create_URI(self.receive_address, amount, message, **kwargs, token_id=token_id)
 
         self.receive_qr.setData(uri)
         if self.qr_window:
@@ -1512,6 +1575,26 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.opreturn_label.setEnabled(False)
         self.update_status()
         self.do_update_fee()
+
+    def on_slptok_receive(self):
+        self.receive_slp_amount_e.setText("")
+        self.receive_amount_e.setText("")
+        slp_token_id = self.receive_token_type_combo.currentData()
+        if slp_token_id is None:
+            self.receive_slp_amount_e.setDisabled(True)
+            self.receive_slp_amount_label.setDisabled(True)
+            self.receive_amount_e.setDisabled(False)
+            self.receive_amount_label.setDisabled(False)
+            self.fiat_receive_e.setDisabled(False)
+        else:
+            self.addr_toggle_slp(True)
+            self.receive_slp_amount_e.setDisabled(False)
+            self.receive_slp_amount_label.setDisabled(False)
+            self.receive_amount_e.setDisabled(True)
+            self.receive_amount_label.setDisabled(True)
+            self.fiat_receive_e.setDisabled(True)
+            tok = self.wallet.token_types[slp_token_id]
+            self.receive_slp_amount_e.set_token(tok['name'][:6],tok['decimals'])
 
     def on_slp_extra_bch(self):
         if self.slp_extra_bch_cb.isChecked():

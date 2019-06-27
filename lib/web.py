@@ -89,14 +89,17 @@ def BE_sorted_list():
     return sorted(BE_info())
 
 
-def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None):
+def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, token_id=None):
     if not isinstance(addr, Address):
         return ""
     if op_return is not None and op_return_raw is not None:
-        raise ValueError('Must specify exactly one of op_return or op_return_hex as kwargs to create_URI')
+        raise ValueError('Must specify exactly one of op_return or \
+                            op_return_hex as kwargs to create_URI')
     scheme, path = addr.to_URI_components()
     query = []
-    if amount:
+    if token_id:
+        query.append('amount=%s-%s'%( amount, token_id ))
+    elif amount:
         query.append('amount=%s'%format_satoshis_plain(amount))
     if message:
         query.append('message=%s'%urllib.parse.quote(message))

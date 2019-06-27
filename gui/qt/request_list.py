@@ -64,7 +64,27 @@ class RequestList(MyTreeWidget):
         self.parent.receive_address = addr
         self.parent.receive_address_e.setText(addr.to_full_ui_string())
         self.parent.receive_message_e.setText(message)
-        self.parent.receive_amount_e.setAmount(amount)
+        if req.get('token_id', None):
+            self.parent.toggle_cashaddr(2, True)
+            self.parent.receive_slp_token_type_label.setDisabled(False)
+            self.parent.receive_slp_amount_e.setDisabled(False)
+            self.parent.receive_slp_amount_label.setDisabled(False)
+            index = 0
+            while index < self.parent.receive_token_type_combo.count():
+                self.parent.receive_token_type_combo.setCurrentIndex(index)
+                if self.parent.receive_token_type_combo.currentData() == req['token_id']:
+                    break
+                index += 1
+            self.parent.receive_amount_e.setText("")
+            self.parent.receive_slp_amount_e.setText(str(amount))
+        else:
+            self.parent.toggle_cashaddr(1, True)
+            self.parent.receive_token_type_combo.setCurrentIndex(0)
+            self.parent.receive_slp_token_type_label.setDisabled(True)
+            self.parent.receive_slp_amount_e.setDisabled(True)
+            self.parent.receive_slp_amount_label.setDisabled(True)
+            self.parent.receive_slp_amount_e.setText("")
+            self.parent.receive_amount_e.setAmount(amount)
         self.parent.expires_combo.hide()
         self.parent.expires_label.show()
         self.parent.expires_label.setText(expires)
@@ -126,9 +146,15 @@ class RequestList(MyTreeWidget):
             status = req.get('status')
             signature = req.get('sig')
             requestor = req.get('name', '')
-            amount_str = self.parent.format_amount(amount) if amount else ""
-            item = QTreeWidgetItem([date, address.to_ui_string(), '', message,
-                                    amount_str, pr_tooltips.get(status,'')])
+            token_id = req.get('token_id', None)
+            if token_id:
+                amount_str = str(amount) if amount else ""
+                item = QTreeWidgetItem([date, address.to_ui_string(), '', message,
+                                        amount_str, pr_tooltips.get(status,'')])
+            else:
+                amount_str = self.parent.format_amount(amount) if amount else ""
+                item = QTreeWidgetItem([date, address.to_ui_string(), '', message,
+                                        amount_str, pr_tooltips.get(status,'')]) 
             item.setData(0, Qt.UserRole, address)
             if signature is not None:
                 item.setIcon(2, QIcon(":icons/seal.svg"))
