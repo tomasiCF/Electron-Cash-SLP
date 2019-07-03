@@ -41,6 +41,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.config = main_window.config
         self.network = main_window.network
         self.app = main_window.app
+        self.token_type = 1
 
 
         self.setWindowTitle(_("Create a New Token"))
@@ -119,6 +120,12 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.token_fixed_supply_cb.setChecked(True)
         grid.addWidget(self.token_fixed_supply_cb, row, 1)
         cb.clicked.connect(self.show_mint_baton_address)
+        row += 1
+
+        self.token_nft_parent_cb = cb = QCheckBox(_('Is NFT Parent?'))
+        self.token_nft_parent_cb.setChecked(False)
+        grid.addWidget(self.token_nft_parent_cb, row, 1)
+        cb.clicked.connect(self.token_nft_parent_cb_update)
         row += 1
 
         msg = _('The \'simpleledger:\' formatted bitcoin address for the "minting baton" receiver.') + '\n\n'\
@@ -201,6 +208,12 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.token_baton_to_e.setHidden(self.token_fixed_supply_cb.isChecked())
         self.token_baton_label.setHidden(self.token_fixed_supply_cb.isChecked())
 
+    def token_nft_parent_cb_update(self):
+        if self.token_nft_parent_cb.isChecked():
+            self.token_type = 129
+        else:
+            self.token_type = 1
+
     def parse_address(self, address):
         if networks.net.SLPADDR_PREFIX not in address:
             address = networks.net.SLPADDR_PREFIX + ":" + address
@@ -230,7 +243,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         outputs = []
         try:
-            slp_op_return_msg = buildGenesisOpReturnOutput_V1(ticker, token_name, token_document_url, token_document_hash_hex, decimals, mint_baton_vout, init_mint_qty)
+            slp_op_return_msg = buildGenesisOpReturnOutput_V1(ticker, token_name, token_document_url, token_document_hash_hex, decimals, mint_baton_vout, init_mint_qty, token_type = self.token_type)
             outputs.append(slp_op_return_msg)
         except OPReturnTooLarge:
             self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))

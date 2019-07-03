@@ -315,7 +315,8 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         # Make sure to throw an error dialog if name exists, hash exists, ...
         token_name = self.token_name_e.text()
         ow = (self.provided_token_name is not None) or self.allow_overwrite
-        ret = self.main_window.add_token_type('SLP1', self.newtoken_token_id, token_name, self.newtoken_decimals,
+        token_class = 'SLP%d'%(self.newtoken_genesis_message.token_type,)
+        ret = self.main_window.add_token_type(token_class, self.newtoken_token_id, token_name, self.newtoken_decimals,
                                               error_callback = self.show_error, allow_overwrite=ow)
         if ret:
             self.add_button.setDisabled(True)

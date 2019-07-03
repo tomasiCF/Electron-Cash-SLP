@@ -91,7 +91,7 @@ def setup_job(tx, reset=False):
     return graph, jobmgr
 
 
-def make_job(tx, wallet, network, debug=False, reset=False, callback_done=None, **kwargs):
+def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=None, require_nft_parent=False, **kwargs):
     """
     Basic validation job maker for a single transaction.
 
@@ -168,6 +168,22 @@ def make_job(tx, wallet, network, debug=False, reset=False, callback_done=None, 
         # Do consistency check here
         # XXXXXXX
 
+        if require_nft_parent:
+            prev_txid0 = tx.inputs()[0]['prevout_hash']
+            prev_n0 = tx.inputs()[0]['prevout_n']
+            prev_tx = Transaction(wallet.transactions[prev_txid0])
+            try:
+                prev_slp_msg = SlpMessage.parseSlpOutputScript(prev_tx.outputs()[0][1])
+                assert wallet.slpv1_validity[prev_tx] == 1
+                assert prev_slp_msg.op_return_fields['token_output'][prev_n0] > 0
+                assert prev_slp_msg.op_return_fields['nft_flag'] == "NFT_PARENT"
+            except:
+                # Save False validity
+                for t,n in job.nodes.items():
+                    val = n.validity
+                    if val != 0:
+                        wallet.slpv1_validity[t] = 2
+                return
         # Save validity
         for t,n in job.nodes.items():
             val = n.validity

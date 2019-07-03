@@ -112,9 +112,21 @@ class SlpMessage:
             raise SlpInvalidOutputMessage('Missing token_type')
 
         # check if the token version is supported
+        # 1   = type 1
+        # 17  = (type 1 reserved purpose)
+        # 33  = (type 1 reserved purpose)
+        # 65  = type 1 as NFT child
+        # 129 = type 1 as NFT parent
         slpMsg.token_type = SlpMessage.parseChunkToInt(chunks[1], 1, 2, True)
-        if slpMsg.token_type != 1:
+        if slpMsg.token_type not in [1, 65, 129]:
             raise SlpUnsupportedSlpTokenType(slpMsg.token_type)
+
+        if slpMsg.token_type == 65:
+            nft_flag = slpMsg.op_return_fields['nft_flag'] = "NFT_CHILD"
+        elif slpMsg.token_type == 129:
+            nft_flag = slpMsg.op_return_fields['nft_flag'] = "NFT_PARENT"
+        else:
+            nft_flag = slpMsg.op_return_fields['nft_flag'] = None
 
         if len(chunks) == 2:
             raise SlpInvalidOutputMessage('Missing SLP command')
@@ -149,6 +161,8 @@ class SlpMessage:
             v = slpMsg.op_return_fields['mint_baton_vout'] = SlpMessage.parseChunkToInt(chunks[8], 1, 1)
             if v is not None and v < 2:
                 raise SlpInvalidOutputMessage('Mint baton cannot be on vout=0 or 1')
+            elif v is not None and nft_flag == 'NFT_CHILD':
+                raise SlpInvalidOutputMessage('Cannot have a minting baton in a NFT_CHILD token.')
 
             # handle initial token quantity issuance
             slpMsg.op_return_fields['initial_token_mint_quantity'] = SlpMessage.parseChunkToInt(chunks[9], 8, 8, True)
@@ -172,6 +186,8 @@ class SlpMessage:
             if len(slpMsg.op_return_fields['token_output']) > 20:
                 raise SlpInvalidOutputMessage('More than 19 output amounts')
         elif slpMsg.transaction_type == 'MINT':
+            if nft_flag == 'NFT_CHILD':
+                raise SlpInvalidOutputMessage('Cannot have MINT with NFT_CHILD')
             if len(chunks) != 6:
                 raise SlpInvalidOutputMessage('MINT with incorrect number of parameters')
             if len(chunks[3]) != 32:
@@ -243,7 +259,7 @@ def chunksToOpreturnOutput(chunks: [bytes]) -> tuple:
 
 
 # Type 1 Token GENESIS Message
-def buildGenesisOpReturnOutput_V1(ticker: str, token_name: str, token_document_url: str, token_document_hash_hex: str, decimals: int, baton_vout: int, initial_token_mint_quantity: int) -> tuple:
+def buildGenesisOpReturnOutput_V1(ticker: str, token_name: str, token_document_url: str, token_document_hash_hex: str, decimals: int, baton_vout: int, initial_token_mint_quantity: int, token_type: int = 1) -> tuple:
     chunks = []
     script = bytearray((0x6a,))  # OP_RETURN
 
@@ -251,7 +267,14 @@ def buildGenesisOpReturnOutput_V1(ticker: str, token_name: str, token_document_u
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x01')
+    if token_type == 1:
+        chunks.append(b'\x01')
+    elif token_type == 65:
+        chunks.append(b'\x41')
+    elif token_type == 129:
+        chunks.append(b'\x81')
+    else:
+        raise Exception('Unsupported token type')
 
     # transaction type
     chunks.append(b'GENESIS')
