@@ -148,8 +148,8 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
     job = ValidationJob(graph, [txid], network,
                         fetch_hook=fetch_hook,
                         validitycache=wallet.slpv1_validity,
-                        download_limit = limit_dls,
-                        depth_limit = limit_depth,
+                        download_limit=limit_dls,
+                        depth_limit=limit_depth,
                         debug=debug,
                         **kwargs)
     def done_callback(job):
@@ -234,7 +234,7 @@ class Validator_SLP1:
             return ('prune', 2)
 
         # Parse the SLP
-        if slpMsg.token_type != 1:
+        if slpMsg.token_type not in [1, 65, 129]:
             return ('prune', 0)
 
         if slpMsg.transaction_type == 'SEND':
