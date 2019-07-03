@@ -71,7 +71,7 @@ from .util import *
 import electroncash.slp as slp
 from electroncash import slp_validator_0x01
 from electroncash.slp_coinchooser import SlpCoinChooser
-from electroncash.slp_wallet import SlpWallet
+from electroncash.slp_checker import SlpTransactionChecker
 from .amountedit import SLPAmountEdit
 from electroncash.util import format_satoshis_nofloat
 from .slp_create_token_genesis_dialog import SlpCreateTokenGenesisDialog
@@ -2448,13 +2448,21 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.sign_tx_with_password(tx, sign_done, password)
 
     @protected
-    def sign_tx(self, tx, callback, password):
-        self.sign_tx_with_password(tx, callback, password)
+    def sign_tx(self, tx, callback, password, *, slp_coins_to_burn=None):
+        self.sign_tx_with_password(tx, callback, password, slp_coins_to_burn=slp_coins_to_burn)
 
-    def sign_tx_with_password(self, tx, callback, password):
+    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
+        
+        # check transaction SLP validity before signing
+        try:
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
+        except (Exception, AssertionError) as e:
+            self.show_warning(str(e))
+            return   
+                 
         # call hook to see if plugin needs gui interaction
         run_hook('sign_tx', self, tx)
 
@@ -2471,7 +2479,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         WaitingDialog(self, _('Signing transaction...'), task,
                       on_signed, on_failed)
 
-    def broadcast_transaction(self, tx, tx_desc, *, slp_coins_to_burn=None):
+    def broadcast_transaction(self, tx, tx_desc):
 
         def broadcast_thread():
             # non-GUI thread
@@ -2491,7 +2499,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.payment_request = None
                     status = True
             else:
-                assert SlpWallet.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
                 status, msg =  self.network.broadcast_transaction(tx)
             return status, msg
 

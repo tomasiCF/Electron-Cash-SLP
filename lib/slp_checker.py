@@ -1,10 +1,10 @@
 from electroncash.util import NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, print_error
 from electroncash import slp
-from electroncash.slp import SlpParsingError
+from electroncash.slp import SlpParsingError, SlpInvalidOutputMessage, SlpUnsupportedSlpTokenType
 from electroncash.transaction import Transaction
 from electroncash.address import Address
 
-class SlpWallet:
+class SlpTransactionChecker:
     @staticmethod
     def check_tx_slp(wallet, tx, *, coins_to_burn=None):
 
@@ -14,33 +14,43 @@ class SlpWallet:
             prev_out = txo['prevout_hash']
             prev_n = txo['prevout_n']
             with wallet.lock:
-                input_tx = wallet.transactions[prev_out]
-            try:
-                slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
-            except SlpParsingError:
-                pass
-            else:
-                if slp_msg.transaction_type == 'SEND':
-                    if prev_n >= len(slp_msg.op_return_fields['token_output']):
-                        continue
-                elif slp_msg.transaction_type in ['GENESIS', 'MINT']:
-                    if slp_msg.op_return_fields['mint_baton_vout'] and prev_n not in [1, slp_msg.op_return_fields['mint_baton_vout']]:
-                        continue
-                    elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
-                        continue
                 try:
-                    with wallet.lock:
-                        assert wallet._slp_txo[addr][prev_out][prev_n]
-                except (KeyError, AssertionError):
-                    raise SlpMissingInputRecord
+                    input_tx = wallet.transactions[prev_out]
+                except KeyError:
+                    raise Exception('Wallet has not downloaded this transaction')
+                else:
+                    try:
+                        slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
+                    except SlpInvalidOutputMessage:
+                        pass
+                    except SlpUnsupportedSlpTokenType:
+                        raise UnsupportedSlpTokenType('Transaction contains an unsupported SLP' \
+                                                        + ' input type')
+                    else:
+                        if slp_msg.transaction_type == 'SEND':
+                            if prev_n >= len(slp_msg.op_return_fields['token_output']):
+                                continue
+                        elif slp_msg.transaction_type in ['GENESIS', 'MINT']:
+                            if slp_msg.op_return_fields['mint_baton_vout'] and \
+                                    prev_n not in [1, slp_msg.op_return_fields['mint_baton_vout']]:
+                                continue
+                            elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
+                                continue
+                        try:
+                            with wallet.lock:
+                                assert wallet._slp_txo[addr][prev_out][prev_n]
+                        except (KeyError, AssertionError):
+                            raise SlpMissingInputRecord('Transaction contains an SLP input that is' \
+                                                            + ' unknown to this wallet (missing from slp_txo).')
 
         # Step 2) Get SLP metadata in current transaction
         try:
             slp_msg = slp.SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
         except SlpParsingError:
             slp_msg = None
-            
-        # Step 3a) If non-SLP check for SLP inputs (only allow spending slp inputs specified in 'coins_to_burn')
+
+        # Step 3a) If non-SLP check for SLP inputs (only allow 
+        #          spending slp inputs specified in 'coins_to_burn')
         if not slp_msg:
             for txo in tx.inputs():
                 addr = txo['address']
@@ -61,8 +71,9 @@ class SlpWallet:
                                 c['is_in_txn'] = True
 
                     if not is_burn_allowed:
-                        print_error("SLP check failed for non-SLP transaction which contains SLP inputs.")
-                        raise NonSlpTransactionHasSlpInputs
+                        print_error("SLP check failed for non-SLP transaction" \
+                                        + " which contains SLP inputs.")
+                        raise NonSlpTransactionHasSlpInputs('Non-SLP transaction contains SLP inputs.')
 
             # Check that all coins within 'coins_to_burn' are included in burn transaction
             if coins_to_burn:
@@ -71,7 +82,8 @@ class SlpWallet:
                         if coin['is_in_txn']:
                             continue
                     except KeyError:
-                        raise MissingCoinToBeBurned
+                        raise MissingCoinToBeBurned('Transaction is missing SLP required inputs that were' \
+                                                        + ' for this burn transaction.')
 
         # Step 3b) If SLP, check quantities and token id of inputs match output requirements
         elif slp_msg:
@@ -96,28 +108,33 @@ class SlpWallet:
                         else:
                             input_slp_qty += slp_input['qty']
                             if slp_input['token_id'] != tid:
-                                print_error("SLP check failed for SEND due to incorrect tokenId in txn input")
-                                raise SlpWrongTokenID
+                                print_error("SLP check failed for SEND due to incorrect" \
+                                                + " tokenId in txn input")
+                                raise SlpWrongTokenID('Transaction contains SLP inputs' \
+                                                        + ' with incorrect token id.')
 
                 if input_slp_qty < sum(slp_outputs):
                     print_error("SLP check failed for SEND due to insufficient SLP inputs")
-                    raise SlpInputsTooLow
+                    raise SlpInputsTooLow('Transaction SLP outputs exceed SLP inputs')
                 elif not coins_to_burn and input_slp_qty > sum(slp_outputs):
                     print_error("SLP check failed for SEND due to SLP inputs too high")
-                    raise SlpInputsTooHigh
+                    raise SlpInputsTooHigh('Transaction SLP inputs exceed SLP outputs.')
 
                 for i, out in enumerate(slp_msg.op_return_fields['token_output']):
                     try:
                         out = tx.outputs()[i]
                     except IndexError:
-                        print_error("Transaction is missing vout for MINT operation token receiver")
-                        raise MissingTokenReceiverOutpoint
+                        print_error("Transaction is missing vout for MINT operation" \
+                                        + " token receiver")
+                        raise MissingTokenReceiverOutpoint('Transaction is missing' \
+                                                                + ' a required SLP output.')
                     else:
                         if i == 0:
                             assert out[0] == 2
                         elif out[1].kind not in [Address.ADDR_P2PKH, Address.ADDR_P2SH]:
                             print_error("Transaction token receiver vout is not P2PKH or P2SH")
-                            raise BadSlpOutpointType
+                            raise BadSlpOutpointType('Tranaction SLP output must be p2pkh' \
+                                                        + ' or p2sh output type.')
 
             elif slp_msg.transaction_type == 'MINT':
                 tid = slp_msg.op_return_fields['token_id_hex']
@@ -136,10 +153,12 @@ class SlpWallet:
                         else:
                             if slp_input['qty'] != 'MINT_BATON':
                                 print_error("Non-baton SLP input found in MINT")
-                                raise SlpNonMintInput
+                                raise SlpNonMintInput('MINT transaction contains non-baton SLP input.')
                             if slp_input['token_id'] != tid:
-                                print_error("SLP check failed for MINT due to incorrect tokenId in baton")
-                                raise SlpWrongTokenID
+                                print_error("SLP check failed for MINT due to incorrect" \
+                                                + " tokenId in baton")
+                                raise SlpWrongTokenID('MINT transaction contains baton with incorrect' \
+                                                        + ' token id.')
 
             if slp_msg.transaction_type in ['GENESIS', 'MINT']:
                 # raise an Exception if:
@@ -150,21 +169,25 @@ class SlpWallet:
                         out = tx.outputs()[slp_msg.op_return_fields['mint_baton_vout']]
                     except IndexError:
                         print_error("Transaction is missing baton vout for MINT operation")
-                        raise MissingMintBatonOutpoint
+                        raise MissingMintBatonOutpoint('Transaction is missing baton' \
+                                                            + ' vout for MINT operation')
                     else:
                         if out[1].kind not in [Address.ADDR_P2PKH, Address.ADDR_P2SH]:
                             print_error("Transaction baton receiver vout is not P2PKH or P2SH")
-                            raise BadSlpOutpointType
+                            raise BadSlpOutpointType('Transaction baton receiver vout is not P2PKH' \
+                                                        + ' or P2SH output type')
 
                     try:
                         out = tx.outputs()[1]
                     except IndexError:
                         print_error("Transaction is missing vout for MINT operation token receiver")
-                        raise MissingTokenReceiverOutpoint
+                        raise MissingTokenReceiverOutpoint('Transaction is missing vout for MINT' \
+                                                                + ' operation token receiver')
                     else:
                         if out[1].kind not in [Address.ADDR_P2PKH, Address.ADDR_P2SH]:
                             print_error("Transaction token receiver vout is not P2PKH or P2SH")
-                            raise BadSlpOutpointType
+                            raise BadSlpOutpointType('Transaction token receiver vout is not P2PKH' \
+                                                        + ' or P2SH output type')
 
         # return True if this check passes
         print_error("Final SLP check passed")
@@ -233,4 +256,8 @@ class MissingTokenReceiverOutpoint(Exception):
 
 class BadSlpOutpointType(Exception):
     # Outpoint not P2PKH or P2SH type
+    pass
+
+class UnsupportedSlpTokenType(Exception):
+    # Input contains an unsupported SLP token type
     pass

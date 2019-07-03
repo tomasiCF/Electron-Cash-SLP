@@ -251,9 +251,9 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     show_transaction(tx, self.main_window, None, False, self)
                     self.main_window.do_clear()
                 else:
-                    self.main_window.broadcast_transaction(tx, tx_desc, slp_coins_to_burn=selected_slp_coins)
+                    self.main_window.broadcast_transaction(tx, tx_desc)
 
-        self.main_window.sign_tx_with_password(tx, sign_done, password)
+        self.main_window.sign_tx(tx, sign_done, password, slp_coins_to_burn=selected_slp_coins)
 
         self.burn_button.setDisabled(True)
         self.close()

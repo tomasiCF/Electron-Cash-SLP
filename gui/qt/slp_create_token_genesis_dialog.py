@@ -19,7 +19,7 @@ from .util import *
 from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildGenesisOpReturnOutput_V1
-from electroncash.slp_wallet import SlpWallet
+from electroncash.slp_checker import SlpTransactionChecker
 from .amountedit import SLPAmountEdit
 from .transaction_dialog import show_transaction
 
@@ -314,6 +314,14 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
+        
+        # check transaction SLP validity before signing
+        try:
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx)
+        except (Exception, AssertionError) as e:
+            self.show_warning(str(e))
+            return 
+
         # call hook to see if plugin needs gui interaction
         run_hook('sign_tx', self, tx)
 
@@ -345,7 +353,6 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             # non-GUI thread
             status = False
             msg = "Failed"
-            assert SlpWallet.check_tx_slp(self.wallet, tx)
             status, msg =  self.network.broadcast_transaction(tx)
             return status, msg
 

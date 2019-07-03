@@ -39,6 +39,7 @@ from electroncash.plugins import run_hook
 from electroncash import web
 
 from electroncash.util import bfh, Weak, PrintError
+from electroncash.slp_checker import SlpTransactionChecker
 from .util import *
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
@@ -83,7 +84,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._dl_pct = None
         self._closed = False
         self.tx_height = None
-        self.slp_coins_to_burn=slp_coins_to_burn
+        self.slp_coins_to_burn = slp_coins_to_burn
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -229,7 +230,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             self.window_to_close_on_broadcast.close()
         self.main_window.push_top_level_window(self)
         try:
-            self.main_window.broadcast_transaction(self.tx, self.desc, slp_coins_to_burn=self.slp_coins_to_burn)
+            self.main_window.broadcast_transaction(self.tx, self.desc)
         finally:
             self.main_window.pop_top_level_window(self)
         self.saved = True
@@ -303,7 +304,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             cleanup()
 
         self.main_window.push_top_level_window(self)
-        self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup)
+        self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup, 
+                                    slp_coins_to_burn=self.slp_coins_to_burn)
 
     def save(self):
         name = 'signed_%s.txn' % (self.tx.txid()[0:8]) if self.tx.is_complete() else 'unsigned.txn'

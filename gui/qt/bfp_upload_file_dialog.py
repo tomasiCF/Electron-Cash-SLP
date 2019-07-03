@@ -25,7 +25,7 @@ from electroncash.transaction import Transaction
 from electroncash import bitcoinfiles
 
 from .transaction_dialog import show_transaction
-from electroncash.slp_wallet import SlpWallet
+from electroncash.slp_checker import SlpTransactionChecker
 
 from electroncash.bitcoinfiles import *
 
@@ -390,6 +390,14 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
+        
+        # check transaction SLP validity before signing
+        try:
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx)
+        except (Exception, AssertionError) as e:
+            self.show_error(str(e))
+            return
+
         # call hook to see if plugin needs gui interaction
         run_hook('sign_tx', self, tx)
 
@@ -440,7 +448,6 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
             # Broadcast all transaction to the nexwork
             for tx in self.tx_batch:
                 tx_desc = None
-                assert SlpWallet.check_tx_slp(self.wallet, tx)
                 status, msg = self.network.broadcast_transaction(tx)
                 # print(status)
                 # print(msg)
