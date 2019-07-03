@@ -116,3 +116,11 @@ Electron Cash - SLP Token Edition
 - Allow OP_RETURN entry in SLP wallets, but disable when a token is selected
 - Reordered Send Tab amount input fields and moved token selector above amount inputs
 - Ported many goodies from the [EC 4.0.6 release](https://github.com/Electron-Cash/Electron-Cash/releases/tag/4.0.6) including: CoinText support (SLP sending is not supported), automatic high resolution scaling
+
+3.4.15 Updates & Features (WIP)
+-----
+- Add SLP invoice support in Receive tab
+- Add pre-sign SLP validity check
+- Bug fixes and improvements 
+- Various improvements ported from EC
+- ...
