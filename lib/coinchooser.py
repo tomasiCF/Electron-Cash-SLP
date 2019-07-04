@@ -200,11 +200,10 @@ class CoinChooserBase(PrintError):
 
         # Collect the coins into buckets, choose a subset of the buckets
         buckets = self.bucketize_coins(coins, sign_schnorr=sign_schnorr)
-        buckets = self.choose_buckets(buckets, sufficient_funds,
-                                      self.penalty_func(tx))
+        self.choose_buckets(buckets, sufficient_funds, self.penalty_func(tx))
 
-        tx.add_inputs([coin for b in buckets for coin in b.coins])
         tx.add_inputs(mandatory_coins)
+        tx.add_inputs([coin for b in buckets for coin in b.coins])
         slp_size = sum(bucket.size for bucket in self.bucketize_coins(mandatory_coins))
         tx_size = base_size + sum(bucket.size for bucket in buckets) + slp_size
 
@@ -221,7 +220,7 @@ class CoinChooserBase(PrintError):
         return tx
 
     def choose_buckets(self, buckets, sufficient_funds, penalty_func):
-        raise NotImplemented('To be subclassed')
+        raise NotImplementedError('To be subclassed')
 
 # class CoinChooserSlp(CoinChooserBase):
 #     def choose_buckets(self, buckets, sufficient_funds, penalty_func):

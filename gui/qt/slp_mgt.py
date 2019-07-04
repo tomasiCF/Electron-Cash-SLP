@@ -92,6 +92,8 @@ class SlpMgt(MyTreeWidget):
                 menu.addAction(_("Add this token"), lambda: SlpAddTokenDialog(self.parent, token_id_hex = keys[0], allow_overwrite=True))
                 menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
             else:
+                if self.parent.wallet.token_types[keys[0]]['class'] == 'SLP129':
+                    menu.addAction(_("Create Child NFT"), lambda: SlpCreateTokenGenesisDialog(self.parent, nft_parent_id=keys[0]))
                 try:
                     self.parent.wallet.get_slp_token_baton(keys[0])
                     menu.addAction(_("Mint Tool"), lambda: SlpCreateTokenMintDialog(self.parent, keys[0]))

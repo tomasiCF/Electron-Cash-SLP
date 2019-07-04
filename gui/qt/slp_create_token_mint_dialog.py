@@ -153,7 +153,8 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
         outputs = []
         try:
             token_id_hex = self.token_id_e.text()
-            slp_op_return_msg = buildMintOpReturnOutput_V1(token_id_hex, mint_baton_vout, init_mint_qty)
+            token_type = self.wallet.token_types[token_id_hex]['class']
+            slp_op_return_msg = buildMintOpReturnOutput_V1(token_id_hex, mint_baton_vout, init_mint_qty, token_type)
             outputs.append(slp_op_return_msg)
         except OPReturnTooLarge:
             self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))

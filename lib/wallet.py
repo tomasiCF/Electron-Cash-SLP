@@ -915,7 +915,7 @@ class Abstract_Wallet(PrintError):
                 valid_token_bal += coin['token_value']
                 if not coin['is_frozen_coin'] and coin['address'] not in self.frozen_addresses:
                     unfrozen_valid_token_bal += coin['token_value']
-            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton)
+            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton / bad NFT parent)
                 invalid_token_bal += coin['token_value']
             elif validity == 0: # Unknown DAG status (should be in processing queue)
                 unvalidated_token_bal += coin['token_value']
@@ -1086,7 +1086,7 @@ class Abstract_Wallet(PrintError):
                 _type, addr, _ = txouts[i]
                 if _type is TYPE_ADDRESS and qty > 0 and self.is_mine(addr):
                     self._slp_txo[addr][tx_hash][i] = {
-                            'type': 'SLP1',
+                            'type': 'SLP%d'%(slpMsg.token_type,),
                             'token_id': token_id_hex,
                             'qty': qty,
                             }
@@ -1097,7 +1097,7 @@ class Abstract_Wallet(PrintError):
                 if _type is TYPE_ADDRESS:
                     if slpMsg.op_return_fields['initial_token_mint_quantity'] > 0 and self.is_mine(addr):
                         self._slp_txo[addr][tx_hash][1] = {
-                                'type': 'SLP1',
+                                'type': 'SLP%d'%(slpMsg.token_type,),
                                 'token_id': token_id_hex,
                                 'qty': slpMsg.op_return_fields['initial_token_mint_quantity'],
                             }
@@ -1106,7 +1106,7 @@ class Abstract_Wallet(PrintError):
                         _type, addr, _ = txouts[i]
                         if _type is TYPE_ADDRESS:
                             self._slp_txo[addr][tx_hash][i] = {
-                                    'type': 'SLP1',
+                                    'type': 'SLP%d'%(slpMsg.token_type,),
                                     'token_id': token_id_hex,
                                     'qty': 'MINT_BATON',
                                 }
@@ -1119,7 +1119,7 @@ class Abstract_Wallet(PrintError):
                 if _type is TYPE_ADDRESS:
                     if slpMsg.op_return_fields['additional_token_quantity'] > 0 and self.is_mine(addr):
                         self._slp_txo[addr][tx_hash][1] = {
-                                'type': 'SLP1',
+                                'type': 'SLP%d'%(slpMsg.token_type,),
                                 'token_id': token_id_hex,
                                 'qty': slpMsg.op_return_fields['additional_token_quantity'],
                             }
@@ -1128,7 +1128,7 @@ class Abstract_Wallet(PrintError):
                         _type, addr, _ = txouts[i]
                         if _type is TYPE_ADDRESS:
                             self._slp_txo[addr][tx_hash][i] = {
-                                    'type': 'SLP1',
+                                    'type': 'SLP%d'%(slpMsg.token_type,),
                                     'token_id': token_id_hex,
                                     'qty': 'MINT_BATON',
                                 }
@@ -1180,7 +1180,7 @@ class Abstract_Wallet(PrintError):
             is_new = self.token_types[tti['token_id']]['decimals'] == "?"
         except:
             is_new = False
-        if tti['validity'] == 0 and tti['token_id'] in self.token_types and not is_new and tti['type'] == 'SLP1':
+        if tti['validity'] == 0 and tti['token_id'] in self.token_types and not is_new and tti['type'] in ['SLP1','SLP65','SLP129']:
             def callback(job):
                 (txid,node), = job.nodes.items()
                 val = node.validity
@@ -1188,8 +1188,14 @@ class Abstract_Wallet(PrintError):
                 ui_cb = getattr(self, 'ui_emit_validity_updated', None)
                 if ui_cb:
                     ui_cb(txid, val)
-            job = slp_validator_0x01.make_job(tx, self, self.network,
-                                            debug=0, reset=False)
+
+            if tti['type'] in ['SLP1','SLP129']:
+                job = slp_validator_0x01.make_job(tx, self, self.network,
+                                                    debug=0, reset=False)
+            elif tti['type'] == 'SLP65':
+                job = slp_validator_0x01.make_job(tx, self, self.network,
+                                                    debug=0, reset=False, require_nft_parent=True)
+
             if job is not None:
                 job.add_callback(callback)
 
@@ -1556,9 +1562,11 @@ class Abstract_Wallet(PrintError):
             # Let the coin chooser select the coins to spend
             max_change = self.max_change_outputs if self.multiple_change else 1
             coin_chooser = coinchooser.CoinChooserPrivacy()
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, mandatory_coins=mandatory_coins)
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], 
+                                        fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, 
+                                        mandatory_coins=mandatory_coins)
         else:
-            inputs.extend(mandatory_coins)
+            inputs = mandatory_coins + inputs
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
