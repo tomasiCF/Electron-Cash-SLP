@@ -171,18 +171,18 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
         if require_nft_parent:
             prev_txid0 = tx.inputs()[0]['prevout_hash']
             prev_n0 = tx.inputs()[0]['prevout_n']
-            prev_tx = Transaction(wallet.transactions[prev_txid0])
+            prev_tx = wallet.transactions[prev_txid0]
             try:
                 prev_slp_msg = SlpMessage.parseSlpOutputScript(prev_tx.outputs()[0][1])
-                assert wallet.slpv1_validity[prev_tx] == 1
-                assert prev_slp_msg.op_return_fields['token_output'][prev_n0] > 0
+                assert wallet.slpv1_validity[prev_txid0] == 1
+                assert prev_slp_msg.op_return_fields['token_output'][prev_n0] >= 0
                 assert prev_slp_msg.op_return_fields['nft_flag'] == "NFT_PARENT"
             except:
                 # Save False validity
                 for t,n in job.nodes.items():
                     val = n.validity
                     if val != 0:
-                        wallet.slpv1_validity[t] = 2
+                        wallet.slpv1_validity[t] = 3
                 return
         # Save validity
         for t,n in job.nodes.items():
@@ -203,7 +203,7 @@ class Validator_SLP1:
         0: 'Unknown',
         1: 'Valid',
         2: 'Invalid: not SLP / malformed SLP',
-        3: 'Invalid: insufficient valid inputs'
+        3: 'Invalid: insufficient valid inputs / bad parent NFT'
         }
 
     def __init__(self, token_id_hex):

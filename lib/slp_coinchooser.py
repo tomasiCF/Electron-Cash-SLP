@@ -32,7 +32,8 @@ class SlpCoinChooser:
             token_change = total_amt_added - amt
             if token_change > 0:
                 token_outputs_amts.append(token_change)
-            slp_op_return_msg = slp.buildSendOpReturnOutput_V1(token_id, token_outputs_amts)
+            token_type = wallet.token_types[token_id]['class']
+            slp_op_return_msg = slp.buildSendOpReturnOutput_V1(token_id, token_outputs_amts, token_type)
 
         if selected_slp_coins:
             assert slp_op_return_msg

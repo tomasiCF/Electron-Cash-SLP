@@ -73,7 +73,7 @@ class SlpTransactionChecker:
                     if not is_burn_allowed:
                         print_error("SLP check failed for non-SLP transaction" \
                                         + " which contains SLP inputs.")
-                        raise NonSlpTransactionHasSlpInputs('Non-SLP transaction contains SLP inputs.')
+                        raise NonSlpTransactionHasSlpInputs('Non-SLP transaction contains unspecified SLP inputs.')
 
             # Check that all coins within 'coins_to_burn' are included in burn transaction
             if coins_to_burn:
@@ -135,7 +135,6 @@ class SlpTransactionChecker:
                             print_error("Transaction token receiver vout is not P2PKH or P2SH")
                             raise BadSlpOutpointType('Tranaction SLP output must be p2pkh' \
                                                         + ' or p2sh output type.')
-
             elif slp_msg.transaction_type == 'MINT':
                 tid = slp_msg.op_return_fields['token_id_hex']
                 # raise an Exception if:
@@ -159,6 +158,28 @@ class SlpTransactionChecker:
                                                 + " tokenId in baton")
                                 raise SlpWrongTokenID('MINT transaction contains baton with incorrect' \
                                                         + ' token id.')
+            elif slp_msg.transaction_type == 'GENESIS':
+                for txo in tx.inputs():
+                    addr = txo['address']
+                    prev_out = txo['prevout_hash']
+                    prev_n = txo['prevout_n']
+                    with wallet.lock:
+                        try:
+                            slp_input = wallet._slp_txo[addr][prev_out][prev_n]
+                        except KeyError:
+                            pass
+                        else:
+                            is_burn_allowed = False
+                            if coins_to_burn:
+                                for c in coins_to_burn:
+                                    if c['prevout_hash'] == prev_out and c['prevout_n'] == prev_n:
+                                        is_burn_allowed = True
+                                        c['is_in_txn'] = True
+
+                            if not is_burn_allowed:
+                                print_error("SLP check failed for SLP GENESIS transaction" \
+                                                                + " which contains SLP inputs.")
+                                raise NonSlpTransactionHasSlpInputs('Genesis transaction contains unspecified SLP inputs.')
 
             if slp_msg.transaction_type in ['GENESIS', 'MINT']:
                 # raise an Exception if:
@@ -224,6 +245,10 @@ class SlpMissingInputRecord(SlpTransactionValidityError):
 
 class NonSlpTransactionHasSlpInputs(SlpTransactionValidityError):
     # Cannot have SLP inputs in non-SLP transaction
+    pass
+
+class GenesisHasSlpInputs(SlpTransactionValidityError):
+    # Genesis cannot have SLP inputs unless specified
     pass
 
 class SlpWrongTokenID(SlpTransactionValidityError):

@@ -31,7 +31,7 @@ dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
 class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
-    def __init__(self, main_window):
+    def __init__(self, main_window, *, nft_parent_id=None):
         #self.provided_token_name = token_name
         # We want to be a top-level window
         QDialog.__init__(self, parent=main_window)
@@ -41,8 +41,11 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.config = main_window.config
         self.network = main_window.network
         self.app = main_window.app
-        self.token_type = 1
-
+        self.nft_parent_id = nft_parent_id
+        if nft_parent_id != None:
+            self.token_type = 65
+        else:
+            self.token_type = 1
 
         self.setWindowTitle(_("Create a New Token"))
 
@@ -76,7 +79,8 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.token_url_e, row, 1)
         row += 1
 
-        msg = _('An optional hash hexidecimal bytes embedded into the token genesis transaction for hashing the document file contents at the URL provided above.')
+        msg = _('An optional hash hexidecimal bytes embedded into the token genesis transaction for hashing') \
+                                                    + 'the document file contents at the URL provided above.'
         grid.addWidget(HelpLabel(_('Document Hash (optional):'), msg), row, 0)
         self.token_dochash_e = QLineEdit()
         self.token_dochash_e.setInputMask("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
@@ -85,8 +89,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.token_dochash_e, row, 1)
         row += 1
 
-        msg = _('Sets the number of decimals of divisibility for this token (embedded into genesis).') + '\n\n'\
-              + _('Each 1 token is divisible into 10^(decimals) base units, and internally in the protocol the token amounts are represented as 64-bit integers measured in these base units.')
+        msg = _('Sets the number of decimals of divisibility for this token (embedded into genesis).') \
+                + '\n\n' \
+                + _('Each 1 token is divisible into 10^(decimals) base units, and internally in the protocol') \
+                + _('the token amounts are represented as 64-bit integers measured in these base units.')
         grid.addWidget(HelpLabel(_('Decimal Places:'), msg), row, 0)
         self.token_ds_e = QDoubleSpinBox()
         self.token_ds_e.setRange(0, 9)
@@ -96,8 +102,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.token_ds_e, row, 1)
         row += 1
 
-        msg = _('The number of tokens created during token genesis transaction, send to the receiver address provided below.')
-        grid.addWidget(HelpLabel(_('Token Quantity:'), msg), row, 0)
+        msg = _('The number of tokens created during token genesis transaction,') \
+                                    + _('send to the receiver address provided below.')
+        self.token_qty_label = HelpLabel(_('Token Quantity:'), msg)
+        grid.addWidget(self.token_qty_label, row, 0)
         self.token_qty_e = SLPAmountEdit('', 0)
         self.token_qty_e.setFixedWidth(200)
         self.token_qty_e.textChanged.connect(self.check_token_qty)
@@ -128,8 +136,17 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         cb.clicked.connect(self.token_nft_parent_cb_update)
         row += 1
 
-        msg = _('The \'simpleledger:\' formatted bitcoin address for the "minting baton" receiver.') + '\n\n'\
-              + _('After the genesis transaction, further unlimited minting operations can be performed by the owner of the "minting baton" transaction output. This baton can be repeatedly used for minting operations but it cannot be duplicated.')
+        if self.nft_parent_id:
+            self.token_nft_parent_cb.setDisabled(True)
+            self.token_fixed_supply_cb.setDisabled(True)
+            self.token_qty_e.setAmount(1)
+            self.token_qty_e.setDisabled(True)
+            self.token_ds_e.setDisabled(True)
+
+        msg = _('The \'simpleledger:\' formatted bitcoin address for the "minting baton" receiver.') + '\n\n' \
+                + _('After the genesis transaction, further unlimited minting operations can be performed by the owner of') \
+                + ' the "minting baton" transaction output. This baton can be repeatedly used for minting operations but' \
+                + ' it cannot be duplicated.'
         self.token_baton_label = HelpLabel(_('Address for Baton:'), msg)
         self.token_baton_label.setHidden(True)
         grid.addWidget(self.token_baton_label, row, 0)
@@ -211,8 +228,12 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
     def token_nft_parent_cb_update(self):
         if self.token_nft_parent_cb.isChecked():
             self.token_type = 129
+            self.token_ds_e.setDisabled(True)
+            self.token_ds_e.setValue(0)
+            self.upd_token()
         else:
             self.token_type = 1
+            self.token_ds_e.setDisabled(False)
 
     def parse_address(self, address):
         if networks.net.SLPADDR_PREFIX not in address:
@@ -243,7 +264,9 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         outputs = []
         try:
-            slp_op_return_msg = buildGenesisOpReturnOutput_V1(ticker, token_name, token_document_url, token_document_hash_hex, decimals, mint_baton_vout, init_mint_qty, token_type = self.token_type)
+            slp_op_return_msg = buildGenesisOpReturnOutput_V1(ticker, token_name, token_document_url,
+                                                                token_document_hash_hex, decimals, mint_baton_vout,
+                                                                init_mint_qty, token_type=self.token_type)
             outputs.append(slp_op_return_msg)
         except OPReturnTooLarge:
             self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))
@@ -276,7 +299,33 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         fee = None
 
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fee, None)
+            selected_coin = None
+            if self.nft_parent_id:
+                # get nft_parent's coins
+                nft_parent_coins = self.main_window.wallet.get_slp_utxos(
+                                            self.nft_parent_id,
+                                            domain=None,
+                                            exclude_frozen=True,
+                                            confirmed_only=self.main_window.config.get('confirmed_only', False),
+                                            slp_include_invalid=False,
+                                            slp_include_baton=False
+                                            )
+
+                # determine if parent coin has qty 1 to burn
+                for coin in nft_parent_coins:
+                    if coin['token_value'] == 1:
+                        selected_coin = coin
+                        break
+    
+                # if yes, proceed with genesis
+                if selected_coin:
+                    tx = self.main_window.wallet.make_unsigned_transaction(coins, 
+                            outputs, self.main_window.config, fee, None, mandatory_coins=[selected_coin])
+                else:
+                    raise Exception('Must have a parent NFT coin with value of 1 first.')
+            else:
+                tx = self.main_window.wallet.make_unsigned_transaction(coins, 
+                                    outputs, self.main_window.config, fee, None)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return
@@ -289,7 +338,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             return
 
         if preview:
-            show_transaction(tx, self.main_window, None, False, self)
+            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=[selected_coin])
             return
 
         msg = []
@@ -321,16 +370,16 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                             wallet_name = wallet_name + "-" + token_id[:3]
                             break
                     self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name)
-        self.sign_tx_with_password(tx, sign_done, password)
+        self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin])
 
-    def sign_tx_with_password(self, tx, callback, password):
+    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
         
         # check transaction SLP validity before signing
         try:
-            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx)
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
             return 
@@ -375,7 +424,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 status, msg = result
                 if status:
                     token_id = msg
-                    self.main_window.add_token_type('SLP1', token_id, token_wallet_name, int(self.token_ds_e.value()), allow_overwrite=True)
+                    self.main_window.add_token_type('SLP%d'%(self.token_type,), token_id, token_wallet_name, int(self.token_ds_e.value()), allow_overwrite=True)
                     if tx.is_complete():
                         self.wallet.set_label(token_id, "SLP Token Created: " + token_wallet_name)
                     if token_name == '':

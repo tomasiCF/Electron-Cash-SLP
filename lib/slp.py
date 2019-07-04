@@ -267,11 +267,11 @@ def buildGenesisOpReturnOutput_V1(ticker: str, token_name: str, token_document_u
     chunks.append(lokad_id)
 
     # token version/type
-    if token_type == 1:
+    if token_type in [1, 'SLP1']:
         chunks.append(b'\x01')
-    elif token_type == 65:
+    elif token_type in [65, 'SLP65']:
         chunks.append(b'\x41')
-    elif token_type == 129:
+    elif token_type in [129, 'SLP129']:
         chunks.append(b'\x81')
     else:
         raise Exception('Unsupported token type')
@@ -390,14 +390,19 @@ def buildGenesisOpReturnOutput_V2(ticker: str, token_name: str, token_document_u
     return chunksToOpreturnOutput(chunks)
 
 # Type 1 Token MINT Message
-def buildMintOpReturnOutput_V1(token_id_hex: str, baton_vout: int, token_mint_quantity: int) -> tuple:
+def buildMintOpReturnOutput_V1(token_id_hex: str, baton_vout: int, token_mint_quantity: int, token_type: int = 1) -> tuple:
     chunks = []
 
     # lokad id
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x01')
+    if token_type in [1, 'SLP1']:
+        chunks.append(b'\x01')
+    elif token_type in [129, 'SLP129']:
+        chunks.append(b'\x81')
+    else:
+        raise Exception('Unsupported token type')
 
     # transaction type
     chunks.append(b'MINT')
@@ -456,14 +461,21 @@ def buildMintOpReturnOutput_V2(token_id_hex: str, baton_vout: int, token_mint_qu
     return chunksToOpreturnOutput(chunks)
 
 # Type 1 Token SEND Message
-def buildSendOpReturnOutput_V1(token_id_hex: str, output_qty_array: [int]) -> tuple:
+def buildSendOpReturnOutput_V1(token_id_hex: str, output_qty_array: [int], token_type: int = 1) -> tuple:
     chunks = []
 
     # lokad id
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x01')
+    if token_type in [1, 'SLP1']:
+        chunks.append(b'\x01')
+    elif token_type in [65, 'SLP65']:
+        chunks.append(b'\x41')
+    elif token_type in [129, 'SLP129']:
+        chunks.append(b'\x81')
+    else:
+        raise Exception('Unsupported token type')
 
     # transaction type
     chunks.append(b'SEND')

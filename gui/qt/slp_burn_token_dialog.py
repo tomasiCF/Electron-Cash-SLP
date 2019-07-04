@@ -183,7 +183,8 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                                 selected_slp_coins.append(coin)
                                 total_amt_added+=coin['token_value']
                 if total_amt_added > burn_amt:
-                    slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt])
+                    token_type = self.wallet.token_types[token_id_hex]['class']
+                    slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt], token_type)
                     outputs.append(slp_op_return_msg)
                     outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
             else:
@@ -253,7 +254,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                 else:
                     self.main_window.broadcast_transaction(tx, tx_desc)
 
-        self.main_window.sign_tx(tx, sign_done, password, slp_coins_to_burn=selected_slp_coins)
+        self.main_window.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=selected_slp_coins)
 
         self.burn_button.setDisabled(True)
         self.close()

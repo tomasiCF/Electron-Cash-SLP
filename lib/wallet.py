@@ -915,7 +915,7 @@ class Abstract_Wallet(PrintError):
                 valid_token_bal += coin['token_value']
                 if not coin['is_frozen_coin'] and coin['address'] not in self.frozen_addresses:
                     unfrozen_valid_token_bal += coin['token_value']
-            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage / missing required NFT parent, 3=inputs lack enough tokens / missing mint baton)
+            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton / bad NFT parent)
                 invalid_token_bal += coin['token_value']
             elif validity == 0: # Unknown DAG status (should be in processing queue)
                 unvalidated_token_bal += coin['token_value']
@@ -1566,9 +1566,11 @@ class Abstract_Wallet(PrintError):
             # Let the coin chooser select the coins to spend
             max_change = self.max_change_outputs if self.multiple_change else 1
             coin_chooser = coinchooser.CoinChooserPrivacy()
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, mandatory_coins=mandatory_coins)
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], 
+                                        fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, 
+                                        mandatory_coins=mandatory_coins)
         else:
-            inputs.extend(mandatory_coins)
+            inputs = mandatory_coins + inputs
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
