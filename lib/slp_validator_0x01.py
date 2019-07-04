@@ -12,6 +12,7 @@ from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager
 from .bitcoin import TYPE_SCRIPT
+from .util import print_error
 
 from . import slp_proxying # loading this module starts a thread.
 
@@ -168,16 +169,51 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
         # Do consistency check here
         # XXXXXXX
 
+        # NFT1 requires child is created by spending parent token(s) in vin=0
         if require_nft_parent:
-            # NFT1 requires child is created by spending parent token(s) in vin=0
-            prev_txid0 = tx.inputs()[0]['prevout_hash']
-            prev_n0 = tx.inputs()[0]['prevout_n']
-            prev_tx = wallet.transactions[prev_txid0]
             try:
-                prev_slp_msg = SlpMessage.parseSlpOutputScript(prev_tx.outputs()[0][1])
-                assert wallet.slpv1_validity[prev_txid0] == 1
-                assert prev_slp_msg.op_return_fields['token_output'][prev_n0] > 0
-                assert prev_slp_msg.op_return_fields['nft_flag'] == "NFT_PARENT"
+                prev_txid0 = tx.inputs()[0]['prevout_hash']
+                prev_n0 = tx.inputs()[0]['prevout_n']
+                prev_tx = wallet.transactions[prev_txid0]
+            except KeyError:
+                print_error('Transaction not downloaded, unhandled exception')
+                return
+                # try:
+                #     prev_tx = wallet.transactions[prev_txid0]
+                # except KeyError:
+                #     requests = [ ('blockchain.transaction.get', [txid]), ]
+                #     self.network.send(requests, callback)
+            try:
+                curr_slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+                assert curr_slp_msg.op_return_fields['nft_flag'] == 'NFT_CHILD'
+                if curr_slp_msg.transaction_type == 'GENESIS':
+                    prev_slp_msg = SlpMessage.parseSlpOutputScript(prev_tx.outputs()[0][1])
+                    assert wallet.slpv1_validity[prev_txid0] == 1
+                    assert prev_slp_msg.op_return_fields['token_output'][prev_n0] > 0
+                    assert prev_slp_msg.op_return_fields['nft_flag'] == 'NFT_PARENT'
+                elif curr_slp_msg.transaction_type == 'SEND':
+                    # look at genesis txn's vin=0 token validity
+                    try: 
+                        genesis_tx = wallet.transactions[curr_slp_msg.op_return_fields['token_id_hex']]
+                    except KeyError:
+                        print_error('Transaction not downloaded, unhandled exception')
+                        return                        
+                    
+                    parent_txid = genesis_tx.inputs()[0]['prevout_hash']
+                    parent_prev0 = genesis_tx.inputs()[0]['prevout_n']
+                    try:
+                        parent_tx = wallet.transactions[parent_txid]
+                    except KeyError:
+                        print_error('Transaction not downloaded, unhandled exception')
+                        return
+                    
+                    parent_tx_slp_msg = SlpMessage.parseSlpOutputScript(parent_tx.outputs()[0][1])
+                    assert parent_tx_slp_msg.op_return_fields['token_output'][parent_prev0] > 0
+                    assert parent_tx_slp_msg.op_return_fields['nft_flag'] == 'NFT_PARENT'
+                    if parent_tx_slp_msg.transaction_type == 'SEND':
+                        assert wallet.slpv1_validity[parent_txid]
+                    elif parent_tx_slp_msg.transaction_type == 'GENESIS':
+                        assert wallet.slpv1_validity[parent_tx.txid()]
             except:
                 # Save False validity
                 for t,n in job.nodes.items():
