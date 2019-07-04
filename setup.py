@@ -102,6 +102,9 @@ setup(
             'libsecp256k1*',
             'libzbar*',
             'locale/*/LC_MESSAGES/electron-cash.mo',
+        ],
+        'electroncash_gui.qt' : [
+            'data/*.ttf'
         ]
     },
     scripts=['electron-cash'],
