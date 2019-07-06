@@ -39,7 +39,7 @@ from collections import defaultdict
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 
-from .i18n import _
+from .i18n import _, ngettext
 from .util import NotEnoughFunds, NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
 
 from .address import Address, Script, ScriptOutput, PublicKey
@@ -701,7 +701,8 @@ class Abstract_Wallet(PrintError):
                 height, conf, timestamp = self.get_tx_height(tx_hash)
                 if height > 0:
                     if conf:
-                        status = _("{} confirmations").format(conf)
+                        status = ngettext("{conf} confirmation", "{conf} confirmations", conf)
+                        status = status.format(conf=conf)
                     else:
                         status = _('Not verified')
                 else:
@@ -1602,8 +1603,8 @@ class Abstract_Wallet(PrintError):
             # Let the coin chooser select the coins to spend
             max_change = self.max_change_outputs if self.multiple_change else 1
             coin_chooser = coinchooser.CoinChooserPrivacy()
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change], 
-                                        fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr, 
+            tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],
+                                        fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr,
                                         mandatory_coins=mandatory_coins)
         else:
             inputs = mandatory_coins + inputs
