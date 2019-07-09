@@ -1001,9 +1001,53 @@ class Node:
         ret = validator.validate(self.myinfo, valinfo)
 
         if ret is None: # undecided
-            if not anyactive:
+            from .slp_validator_0x01 import Validator_SLP1
+            if not anyactive and isinstance(self.graph.validator, Validator_SLP1):
                 raise RuntimeError("Undecided with finalized parents",
                                    self.txid, self.myinfo, valinfo)
+            from .slp_validator_0x01_nft1 import Validator_NFT1
+            if self.myinfo == 'GENESIS' and isinstance(self.graph.validator, Validator_NFT1):
+                if not self.graph.validator.genesis_tx:
+                    def dl_cb(resp):
+                        if resp.get('error'):
+                            return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+                        raw = resp.get('result')
+                        tx = Transaction(raw)
+                        self.graph.validator.genesis_tx = tx
+                        self.ping()
+                    requests = [('blockchain.transaction.get', [self.txid]), ]
+                    self.graph.validator.network.send(requests, dl_cb)
+                elif not self.graph.validator.nft_parent_tx:
+                    def dl_cb(resp):
+                        if resp.get('error'):
+                            return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+                        raw = resp.get('result')
+                        tx = Transaction(raw)
+                        self.graph.validator.nft_parent_tx = tx
+                        self.ping()
+                    nft_parent_txid = self.graph.validator.genesis_tx.inputs()[0]['prevout_hash']
+                    requests = [('blockchain.transaction.get', [nft_parent_txid]), ]
+                    self.graph.validator.network.send(requests, dl_cb)
+                elif self.graph.validator.nft_parent_tx:
+                    wallet = self.graph.validator.wallet
+                    network = self.graph.validator.network
+                    def callback(job):
+                        (txid,node), = job.nodes.items()
+                        val = node.validity
+                        self.set_validity(self.myinfo, val)
+                        with wallet.lock:
+                            wallet.tx_tokinfo[self.graph.validator.nft_parent_tx.txid()]['validity'] = val
+                            wallet.tx_tokinfo[self.graph.validator.genesis_tx.txid()]['validity'] = val
+                        ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+                        if ui_cb:
+                            ui_cb(txid, val)
+                            ui_cb(self.graph.validator.genesis_tx.txid(), val)
+                    tx = self.graph.validator.nft_parent_tx
+
+                    from . import slp_validator_0x01_nft1
+                    job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=0, reset=False)
+                    if job is not None:
+                        job.add_callback(callback)                             
             return
         else: # decided
             self.graph.debug("%.10s... judgement based on inputs: %s",

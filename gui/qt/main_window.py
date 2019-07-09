@@ -69,7 +69,7 @@ from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
 from .util import *
 
 import electroncash.slp as slp
-from electroncash import slp_validator_0x01
+from electroncash import slp_validator_0x01, slp_validator_0x01_nft1
 from electroncash.slp_coinchooser import SlpCoinChooser
 from electroncash.slp_checker import SlpTransactionChecker
 from .amountedit import SLPAmountEdit
@@ -446,10 +446,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.clear_receive_tab()
         self.request_list.update()
 
-        # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
-        slp_validator_0x01.setup_config(self.config)
-
         if self.is_slp_wallet:
+            # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
+            slp_validator_0x01.setup_config(self.config)
+            slp_validator_0x01_nft1.setup_config(self.config)
             self.wallet.activate_slp()
             self.slp_history_list.update()
             self.token_list.update()

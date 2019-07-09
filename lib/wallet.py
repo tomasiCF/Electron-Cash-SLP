@@ -65,7 +65,7 @@ from .paymentrequest import InvoiceStore
 from .contacts import Contacts
 
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpNoMintingBatonFound
-from . import slp_validator_0x01
+from . import slp_validator_0x01, slp_validator_0x01_nft1
 
 TX_STATUS = [
     _('Unconfirmed parent'),
@@ -1230,12 +1230,12 @@ class Abstract_Wallet(PrintError):
                 if ui_cb:
                     ui_cb(txid, val)
 
-            if tti['type'] in ['SLP1','SLP129']:
+            if tti['type'] in ['SLP1']:
                 job = slp_validator_0x01.make_job(tx, self, self.network,
                                                     debug=0, reset=False)
-            elif tti['type'] == 'SLP65':
-                job = slp_validator_0x01.make_job(tx, self, self.network,
-                                                    debug=0, reset=False, require_nft_parent=True)
+            elif tti['type'] in ['SLP65','SLP129']:
+                job = slp_validator_0x01_nft1.make_job(tx, self, self.network,
+                                                    debug=0, reset=False)
 
             if job is not None:
                 job.add_callback(callback)
