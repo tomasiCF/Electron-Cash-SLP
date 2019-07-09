@@ -37,7 +37,7 @@ def get_graph(token_id_hex, token_type):
             return graph_db[token_id_hex]
         except KeyError:
             if token_type == 129:
-                val = Validator_SLP1(token_id_hex)
+                val = Validator_SLP1(token_id_hex, enforced_token_type=129)
             elif token_type == 65:
                 val = Validator_NFT1(token_id_hex)
 

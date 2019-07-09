@@ -188,11 +188,13 @@ class Validator_SLP1:
         0: 'Unknown',
         1: 'Valid',
         2: 'Invalid: not SLP / malformed SLP',
-        3: 'Invalid: insufficient valid inputs'
+        3: 'Invalid: insufficient valid inputs',
+        4: 'Invalid: token type different than required'
         }
 
-    def __init__(self, token_id_hex):
+    def __init__(self, token_id_hex, *, enforced_token_type=1):
         self.token_id_hex = token_id_hex
+        self.token_type = enforced_token_type
 
     def get_info(self,tx):
         """
@@ -221,6 +223,10 @@ class Validator_SLP1:
         # Parse the SLP
         if slpMsg.token_type not in [1,129]:
             return ('prune', 0)
+
+        # Check that the correct token_type is enforced (type 0x01 or 0x81)
+        if self.token_type != slpMsg.token_type:
+            return ('prune', 4)
 
         if slpMsg.transaction_type == 'SEND':
             token_id_hex = slpMsg.op_return_fields['token_id_hex']

@@ -113,8 +113,6 @@ class SlpMessage:
 
         # check if the token version is supported
         # 1   = type 1
-        # 17  = (type 1 reserved purpose)
-        # 33  = (type 1 reserved purpose)
         # 65  = type 1 as NFT child
         # 129 = type 1 as NFT parent
         slpMsg.token_type = SlpMessage.parseChunkToInt(chunks[1], 1, 2, True)

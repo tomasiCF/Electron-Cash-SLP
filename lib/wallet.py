@@ -956,7 +956,7 @@ class Abstract_Wallet(PrintError):
                 valid_token_bal += coin['token_value']
                 if not coin['is_frozen_coin'] and coin['address'] not in self.frozen_addresses:
                     unfrozen_valid_token_bal += coin['token_value']
-            elif validity == 2 or validity == 3: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton / bad NFT parent)
+            elif validity > 1: # Invalid DAG (2=bad slpmessage, 3=inputs lack enough tokens / missing mint baton, 4=change token_type or bad NFT parent)
                 invalid_token_bal += coin['token_value']
             elif validity == 0: # Unknown DAG status (should be in processing queue)
                 unvalidated_token_bal += coin['token_value']
