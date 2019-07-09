@@ -264,6 +264,9 @@ class Validator_NFT1:
             mintvout = slpMsg.op_return_fields['mint_baton_vout']
             if mintvout is not None:
                 return ('prune', 2)
+            decimals = slpMsg.op_return_fields['decimals']
+            if decimals != 0:
+                return ('prune', 2)
             outputs = [None,None]
             outputs[1] = slpMsg.op_return_fields['initial_token_mint_quantity']
             if outputs[1] > 1:
