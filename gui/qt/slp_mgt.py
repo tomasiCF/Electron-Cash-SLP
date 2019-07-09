@@ -163,4 +163,33 @@ class SlpMgt(MyTreeWidget):
                 item.setForeground(1, QBrush(QColor("#BC1E1E")))
                 item.setForeground(2, QBrush(QColor("#BC1E1E")))
                 item.setForeground(3, QBrush(QColor("#BC1E1E")))
-            self.addTopLevelItem(item)
+            if i["class"] == "SLP129":
+                for _token_id, _i in self.parent.wallet.token_types.items():
+                    if _i["class"] == "SLP65" and _i["group_id"] == token_id:
+                        name =     _i["name"]
+                        decimals = _i["decimals"]
+                        calculated_balance= self.get_balance_from_token_id(_token_id)
+                        if decimals != "?":
+                            balancestr = format_satoshis_nofloat(calculated_balance, decimal_point=decimals, num_zeros=decimals)
+                            balancestr += ' '*(9-decimals)
+                        else:
+                            balancestr = "double-click to add"
+                        _nft_item = QTreeWidgetItem([str(_token_id),str(name),str(decimals),balancestr,""])
+                        squishyfont = QFont(MONOSPACE_FONT)
+                        squishyfont.setStretch(85)
+                        _nft_item.setFont(0, squishyfont)
+                        #item.setTextAlignment(2, Qt.AlignRight)
+                        _nft_item.setTextAlignment(3, Qt.AlignRight)
+                        _nft_item.setFont(3, QFont(MONOSPACE_FONT))
+                        _nft_item.setData(0, Qt.UserRole, _token_id)
+                        if decimals == "?":
+                            _nft_item.setForeground(0, QBrush(QColor("#BC1E1E")))
+                            _nft_item.setForeground(1, QBrush(QColor("#BC1E1E")))
+                            _nft_item.setForeground(2, QBrush(QColor("#BC1E1E")))
+                            _nft_item.setForeground(3, QBrush(QColor("#BC1E1E")))
+                        item.addChild(_nft_item)
+                self.addTopLevelItem(item)
+            elif i["class"] == "SLP65" and i["group_id"] == "?":
+                self.addTopLevelItem(item)
+            elif i["class"] == "SLP1":
+                self.addTopLevelItem(item)

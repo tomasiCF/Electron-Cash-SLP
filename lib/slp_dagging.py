@@ -1034,8 +1034,13 @@ class Node:
                     def callback(job):
                         (txid,node), = job.nodes.items()
                         val = node.validity
-                        self.set_validity(self.myinfo, val)
+                        if val > 1:
+                            self.set_validity(self.myinfo, 4)
+                        else:
+                            self.set_validity(self.myinfo, val)
                         with wallet.lock:
+                            group_id = wallet.tx_tokinfo[self.graph.validator.nft_parent_tx.txid()]['token_id']
+                            wallet.token_types[self.graph.validator.genesis_tx.txid()]['group_id'] = group_id
                             wallet.tx_tokinfo[self.graph.validator.nft_parent_tx.txid()]['validity'] = val
                             wallet.tx_tokinfo[self.graph.validator.genesis_tx.txid()]['validity'] = val
                         ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)

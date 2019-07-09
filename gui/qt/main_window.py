@@ -3038,6 +3038,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
 
         new_entry=dict({'class':token_class,'name':token_name,'decimals':decimals_divisibility})
+        if token_class == "SLP65":
+            new_entry['group_id'] = "?"
 
         self.wallet.add_token_type(token_id, new_entry)
 

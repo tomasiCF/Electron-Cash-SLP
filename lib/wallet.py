@@ -1199,6 +1199,8 @@ class Abstract_Wallet(PrintError):
                         'decimals': "?",
                         'name': 'unknown-' + tokenid[:3]
                         }
+                if slpMsg.token_type == 65:
+                    tty['group_id'] = "?"
                 self.token_types[tokenid] = tty
 
         # Always add entry to tx_tokinfo
