@@ -36,17 +36,17 @@ def get_graph(token_id_hex, token_type):
         try:
             return graph_db[token_id_hex]
         except KeyError:
-            if token_type == 129:
-                val = Validator_SLP1(token_id_hex, enforced_token_type=129)
-            elif token_type == 65:
-                val = Validator_NFT1(token_id_hex)
-
-            graph = TokenGraph(val)
-
             if shared_jobmgr:
                 jobmgr = shared_jobmgr
             else:
                 jobmgr = ValidationJobManager(threadname="Validation_NFT1_token_id_%.10s"%(token_id_hex,))
+
+            if token_type == 129:
+                val = Validator_SLP1(token_id_hex, enforced_token_type=129)
+            elif token_type == 65:
+                val = Validator_NFT1(token_id_hex, jobmgr)
+
+            graph = TokenGraph(val)
 
             graph_db[token_id_hex] = (graph, jobmgr)
 
@@ -198,8 +198,9 @@ class Validator_NFT1:
         4: 'Invalid: bad parent for child NFT'
         }
 
-    def __init__(self, token_id_hex):
+    def __init__(self, token_id_hex, jobmgr):
         self.token_id_hex = token_id_hex
+        self.validation_jobmgr = jobmgr
         self.wallet = None
         self.network = None
         self.genesis_tx = None
@@ -303,7 +304,7 @@ class Validator_NFT1:
     def download_nft_genesis(self, done_callback):
         def dl_cb(resp):
             if resp.get('error'):
-                return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+                raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
             assert tx.txid() == self.token_id_hex
@@ -330,7 +331,7 @@ class Validator_NFT1:
     def download_nft_parent_tx(self, done_callback):
         def dl_cb(resp):
             if resp.get('error'):
-                return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+                raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
             wallet = self.wallet
@@ -387,8 +388,8 @@ class Validator_NFT1:
             job.add_callback(callback)    
 
     def validate_NFT_parent(self, myinfo):
-        self.nft_child_job = shared_jobmgr.job_current
-        shared_jobmgr.pause_job(self.nft_child_job)
+        self.nft_child_job = self.validation_jobmgr.job_current
+        self.validation_jobmgr.pause_job(self.nft_child_job)
 
         def restart_nft_job(val):
             self.nft_parent_validity = val
@@ -405,7 +406,7 @@ class Validator_NFT1:
     def validate(self, myinfo, inputs_info):
 
         # NFT requires parent validation pre-valid phase
-        if self.nft_parent_tx == None and myinfo == 'GENESIS':
+        if self.nft_parent_tx == None:
             self.validate_NFT_parent(myinfo)
             return None
 

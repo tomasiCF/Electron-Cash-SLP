@@ -1003,6 +1003,7 @@ class Node:
         if ret is None: # undecided
             from .slp_validator_0x01_nft1 import Validator_NFT1
             if isinstance(validator, Validator_NFT1):
+                self.waiting = True
                 return
             if not anyactive:
                 raise RuntimeError("Undecided with finalized parents",
