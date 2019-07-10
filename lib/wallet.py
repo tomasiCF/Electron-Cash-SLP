@@ -1234,10 +1234,10 @@ class Abstract_Wallet(PrintError):
 
             if tti['type'] in ['SLP1']:
                 job = slp_validator_0x01.make_job(tx, self, self.network,
-                                                    debug=1, reset=False)
+                                                    debug=2, reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
                 job = slp_validator_0x01_nft1.make_job(tx, self, self.network,
-                                                    debug=1, reset=False)
+                                                    debug=2, reset=False)
 
             if job is not None:
                 job.add_callback(callback)

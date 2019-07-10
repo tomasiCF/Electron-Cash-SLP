@@ -158,6 +158,7 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
                         download_limit=limit_dls,
                         depth_limit=limit_depth,
                         debug=debug,
+                        was_reset=reset,
                         **kwargs)
     def done_callback(job):
         # wait for proxy stuff to roll in
@@ -206,7 +207,6 @@ class Validator_NFT1:
         self.genesis_tx = None
         self.nft_parent_tx = None
         self.nft_child_job = None
-        self.nft_parent_job = None
         self.nft_parent_validity = 0
 
     def get_info(self,tx):
@@ -383,7 +383,7 @@ class Validator_NFT1:
 
         tx = self.nft_parent_tx
         from . import slp_validator_0x01_nft1
-        job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=1, reset=False)
+        job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)    
 

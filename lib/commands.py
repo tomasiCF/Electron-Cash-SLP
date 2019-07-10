@@ -582,7 +582,9 @@ class Commands:
         until finished!
         """
 
-        from . import slp_validator_0x01
+        from . import slp_validator_0x01, slp_validator_0x01_nft1
+        from .slp_validator_0x01_nft1 import Validator_NFT1
+        from .slp import SlpMessage
         from queue import Queue, Empty
 
         q = Queue()
@@ -598,13 +600,24 @@ class Commands:
 
         if debug:
             print("Debug info will be printed to stderr.")
-        job = slp_validator_0x01.make_job(tx, self.wallet, self.network,
-                                          debug=2, reset=reset)
+        
+        slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+        if slp_msg.token_type == 1:
+            job = slp_validator_0x01.make_job(tx, self.wallet, self.network,
+                                              debug=2, reset=reset)
+        else:            
+            job = slp_validator_0x01_nft1.make_job(tx, self.wallet, self.network,
+                                              debug=2, reset=reset)
         job.add_callback(q.put, way='weakmethod')
         try:
             q.get(timeout=3)
         except Empty:
             print("Validation job taking too long. Returning now as to not freeze UI for too long!")
+            print("(returned job is still running in background)")
+            return job
+        
+        if not job.running and isinstance(job.graph.validator, Validator_NFT1):
+            print("Validation job is taking too long. Returning now as to not freeze UI for too long!")
             print("(returned job is still running in background)")
             return job
 
