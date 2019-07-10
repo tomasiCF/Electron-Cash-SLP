@@ -79,7 +79,7 @@ def setup_job(tx, reset=False):
 
     if slpMsg.transaction_type == 'GENESIS':
         token_id_hex = tx.txid()
-    elif slpMsg.transaction_type in ('SEND'):
+    elif slpMsg.transaction_type == 'SEND':
         token_id_hex = slpMsg.op_return_fields['token_id_hex']
     else:
         return None
@@ -154,7 +154,7 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
 
     job = ValidationJob(graph, [txid], network,
                         fetch_hook=fetch_hook,
-                        validitycache=wallet.slpv1_validity,
+                        validitycache=None, #wallet.slpv1_validity,
                         download_limit=limit_dls,
                         depth_limit=limit_depth,
                         debug=debug,
@@ -204,6 +204,9 @@ class Validator_NFT1:
         self.network = None
         self.genesis_tx = None
         self.nft_parent_tx = None
+        self.nft_child_job = None
+        self.nft_parent_job = None
+        self.nft_parent_validity = 0
 
     def get_info(self,tx):
         """
@@ -297,12 +300,123 @@ class Validator_NFT1:
         else:
             return (out_n > 0)
 
+    def download_nft_genesis(self, done_callback):
+        def dl_cb(resp):
+            if resp.get('error'):
+                return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+            raw = resp.get('result')
+            tx = Transaction(raw)
+            assert tx.txid() == self.token_id_hex
+            wallet = self.wallet
+            with wallet.lock, wallet.transaction_lock:
+                if not wallet.transactions.get(tx.txid(), None):
+                    wallet.transactions[tx.txid()] = tx
+                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                    from .slp import SlpMessage
+                    slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+                    tti = { 'type':'SLP%d'%(slpMsg.token_type,),
+                        'transaction_type':slpMsg.transaction_type,
+                        'token_id': tx.txid(),
+                        'validity': 0,
+                    }
+                    wallet.tx_tokinfo[tx.txid()] = tti
+            wallet.save_transactions(True)
+            self.genesis_tx = tx
+            if done_callback:
+                done_callback()
+        requests = [('blockchain.transaction.get', [self.token_id_hex]), ]
+        self.network.send(requests, dl_cb)
+
+    def download_nft_parent_tx(self, done_callback):
+        def dl_cb(resp):
+            if resp.get('error'):
+                return self.fail_metadata_info("Download error!\n%r"%(resp['error'].get('message')))
+            raw = resp.get('result')
+            tx = Transaction(raw)
+            wallet = self.wallet
+            with wallet.lock, wallet.transaction_lock:
+                if not wallet.transactions.get(tx.txid(), None):
+                    wallet.transactions[tx.txid()] = tx
+                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                    slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+                    tti = { 'type':'SLP%d'%(slpMsg.token_type,),
+                        'transaction_type':slpMsg.transaction_type,
+                        'validity': 0,
+                    }
+                    if slpMsg.transaction_type == 'GENESIS':
+                        tti['token_id'] = tx.txid()
+                    else:
+                        tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
+                    wallet.tx_tokinfo[tx.txid()] = tti
+            wallet.save_transactions(True)
+            self.nft_parent_tx = tx
+            if done_callback:
+                done_callback()
+        nft_parent_txid = self.genesis_tx.inputs()[0]['prevout_hash']
+        requests = [('blockchain.transaction.get', [nft_parent_txid]), ]
+        self.network.send(requests, dl_cb)
+
+    def start_NFT_parent_job(self, done_callback):
+        wallet = self.wallet
+        network = self.network
+        def callback(job):
+            (txid,node), = job.nodes.items()
+            val = node.validity
+            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid()]['token_id']                            
+            if not wallet.token_types.get(group_id, None):
+                name = wallet.token_types[self.genesis_tx.txid()]['name'] + '-parent'
+                #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
+                parent_entry = dict({'class':'SLP129','name':name,'decimals':0}) # TODO: handle case where decimals is not 0
+                wallet.add_token_type(group_id, parent_entry)
+            with wallet.lock, wallet.transaction_lock:
+                wallet.token_types[self.genesis_tx.txid()]['group_id'] = group_id
+                wallet.tx_tokinfo[self.nft_parent_tx.txid()]['validity'] = val
+                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = val
+            wallet.save_transactions(True)
+            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+            if ui_cb:
+                ui_cb(txid, val)
+                ui_cb(self.genesis_tx.txid(), val)
+            if done_callback:
+                done_callback(val)
+
+        tx = self.nft_parent_tx
+        from . import slp_validator_0x01_nft1
+        job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=1, reset=False)
+        if job is not None:
+            job.add_callback(callback)    
+
+    def validate_NFT_parent(self, myinfo):
+        self.nft_child_job = shared_jobmgr.job_current
+        shared_jobmgr.pause_job(self.nft_child_job)
+
+        def restart_nft_job(val):
+            self.nft_parent_validity = val
+            shared_jobmgr.unpause_job(self.nft_child_job)
+
+        def start_nft_parent_validation():
+            self.start_NFT_parent_job(restart_nft_job)
+
+        def start_dl_nft_parent():
+            self.download_nft_parent_tx(start_nft_parent_validation)
+
+        self.download_nft_genesis(start_dl_nft_parent)
 
     def validate(self, myinfo, inputs_info):
+
+        # NFT requires parent validation pre-valid phase
+        if self.nft_parent_tx == None and myinfo == 'GENESIS':
+            self.validate_NFT_parent(myinfo)
+            return None
+
         if myinfo == 'GENESIS':
             if len(inputs_info) != 0:
                 raise RuntimeError('Unexpected', inputs_info)
-            return None  # genesis is always undecided until the parent DAG is validated
+            if self.nft_parent_validity == 1:
+                return (True, 1)
+            elif self.nft_parent_validity > 1:
+                return (False, self.nft_parent_validity)
+            return None
         else:
             # TRAN --- myinfo is an integer sum(outs)
 

@@ -1220,7 +1220,7 @@ class Abstract_Wallet(PrintError):
     def slp_check_validation(self, tx_hash, tx):
         tti = self.tx_tokinfo[tx_hash]
         try:
-            is_new = self.token_types[tti['token_id']]['decimals'] == "?"
+            is_new = self.token_types[tti['token_id']]['decimals'] == '?'
         except:
             is_new = False
         if tti['validity'] == 0 and tti['token_id'] in self.token_types and not is_new and tti['type'] in ['SLP1','SLP65','SLP129']:
@@ -1234,10 +1234,10 @@ class Abstract_Wallet(PrintError):
 
             if tti['type'] in ['SLP1']:
                 job = slp_validator_0x01.make_job(tx, self, self.network,
-                                                    debug=0, reset=False)
+                                                    debug=1, reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
                 job = slp_validator_0x01_nft1.make_job(tx, self, self.network,
-                                                    debug=0, reset=False)
+                                                    debug=1, reset=False)
 
             if job is not None:
                 job.add_callback(callback)
