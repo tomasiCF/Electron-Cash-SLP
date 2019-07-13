@@ -173,7 +173,7 @@ class SlpMgt(MyTreeWidget):
                 item.setForeground(3, QBrush(QColor("#BC1E1E")))
             if i["class"] == "SLP129":
                 for _token_id, _i in self.parent.wallet.token_types.items():
-                    if _i["class"] == "SLP65" and _i["group_id"] == token_id:
+                    if _i["class"] == "SLP65" and i.get("group_id", None) == token_id:
                         name =     _i["name"]
                         decimals = _i["decimals"]
                         calculated_balance= self.get_balance_from_token_id(_token_id)
