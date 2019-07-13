@@ -50,7 +50,7 @@ class SlpMgt(MyTreeWidget):
         self.update()
 
     def __init__(self, parent):
-        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Baton')], 0, [0])
+        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Baton'), _('Token Type')], 0, [0])
         self.slp_validity_signal = parent.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -145,11 +145,19 @@ class SlpMgt(MyTreeWidget):
             else:
                 balancestr = "double-click to add"
 
+            typestr = "?"
+            if i['class'] == "SLP1":
+                typestr = "Type 1"
+            elif i['class'] == "SLP65":
+                typestr = "NFT1 Child"
+            elif i['class'] == "SLP129":
+                typestr = "NFT1 Parent"
+
             try:
                 self.parent.wallet.get_slp_token_baton(token_id)
-                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,"★"])
+                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,"★", typestr])
             except SlpNoMintingBatonFound:
-                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,""])
+                item = QTreeWidgetItem([str(token_id),str(name),str(decimals),balancestr,"", typestr])
 
             squishyfont = QFont(MONOSPACE_FONT)
             squishyfont.setStretch(85)
@@ -174,7 +182,7 @@ class SlpMgt(MyTreeWidget):
                             balancestr += ' '*(9-decimals)
                         else:
                             balancestr = "double-click to add"
-                        _nft_item = QTreeWidgetItem([str(_token_id),str(name),str(decimals),balancestr,""])
+                        _nft_item = QTreeWidgetItem([str(_token_id),str(name),str(decimals),balancestr,"", "NFT1 Child"])
                         squishyfont = QFont(MONOSPACE_FONT)
                         squishyfont.setStretch(85)
                         _nft_item.setFont(0, squishyfont)
@@ -189,7 +197,7 @@ class SlpMgt(MyTreeWidget):
                             _nft_item.setForeground(3, QBrush(QColor("#BC1E1E")))
                         item.addChild(_nft_item)
                 self.addTopLevelItem(item)
-            elif i["class"] == "SLP65" and i["group_id"] == "?":
+            elif i["class"] == "SLP65" and i.get("group_id", "?") == "?":
                 self.addTopLevelItem(item)
             elif i["class"] == "SLP1":
                 self.addTopLevelItem(item)
