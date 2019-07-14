@@ -1372,7 +1372,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             tokenid = self.receive_token_type_combo.currentData()
             req = self.wallet.make_payment_request(self.receive_address, amount,
                                     message, expiration, token_id=tokenid, **kwargs)
-        else: 
+        else:
             req = self.wallet.make_payment_request(self.receive_address, amount,
                                                 message, expiration, **kwargs)
         self.wallet.add_payment_request(req, self.config)
@@ -1532,7 +1532,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         elif not token_id:
             # Otherwise proceed as normal, prepending bitcoincash: to URI
             uri = web.create_URI(self.receive_address, amount, message, **kwargs)
-        else: 
+        else:
             uri = web.create_URI(self.receive_address, amount, message, **kwargs, token_id=token_id)
 
         self.receive_qr.setData(uri)
@@ -2456,14 +2456,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
-        
+
         # check transaction SLP validity before signing
         try:
             assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
-            return   
-                 
+            return
+
         # call hook to see if plugin needs gui interaction
         run_hook('sign_tx', self, tx)
 
@@ -4972,15 +4972,26 @@ class TxUpdateMgr(QObject, PrintError):
             return
         items = self.verifs_get_and_clear()
         if items:
+            t0 = time.time()
             parent.history_list.setUpdatesEnabled(False)
             parent.slp_history_list.setUpdatesEnabled(False)
+            had_sorting = [ parent.history_list.isSortingEnabled(),
+                            parent.slp_history_list.isSortingEnabled() ]
+            if had_sorting[0]:
+                parent.history_list.setSortingEnabled(False)
+            if had_sorting[1]:
+                parent.slp_history_list.setSortingEnabled(False)
             n_updates = 0
             for item in items:
                 did_update = parent.history_list.update_item(*item)
                 parent.slp_history_list.update_item_netupdate(*item)
                 n_updates += 1 if did_update else 0
-            self.print_error("Updated {}/{} verified txs in GUI"
-                             .format(n_updates, len(items)))
+            self.print_error("Updated {}/{} verified txs in GUI in {:0.2f} ms"
+                             .format(n_updates, len(items), (time.time()-t0)*1e3))
+            if had_sorting[0]:
+                parent.history_list.setSortingEnabled(True)
+            if had_sorting[1]:
+                parent.slp_history_list.setSortingEnabled(True)
             parent.slp_history_list.setUpdatesEnabled(True)
             parent.history_list.setUpdatesEnabled(True)
             parent.update_status()
