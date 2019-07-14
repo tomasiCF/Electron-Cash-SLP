@@ -23,7 +23,7 @@ Getting started
 Electron Cash is a pure python application forked from Electrum. If you want to use the
 Qt interface, install the Qt dependencies::
 
-    sudo apt-get install python3-pyqt5
+    sudo apt-get install python3-pyqt5 python3-pyqt5.qtsvg
 
 If you downloaded the official package (tar.gz), you can run
 Electron Cash from its root directory (called Electrum), without installing it on your
