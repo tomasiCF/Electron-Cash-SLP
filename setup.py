@@ -63,10 +63,18 @@ if platform.system() in ['Linux', 'FreeBSD', 'DragonFly']:
 
 platform_package_data = {}
 
-if sys.platform in ('linux', 'win32', 'cygwin'):
+if sys.platform in ('linux'):
     platform_package_data = {
         'electroncash_gui.qt' : [
-            'data/*.ttf'
+            'data/ecsupplemental_lnx.ttf',
+            'data/fonts.xml'
+        ],
+    }
+
+if sys.platform in ('win32', 'cygwin'):
+    platform_package_data = {
+        'electroncash_gui.qt' : [
+            'data/ecsupplemental_win.ttf'
         ],
     }
 
