@@ -304,7 +304,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             cleanup()
 
         self.main_window.push_top_level_window(self)
-        self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup, 
+        self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup,
                                     slp_coins_to_burn=self.slp_coins_to_burn)
 
     def save(self):
