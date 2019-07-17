@@ -1900,7 +1900,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if self.slp_amount_e.get_amount() > (2 ** 64) - 1:
                         amt_color = ColorScheme.RED
                         maxqty = format_satoshis_plain_nofloat((2 ** 64) - 1, self.wallet.token_types.get(self.slp_token_id)['decimals'])
-                        text = _("Token output quantity is too large. Maximum %s.")%(maxqty,)
+                        text = _('Token output quantity is too large. Maximum {maxqty}.').format(maxqty=maxqty)
                 except TypeError:
                     pass
 
