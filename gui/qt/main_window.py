@@ -2239,7 +2239,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.slp_token_id:
             change_addr = None
             token_outputs = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
-            if len(token_outputs) > 1 and len(bch_outputs) - 1 < len(token_outputs):
+            if len(token_outputs) > 1 and len(bch_outputs) < len(token_outputs):
                 """ start of logic copied from wallet.py """
                 addrs = self.wallet.get_change_addresses()[-self.wallet.gap_limit_for_change:]
                 if self.wallet.use_change and addrs:
