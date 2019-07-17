@@ -162,7 +162,7 @@ class BaseWizard(object):
             #TODO: pre-merge task: figure out how to hook a "enable_slp" checkbox GUI to call the correct class type
             self.wallet = Slp_ImportedPrivkeyWallet.from_text(self.storage, text, None)
             self.keystores = self.wallet.get_keystores()
-            self.request_password(run_next=self.on_password)
+            self.request_password(run_next=self.on_password, back_cancels=True)
         self.terminate()
 
     def restore_from_key(self):
@@ -362,7 +362,7 @@ class BaseWizard(object):
 
     def create_wallet(self):
         if any(k.may_have_password() for k in self.keystores):
-            self.request_password(run_next=self.on_password)
+            self.request_password(run_next=self.on_password, back_cancels=True)
         else:
             self.on_password(None, False)
 
