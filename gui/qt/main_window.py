@@ -1870,7 +1870,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 name = self.wallet.token_types.get(self.slp_token_id)['name']
                 decimals = self.wallet.token_types.get(self.slp_token_id)['decimals']
                 if self.not_enough_funds_slp or self.not_enough_unfrozen_funds_slp:
-                    bal_avail, _, _, _, frozen_amt = self.wallet.get_slp_token_balance(self.slp_token_id, { 'user_config': { 'confirmed_only': False }})
+                    bal_avail, _x, _x, _x, frozen_amt = self.wallet.get_slp_token_balance(self.slp_token_id, { 'user_config': { 'confirmed_only': False }})
                     if self.not_enough_funds_slp:
                         amt_color = ColorScheme.RED
                         text = "Not enough " + \
@@ -1899,7 +1899,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if self.slp_amount_e.get_amount() > (2 ** 64) - 1:
                         amt_color = ColorScheme.RED
                         maxqty = format_satoshis_plain_nofloat((2 ** 64) - 1, self.wallet.token_types.get(self.slp_token_id)['decimals'])
-                        text = _("Token output quantity is too large. Maximum %s.")%(maxqty,)
+                        text = _('Token output quantity is too large. Maximum {maxqty}.').format(maxqty=maxqty)
                 except TypeError:
                     pass
 
