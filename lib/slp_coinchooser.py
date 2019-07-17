@@ -14,7 +14,7 @@ class SlpCoinChooser:
             raise NotEnoughUnfrozenFundsSlp()
 
         slp_coins = wallet.get_slp_spendable_coins(token_id, None, config, isInvoice)
-        slp_coins = sorted(slp_coins, key=lambda k: k['token_value'])
+        slp_coins = sorted(slp_coins, key=lambda k: -k['token_value'])
 
         selected_slp_coins = []
         total_amt_added = 0
