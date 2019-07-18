@@ -104,7 +104,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         msg = _('The number of tokens created during token genesis transaction,') \
                                     + _('send to the receiver address provided below.')
-        self.token_qty_label = HelpLabel(_('Token Quantity:'), msg)
+        if nft_parent_id == None:
+            self.token_qty_label = HelpLabel(_('Token Quantity:'), msg)
+        else:
+            self.token_qty_label = HelpLabel(_('Number of Child NFTs:'), msg)
         grid.addWidget(self.token_qty_label, row, 0)
         self.token_qty_e = SLPAmountEdit('', 0)
         self.token_qty_e.setFixedWidth(200)
@@ -283,7 +286,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             self.show_message(_("Must have Receiver Address in simpleledger format."))
             return
 
-        if not self.token_fixed_supply_cb.isChecked():
+        if not self.token_fixed_supply_cb.isChecked() and not self.nft_parent_id:
             try:
                 addr = self.parse_address(self.token_baton_to_e.text())
                 outputs.append((TYPE_ADDRESS, addr, 546))

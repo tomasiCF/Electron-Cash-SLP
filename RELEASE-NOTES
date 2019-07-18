@@ -119,8 +119,12 @@ Electron Cash - SLP Token Edition
 
 3.4.15 Updates & Features (WIP)
 -----
-- Add SLP invoice support in Receive tab
-- Add pre-sign SLP validity check
+- Add SLP invoice support in Receive tab (TODO: Check NFT1)
+- Add NFT1 Parent/Group Token GENESIS support (TODO: Check mint baton is using 0x81)
+- Add NFT1 Child Token GENESIS support via right-click on NFT1 parent item
+- Update Token tab UI to categorize NFT1 Child tokens as children to its NFT1 Parent token
+- Pull SLP coin selection code parts out of `main_window.py` into its own file `slp_checker.py`
+- Add new SLP pre-sign feature that double checks that SLP transaction is valid before being signed
 - Bug fixes and improvements 
 - Various improvements ported from EC
 - ...
