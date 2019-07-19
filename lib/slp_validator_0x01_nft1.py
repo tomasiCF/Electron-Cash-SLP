@@ -79,7 +79,7 @@ def setup_job(tx, reset=False):
 
     if slpMsg.transaction_type == 'GENESIS':
         token_id_hex = tx.txid()
-    elif slpMsg.transaction_type == 'SEND':
+    elif slpMsg.transaction_type == 'SEND' or slpMsg.transaction_type == 'MINT':
         token_id_hex = slpMsg.op_return_fields['token_id_hex']
     else:
         return None
