@@ -11,7 +11,7 @@ from functools import partial, wraps
 
 from electroncash.i18n import _
 from electroncash.address import Address
-from electroncash.util import print_error, PrintError, Weak
+from electroncash.util import print_error, PrintError, Weak, finalization_print_error
 from electroncash.wallet import Abstract_Wallet
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -89,21 +89,22 @@ class WWLabel(QLabel):
 
 # --- Help widgets
 class HelpMixin:
-    def __init__(self, help_text):
+    def __init__(self, help_text, *, custom_parent=None):
         assert isinstance(self, QWidget), "HelpMixin must be a QWidget instance!"
         self.help_text = help_text
+        self.custom_parent = custom_parent
         if isinstance(self, QLabel):
             self.setTextInteractionFlags(
                 (self.textInteractionFlags() | Qt.TextSelectableByMouse)
                 & ~Qt.TextSelectableByKeyboard)
 
     def show_help(self):
-        QMessageBox.information(self, _('Help'), self.help_text)
+        QMessageBox.information(self.custom_parent or self, _('Help'), self.help_text)
 
 class HelpLabel(HelpMixin, QLabel):
-    def __init__(self, text, help_text):
+    def __init__(self, text, help_text, *, custom_parent=None):
         QLabel.__init__(self, text)
-        HelpMixin.__init__(self, help_text)
+        HelpMixin.__init__(self, help_text, custom_parent=custom_parent)
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.font = self.font()
 
@@ -121,11 +122,17 @@ class HelpLabel(HelpMixin, QLabel):
         return QLabel.leaveEvent(self, event)
 
 class HelpButton(HelpMixin, QPushButton):
-    def __init__(self, text):
-        QPushButton.__init__(self, '?')
-        HelpMixin.__init__(self, text)
+    def __init__(self, text, *, button_text='?', fixed_size=True, icon=None,
+                 tool_tip=None, custom_parent=None):
+        QPushButton.__init__(self, button_text or '')
+        HelpMixin.__init__(self, text, custom_parent=custom_parent)
+        self.setToolTip(tool_tip or _("Show help"))
+        self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setFocusPolicy(Qt.NoFocus)
-        self.setFixedWidth(20)
+        if fixed_size:
+            self.setFixedWidth(20)
+        if icon:
+            self.setIcon(icon)
         self.clicked.connect(self.show_help)
         # The below is for older plugins that may have relied on the existence
         # of this method.  The older version of this class provided this method.
@@ -178,10 +185,11 @@ class CancelButton(QPushButton):
 class MessageBoxMixin:
     def top_level_window_recurse(self, window=None):
         window = window or self
-        classes = (WindowModalDialog, QMessageBox)
         for n, child in enumerate(window.children()):
-            # Test for visibility as old closed dialogs may not be GC-ed
-            if isinstance(child, classes) and child.isVisible():
+            if (isinstance(child, QWidget) and child.isWindow()
+                    and child.windowModality() != Qt.NonModal
+                    # Test for visibility as old closed dialogs may not be GC-ed
+                    and child.isVisible()):
                 return self.top_level_window_recurse(child)
         return window
 
@@ -225,7 +233,8 @@ class MessageBoxMixin:
                 defaultButton=QMessageBox.NoButton,  # IFF buttons is a list, use a string appearing in the list to specify this
                 rich_text=False, detail_text=None, informative_text=None,
                 checkbox_text=None, checkbox_ischecked=False,  # If checkbox_text is set, will add a checkbox, and return value becomes a tuple (result(), isChecked())
-                escapeButton=QMessageBox.NoButton  # IFF buttons is a list, use a string appearing in the list to specify this
+                escapeButton=QMessageBox.NoButton,  # IFF buttons is a list, use a string appearing in the list to specify this
+                app_modal=False  # IFF true, set the popup window to be application modal
                 ):
         ''' Note about 'new' msg_box API (this applies to all of the above functions that call into this as well):
             - `icon' may not be either a standard QMessageBox.Icon or a QPixmap for a custom icon.
@@ -237,7 +246,7 @@ class MessageBoxMixin:
         '''
         parent = parent or self.top_level_window()
         d = QMessageBoxMixin(parent)
-        d.setWindowModality(Qt.WindowModal)
+        d.setWindowModality(Qt.ApplicationModal if app_modal else Qt.WindowModal)
         d.setWindowTitle(title)
         if isinstance(buttons, (list, tuple)):
             # new! We support a button list, which specifies button text
@@ -266,7 +275,7 @@ class MessageBoxMixin:
         if informative_text and isinstance(informative_text, str):
             d.setInformativeText(informative_text)
         if rich_text:
-            d.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.LinksAccessibleByMouse)
+            d.setTextInteractionFlags(d.textInteractionFlags()|Qt.TextSelectableByMouse|Qt.LinksAccessibleByMouse)
             d.setTextFormat(Qt.RichText)
         else:
             d.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -299,22 +308,46 @@ class WindowModalDialog(QDialog, MessageBoxMixin):
         if title:
             self.setWindowTitle(title)
 
+class AppModalDialog(MessageBoxMixin, QDialog):
+    ''' Convenience class -- like the WindowModalDialog but is app-modal.
+    Has all the MessageBoxMixin convenience methods.  Is always top-level and
+    parentless.'''
+    def __init__(self, parent=None, title=None, windowFlags=None):
+        QDialog.__init__(self, parent=parent)
+        self.setWindowModality(Qt.ApplicationModal)
+        if title:
+            self.setWindowTitle(title)
+        if windowFlags is not None:
+            self.setWindowFlags(windowFlags)
+
 
 class WaitingDialog(WindowModalDialog):
     '''Shows a please wait dialog whilst runnning a task.  It is not
-    necessary to maintain a reference to this dialog.'''
-    def __init__(self, parent, message, task, on_success=None, on_error=None, auto_cleanup=True):
+    necessary to maintain a reference to this dialog.
+
+    Note if disable_escape_key is not set, user can hit cancel to prematurely
+    close the dialog. Sometimes this is desirable, and sometimes it isn't, hence
+    why the option is offered.'''
+    def __init__(self, parent, message, task, on_success=None, on_error=None, auto_cleanup=True,
+                 *, auto_show=True, auto_exec=False, title=None, disable_escape_key=False):
         assert parent
         if isinstance(parent, MessageBoxMixin):
             parent = parent.top_level_window()
-        WindowModalDialog.__init__(self, parent, _("Please wait"))
-        vbox = QVBoxLayout(self)
-        vbox.addWidget(QLabel(message))
+        WindowModalDialog.__init__(self, parent, title or _("Please wait"))
+        self.auto_cleanup = auto_cleanup
+        self.disable_escape_key = disable_escape_key
+        self._vbox = vbox = QVBoxLayout(self)
+        self._label = label = QLabel(message)
+        vbox.addWidget(label)
         self.accepted.connect(self.on_accepted)
-        self.show() # Bug here -- user can hit ESC key and kill the dialog before it's done. TODO: FIX!
+        self.rejected.connect(self.on_rejected)
+        if auto_show and not auto_exec:
+            self.open()
         self.thread = TaskThread(self)
         self.thread.add(task, on_success, self.accept, on_error)
-        self.auto_cleanup = auto_cleanup
+        if auto_exec:
+            self.exec_()
+        finalization_print_error(self)  # track object lifecycle
 
     def wait(self):
         self.thread.wait()
@@ -325,18 +358,60 @@ class WaitingDialog(WindowModalDialog):
             self.wait() # wait for thread to complete so that we can get cleaned up
             self.setParent(None) # this causes GC to happen sooner rather than later. Before this call was added the WaitingDialogs would stick around in memory until the ElectrumWindow was closed and would never get GC'd before then. (as of PyQt5 5.11.3)
 
+    def on_rejected(self):
+        if self.auto_cleanup:
+            self.setParent(None)
 
-def line_dialog(parent, title, label, ok_label, default=None):
+    def keyPressEvent(self, e):
+        ''' The user can hit Cancel to close the dialog before the task is done.
+        If self.disable_escape_key, then we suppress this unwanted behavior.
+        Note: Do not enable self.disable_escape_key for extremely long
+        operations.'''
+        if e.matches(QKeySequence.Cancel) and self.disable_escape_key:
+            e.ignore()
+        else:
+            super().keyPressEvent(e)
+
+
+
+def line_dialog(parent, title, label, ok_label, default=None,
+                *, linkActivated=None, placeholder=None, disallow_empty=False,
+                icon=None, line_edit_widget=None):
     dialog = WindowModalDialog(parent, title)
+    dialog.setObjectName('WindowModalDialog - ' + title)
+    destroyed_print_error(dialog)  # track object lifecycle
     dialog.setMinimumWidth(500)
     l = QVBoxLayout()
     dialog.setLayout(l)
-    l.addWidget(QLabel(label))
-    txt = QLineEdit()
+    if isinstance(icon, QIcon):
+        hbox = QHBoxLayout()
+        hbox.setContentsMargins(0,0,0,0)
+        ic_lbl = QLabel()
+        ic_lbl.setPixmap(icon.pixmap(50))
+        hbox.addWidget(ic_lbl)
+        hbox.addItem(QSpacerItem(10, 1))
+        t_lbl = QLabel("<font size=+1><b>" + title + "</b></font>")
+        hbox.addWidget(t_lbl, 0, Qt.AlignLeft)
+        hbox.addStretch(1)
+        l.addLayout(hbox)
+    lbl = WWLabel(label)
+    l.addWidget(lbl)
+    if linkActivated:
+        lbl.linkActivated.connect(linkActivated)
+        lbl.setTextInteractionFlags(lbl.textInteractionFlags()|Qt.LinksAccessibleByMouse)
+    txt = line_edit_widget or QLineEdit()
     if default:
         txt.setText(default)
+    if placeholder:
+        txt.setPlaceholderText(placeholder)
     l.addWidget(txt)
-    l.addLayout(Buttons(CancelButton(dialog), OkButton(dialog, ok_label)))
+    okbut = OkButton(dialog, ok_label)
+    l.addLayout(Buttons(CancelButton(dialog), okbut))
+    if disallow_empty:
+        def on_text_changed():
+            okbut.setEnabled(bool(txt.text()))
+        txt.textChanged.connect(on_text_changed)
+        on_text_changed() # initially enable/disable it.
     if dialog.exec_():
         return txt.text()
 
@@ -632,10 +707,15 @@ class MyTreeWidget(QTreeWidget):
             self._forced_update = False
             # self.deferred_update_ct will be set right after on_update is called because some subclasses use @rate_limiter on the update() method
 
-    def get_leaves(self, root):
+    def get_leaves(self, root=None):
+        if root is None:
+            root = self.invisibleRootItem()
         child_count = root.childCount()
         if child_count == 0:
-            yield root
+            if root is not self.invisibleRootItem():
+                yield root
+            else:
+                return
         for i in range(child_count):
             item = root.child(i)
             for x in self.get_leaves(item):
@@ -694,22 +774,21 @@ class OverlayControlMixin:
             x -= scrollbar_width
         self.overlay_widget.move(x, y)
 
-    def addWidget(self, widget: QWidget, index: int = None):
+    def addWidget(self, widget: QWidget, index: int = 0):
         if index is not None:
             self.overlay_layout.insertWidget(index, widget)
         else:
-            self.overlay_layout.insertWidget(0, widget)
+            self.overlay_layout.addWidget(widget)  # <-- EC Regular this is the default order
 
-    def addButton(self, icon_name: str, on_click, tooltip: str, index : int = None,
+    def addButton(self, icon_name: str, on_click, tooltip: str, index : int = 0,  # Note that on EC Regular the default order is reversed here: TODO make these the same on both variants
                   *, text : str = None) -> QAbstractButton:
         ''' icon_name may be None but then you must define text (which is
         hopefully then some nice Unicode character). Both cannot be None.
 
         `on_click` is the callable to connect to the button.clicked signal.
 
-        Use `index` to insert it not at the beginning of the layout but anywhere
-        in the layout. If None, it will be inserted to the left of the layout
-        (position 0). '''
+        Use `index` to insert it not at the beginning of the layout by anywhere
+        in the layout. If None, it will be prepended to the left of the layout. '''
         button = QPushButton(self.overlay_widget)
         button.setToolTip(tooltip)
         button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -729,6 +808,19 @@ class OverlayControlMixin:
     def on_copy(self):
         QApplication.instance().clipboard().setText(self.text())
         QToolTip.showText(QCursor.pos(), _("Text copied to clipboard"), self)
+
+    def keyPressEvent(self, e):
+        if not self.hasFocus():
+            # Ignore keypress when we're not focused like when the focus is on a button
+            e.ignore()
+            return
+        super().keyPressEvent(e)
+
+    def keyReleaseEvent(self, e):
+        if not self.hasFocus():
+            e.ignore()
+            return
+        super().keyReleaseEvent(e)
 
 class ButtonsLineEdit(OverlayControlMixin, QLineEdit):
     def __init__(self, text=None):
