@@ -4675,6 +4675,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         rl_obj.kill_timer()
             try: self.disconnect()
             except TypeError: pass
+            # Work-around to PyQt bugs. See EC issue #1532
+            try: self.gui_object.update_available_signal.disconnect(self.on_update_available)  # shows/hides the update_available_button, emitted by update check mechanism when a new version is available
+            except TypeError: pass
+
         def disconnect_network_callbacks():
             if self.network:
                 self.network.unregister_callback(self.on_network)
