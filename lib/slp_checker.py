@@ -94,6 +94,7 @@ class SlpTransactionChecker:
                 #   - [X] input quantity is less than output quanitity
                 #   - [X] slp input does not match tokenId
                 #   - [X] make sure outpoint is provided for every slp output and is P2PKH or P2SH
+                #   - [ ] the proper token type is not respected in the output op_return message
                 slp_outputs = slp_msg.op_return_fields['token_output']
                 input_slp_qty = 0
                 for txo in tx.inputs():
@@ -140,6 +141,7 @@ class SlpTransactionChecker:
                 # raise an Exception if:
                 #   - [X] Any non-baton SLP input is found
                 #   - [X] Baton has wrong token ID
+                #   - [ ] Minting transaction is being made from NFT child type baton
                 for txo in tx.inputs():
                     addr = txo['address']
                     prev_out = txo['prevout_hash']
@@ -159,6 +161,12 @@ class SlpTransactionChecker:
                                 raise SlpWrongTokenID('MINT transaction contains baton with incorrect' \
                                                         + ' token id.')
             elif slp_msg.transaction_type == 'GENESIS':
+                # raise an Exception if:
+                #   - [ ] NFT Child has quantity that is !== 1
+                #   - [ ] Allow 0x01 or 0x81 qty == 0
+                #   - [ ] NFT Child has minting baton vout specified
+                #   - [ ] NFT Child does not grant exception for burning a coin in vin=0
+                #   - [ ] NFT Child does not have a valid Type 0x81 coin in vin=0
                 for txo in tx.inputs():
                     addr = txo['address']
                     prev_out = txo['prevout_hash']
