@@ -452,7 +452,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
             slp_validator_0x01.setup_config(self.config)
             slp_validator_0x01_nft1.setup_config(self.config)
-            self.wallet.activate_slp()
             self.slp_history_list.update()
             self.token_list.update()
             self.update_token_type_combo()
@@ -950,15 +949,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 text = ""
                 if not self.is_slp_wallet:
                     text += "Tokens Disabled - "
-                token_id = self.slp_token_id
-                try:
-                    d = self.wallet.token_types[token_id]
-                except (AttributeError, KeyError):
-                    pass
                 else:
-                    bal = format_satoshis_nofloat(self.wallet.get_slp_token_balance(token_id, { 'user_config': { 'confirmed_only': False } })[0],
-                                                  decimal_point=d['decimals'],)
-                    text += "%s Token Balance: %s; "%(d['name'], bal)
+                    self.wallet.activate_slp()
+                    token_id = self.slp_token_id
+                    try:
+                        d = self.wallet.token_types[token_id]
+                    except (AttributeError, KeyError):
+                        pass
+                    else:
+                        bal = format_satoshis_nofloat(self.wallet.get_slp_token_balance(token_id, { 'user_config': { 'confirmed_only': False } })[0],
+                                                    decimal_point=d['decimals'],)
+                        text += "%s Token Balance: %s; "%(d['name'], bal)
                 c, u, x = self.wallet.get_balance()
                 text +=  _("BCH Balance" ) + ": %s "%(self.format_amount_and_units(c))
                 if u:
