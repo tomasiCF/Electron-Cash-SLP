@@ -77,6 +77,9 @@ def setup_job(tx, reset=False):
     """ Perform setup steps before validation for a given transaction. """
     slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
+    if slpMsg.token_type not in [65, 129]:
+        raise SlpParsingError("NFT1 invalid if parent or child transaction is of SLP type " + str(slpMsg.token_type))
+
     if slpMsg.transaction_type == 'GENESIS':
         token_id_hex = tx.txid()
     elif slpMsg.transaction_type == 'SEND' or slpMsg.transaction_type == 'MINT':
@@ -386,6 +389,15 @@ class Validator_NFT1:
         job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)    
+        else:
+            with wallet.lock, wallet.transaction_lock:
+                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4
+            wallet.save_transactions(True)
+            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+            if ui_cb:
+                ui_cb(self.genesis_tx.txid(), 4)
+            if done_callback:
+                done_callback(4)
 
     def validate_NFT_parent(self, myinfo):
         self.nft_child_job = self.validation_jobmgr.job_current
