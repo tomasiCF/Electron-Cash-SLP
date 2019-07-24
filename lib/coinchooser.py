@@ -200,7 +200,7 @@ class CoinChooserBase(PrintError):
 
         # Collect the coins into buckets, choose a subset of the buckets
         buckets = self.bucketize_coins(coins, sign_schnorr=sign_schnorr)
-        self.choose_buckets(buckets, sufficient_funds, self.penalty_func(tx))
+        buckets = self.choose_buckets(buckets, sufficient_funds, self.penalty_func(tx))
 
         tx.add_inputs(mandatory_coins)
         tx.add_inputs([coin for b in buckets for coin in b.coins])
