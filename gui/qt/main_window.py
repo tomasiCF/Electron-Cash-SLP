@@ -4427,6 +4427,31 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             hidpi_chk.stateChanged.connect(on_hi_dpi_toggle)
             gui_widgets.append((hidpi_chk, None))
 
+            if sys.platform in ('win32', 'cygwin'):
+                # Enable/Disable the use of the FreeType library on Qt
+                # (Windows only)
+                freetype_chk = QCheckBox(_('Use FreeType for font rendering'))
+                freetype_chk.setChecked(self.gui_object.windows_qt_use_freetype)
+                freetype_chk.setEnabled(self.config.is_modifiable('windows_qt_use_freetype'))
+                freetype_chk.setToolTip(_("Enable/disable this option if you experience font rendering glitches (such as blurred text or monochrome emoji characters)"))
+                def on_freetype_chk():
+                    self.gui_object.windows_qt_use_freetype = freetype_chk.isChecked()  # property has a method backing it
+                    self.need_restart = True
+                freetype_chk.stateChanged.connect(on_freetype_chk)
+                gui_widgets.append((freetype_chk, None))
+            elif sys.platform in ('linux',):
+                # Enable/Disable the use of the fonts.xml FontConfig override
+                # (Linux only)
+                fontconfig_chk = QCheckBox(_('Use custom fontconfig for emojis'))
+                fontconfig_chk.setChecked(self.gui_object.linux_qt_use_custom_fontconfig)
+                fontconfig_chk.setEnabled(self.config.is_modifiable('linux_qt_use_custom_fontconfig'))
+                fontconfig_chk.setToolTip(_("Enable/disable this option if you experience font rendering glitches (such as blurred text or monochrome emoji characters)"))
+                def on_fontconfig_chk():
+                    self.gui_object.linux_qt_use_custom_fontconfig = fontconfig_chk.isChecked()  # property has a method backing it
+                    self.need_restart = True
+                fontconfig_chk.stateChanged.connect(on_fontconfig_chk)
+                gui_widgets.append((fontconfig_chk, None))
+
         gui_widgets.append((None, None)) # spacer
         updatecheck_cb = QCheckBox(_("Automatically check for updates"))
         updatecheck_cb.setChecked(self.gui_object.has_auto_update_check())
