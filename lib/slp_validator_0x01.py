@@ -18,8 +18,7 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-
-proxy = slp_proxying.tokengraph_proxy
+from . import slp_graph_search # loading this module starts a thread.
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
@@ -135,17 +134,15 @@ class GraphContext(PrintError):
 
         return graph, job_mgr
 
-    @staticmethod
-    def get_validation_config():
-        config = get_config()
-        if config:
-            limit_dls   = config.get('slp_validator_download_limit', None)
-            limit_depth = config.get('slp_validator_depth_limit', None)
-            proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        else: # in daemon mode (no GUI) 'config' is not defined
-            limit_dls = None
-            limit_depth = None
-            proxy_enable = False
+    try:
+        limit_dls   = config.get('slp_validator_download_limit', None)
+        limit_depth = config.get('slp_validator_depth_limit', None)
+        proxy_enable = config.get('slp_validator_proxy_enabled', False)
+        graphsearch_enable = config.get('slp_validator_graphsearch_enabled', True)
+    except NameError: # in daemon mode (no GUI) 'config' is not defined
+        limit_dls = None
+        limit_depth = None
+        proxy_enable = False
 
         return limit_dls, limit_depth, proxy_enable
 
@@ -180,19 +177,31 @@ class GraphContext(PrintError):
                 else:
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
+            
+        graphsearch = slp_graph_search.SlpGraphSearch(network, wallet)
+        num_graphsearch_requests = 0
 
         def fetch_hook(txids):
             l = []
+            nonlocal num_graphsearch_requests
+            if graphsearch_enable and num_graphsearch_requests < 1:
+                num_graphsearch_requests += 1
+                nonlocal txid
+                graphsearch.add_search_job(txid, None)
             for txid in txids:
                 try:
                     l.append(wallet.transactions[txid])
                 except KeyError:
-                    pass
+                    txn = Transaction.tx_cache_get(txid)
+                    if txn:
+                        l.append(txn)
+                
             if proxy_enable:
                 proxy.add_job(txids, proxy_cb)
                 nonlocal num_proxy_requests
                 num_proxy_requests += 1
             return l
+
 
         def done_callback(job):
             # wait for proxy stuff to roll in
