@@ -17,8 +17,8 @@ with open('contrib/requirements/requirements-hw.txt') as f:
 
 version = imp.load_source('version', 'lib/version.py')
 
-if sys.version_info[:3] < (3, 5, 2):
-    sys.exit("Error: Electron Cash requires Python version >= 3.5.2...")
+if sys.version_info[:3] < (3, 6):
+    sys.exit("Error: Electron Cash requires Python version >= 3.6...")
 
 data_files = []
 
@@ -79,8 +79,8 @@ if sys.platform in ('win32', 'cygwin'):
     }
 
 setup(
-    name="Electron Cash SLP",
-    version=version.PACKAGE_VERSION,
+    name=os.environ.get('EC_PACKAGE_NAME') or "Electron Cash SLP",
+    version=os.environ.get('EC_PACKAGE_VERSION') or version.PACKAGE_VERSION,
     install_requires=requirements + ['pyqt5'],
     extras_require={
         'hardware': requirements_hw,
