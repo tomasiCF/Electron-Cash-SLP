@@ -2050,6 +2050,12 @@ class Abstract_Wallet(PrintError):
                 return True, conf
         return False, None
 
+    def has_payment_request(self, addr):
+        ''' Returns True iff Address addr has any extant payment requests
+        (even if expired), False otherwise. '''
+        assert isinstance(addr, Address)
+        return bool(self.receive_requests.get(addr))
+
     def get_payment_request(self, addr, config):
         assert isinstance(addr, Address)
         r = self.receive_requests.get(addr)
