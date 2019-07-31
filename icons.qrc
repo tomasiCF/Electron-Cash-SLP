@@ -1,6 +1,6 @@
 <RCC>
   <qresource prefix="/" >
-    <file>icons/electron.svg</file>
+    <file>icons/electron-cash.svg</file>
     <file>icons/electron-cash-update.svg</file>
     <file>icons/clock1.svg</file>
     <file>icons/clock2.svg</file>

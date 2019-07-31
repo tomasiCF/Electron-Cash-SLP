@@ -743,7 +743,7 @@ class ElectrumGui(QObject, PrintError):
         if self.tray:
             try:
                 # this requires Qt 5.9
-                self.tray.showMessage("Electron Cash", message, QIcon(":icons/electron.svg"), 20000)
+                self.tray.showMessage("Electron Cash", message, QIcon(":icons/electron-cash.svg"), 20000)
             except TypeError:
                 self.tray.showMessage("Electron Cash", message, QSystemTrayIcon.Information, 20000)
 
