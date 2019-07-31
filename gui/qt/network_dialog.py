@@ -264,6 +264,60 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
 
+class SlpdbListWidget(QTreeWidget):
+    def __init__(self, parent):
+        QTreeWidget.__init__(self)
+        self.parent = parent
+        self.network = parent.network
+        self.setHeaderLabels([_('SLPDB Server'), _('Status')])
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.create_menu)
+
+    def create_menu(self, position):
+        item = self.currentItem()
+        if not item:
+            return
+        menu = QMenu()
+        server = item.data(1, Qt.UserRole)
+        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def select_slpdb_server(self, server):
+        self.network.slpdb_host = server
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            item, col = self.currentItem(), self.currentColumn()
+            if item and col > -1:
+                self.on_activated(item, col)
+        else:
+            QTreeWidget.keyPressEvent(self, event)
+
+    def on_activated(self, item, column):
+        # on 'enter' we show the menu
+        pt = self.visualItemRect(item).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def update(self):
+        self.clear()
+        self.addChild = self.addTopLevelItem
+        slpdbs = networks.net.SLPDB_SERVERS
+        n_slpdbs = len(slpdbs)
+        for k, items in slpdbs.items():
+            if n_slpdbs > 1:
+                star = ' ◀' if k == self.network.slpdb_host else ''
+                x = QTreeWidgetItem([k+star, 'NA'])
+                x.setData(0, Qt.UserRole, 0)
+                x.setData(1, Qt.UserRole, k)
+                self.addTopLevelItem(x)
+
+        h = self.header()
+        h.setStretchLastSection(False)
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+
 class NetworkChoiceLayout(QObject, PrintError):
 
     def __init__(self, parent, network, config, wizard=False):
@@ -293,9 +347,11 @@ class NetworkChoiceLayout(QObject, PrintError):
                     td.stop() # stops the tor detector when proxy_tab disappears
         proxy_tab = ProxyTab()
         blockchain_tab = QWidget()
+        slp_tab = QWidget()
         tabs.addTab(blockchain_tab, _('Overview'))
         tabs.addTab(server_tab, _('Server'))
         tabs.addTab(proxy_tab, _('Proxy'))
+        tabs.addTab(slp_tab, _('Tokens'))
 
         if wizard:
             tabs.setCurrentIndex(1)
@@ -415,6 +471,15 @@ class NetworkChoiceLayout(QObject, PrintError):
         grid.addWidget(self.proxy_password, 5, 3)
         grid.setRowStretch(7, 1)
 
+        # SLP Validation Tab
+        grid = QGridLayout(slp_tab)
+        self.slpdb_cb = QCheckBox(_('Use SLPDB Graph Search'))
+        self.slpdb_cb.clicked.connect(self.use_slpdb)
+        grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
+        self.slpdb_list_widget = SlpdbListWidget(self)
+        self.slpdb_list_widget.setDisabled(True)
+        grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
+
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
         msg =  ' '.join([
@@ -454,6 +519,12 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         self.fill_in_proxy_settings()
         self.update()
+
+    def use_slpdb(self):
+        if self.slpdb_cb.isChecked():
+            self.slpdb_list_widget.setEnabled(True)
+        else:
+            self.slpdb_list_widget.setEnabled(False)
 
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
@@ -538,6 +609,7 @@ class NetworkChoiceLayout(QObject, PrintError):
             msg = ''
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
+        self.slpdb_list_widget.update()
 
     def fill_in_proxy_settings(self):
         host, port, protocol, proxy_config, auto_connect = self.network.get_parameters()
