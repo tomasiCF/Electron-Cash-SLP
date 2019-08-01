@@ -1,14 +1,14 @@
 {
-    "slpserve.imaginary.cash": {
+    "https://slpserve.imaginary.cash": {
 
     }, 
-    "slpdb.bitcoin.com": {
+    "https://slpdb.bitcoin.com": {
 
     },
-    "slpdb.fountainhead.cash": {
+    "https://slpdb.fountainhead.cash": {
 
     }, 
-    "localhost:3000": {
+    "http://localhost:3000": {
 
     }
 }

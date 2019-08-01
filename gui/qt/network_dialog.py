@@ -376,6 +376,60 @@ class SlpServeListWidget(QTreeWidget):
         h.setSectionResizeMode(0, QHeaderView.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
+class SlpdbListWidget(QTreeWidget):
+    def __init__(self, parent):
+        QTreeWidget.__init__(self)
+        self.parent = parent
+        self.network = parent.network
+        self.setHeaderLabels([_('SLPDB Server'), _('Status')])
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.create_menu)
+
+    def create_menu(self, position):
+        item = self.currentItem()
+        if not item:
+            return
+        menu = QMenu()
+        server = item.data(1, Qt.UserRole)
+        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def select_slpdb_server(self, server):
+        self.network.slpdb_host = server
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            item, col = self.currentItem(), self.currentColumn()
+            if item and col > -1:
+                self.on_activated(item, col)
+        else:
+            QTreeWidget.keyPressEvent(self, event)
+
+    def on_activated(self, item, column):
+        # on 'enter' we show the menu
+        pt = self.visualItemRect(item).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def update(self):
+        self.clear()
+        self.addChild = self.addTopLevelItem
+        slpdbs = networks.net.SLPDB_SERVERS
+        n_slpdbs = len(slpdbs)
+        for k, items in slpdbs.items():
+            if n_slpdbs > 1:
+                star = ' ◀' if k == self.network.slpdb_host else ''
+                x = QTreeWidgetItem([k+star, 'NA'])
+                x.setData(0, Qt.UserRole, 0)
+                x.setData(1, Qt.UserRole, k)
+                self.addTopLevelItem(x)
+
+        h = self.header()
+        h.setStretchLastSection(False)
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+
 class NetworkChoiceLayout(QObject, PrintError):
 
     def __init__(self, parent, network, config, wizard=False):

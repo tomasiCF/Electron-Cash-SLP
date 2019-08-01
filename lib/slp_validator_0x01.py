@@ -18,7 +18,7 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-from . import slp_graph_search # loading this module starts a thread.
+from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
@@ -180,29 +180,30 @@ class GraphContext(PrintError):
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
             
-        graphsearch = slp_graph_search.SlpGraphSearch(network, wallet)
-        num_graphsearch_requests = 0
-
-        def fetch_hook(txids):
+        def fetch_hook(txids, job):
             l = []
-            nonlocal num_graphsearch_requests
-            if graphsearch_enable and num_graphsearch_requests < 1:
-                num_graphsearch_requests += 1
-                nonlocal txid
-                graphsearch.add_search_job(txid, None)
+            source = dict()
+
+            if graphsearch_enable:
+                if not job.graph_search_running and not job.graph_search_skipped and network.slpdb_host:
+                    job.graph_search_running = True
+                    graphsearch = slp_graph_search.SlpGraphSearch(network, wallet)
+                    graphsearch.add_search_job(txids, validation_job=job)
+                elif not job.graph_search_running and not job.graph_search_skipped:
+                    print("[SLP Graph Search] Skipping graph search since no network selected.")
+                    job.graph_search_skipped = True
+
             for txid in txids:
-                try:
-                    l.append(wallet.transactions[txid])
-                except KeyError:
-                    txn = Transaction.tx_cache_get(txid)
-                    if txn:
-                        l.append(txn)
-                
-            if proxy_enable:
-                proxy.add_job(txids, proxy_cb)
-                nonlocal num_proxy_requests
-                num_proxy_requests += 1
-            return l
+                txn = slp_graph_search.SlpGraphSearch.tx_cache_get(txid)
+                if txn:
+                    l.append(txn)
+                    source[txid] = 'graph_search'
+                else:
+                    try:
+                        l.append(wallet.transactions[txid])
+                        source[txid] = 'wallet'
+                    except KeyError:
+                        pass
 
 
         def done_callback(job):

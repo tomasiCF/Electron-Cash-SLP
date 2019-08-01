@@ -1,8 +1,8 @@
 {
-    "tslpdb.bitcoin.com": {
+    "https://tslpdb.bitcoin.com": {
 
     }, 
-    "localhost:3000": {
+    "http://localhost:3000": {
 
     }
 }

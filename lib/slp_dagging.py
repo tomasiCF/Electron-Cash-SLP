@@ -31,6 +31,8 @@ from .util import PrintError
 
 INF_DEPTH=2147483646  # 'infinity' value for node depths. 2**31 - 2
 
+from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
+
 class hardref:
     # a proper reference that mimics weakref interface
     __slots__ = ('_obj')
@@ -174,7 +176,7 @@ class ValidationJob:
         network is a lib.network.Network object, will be used to download when
         transactions can't be found in the cache.
 
-        fetch_hook (optional) called as fetch_hook({txid0,txid1,...}) whenever
+        fetch_hook (optional) called as fetch_hook({txid0,txid1,...},depth) whenever
         a set of transactions is loaded into the graph (from cache or network)
         at a given depth level. It should return a list of matching Transaction
         objects, for known txids (e.g., from wallet or elsewhere),
@@ -196,6 +198,10 @@ class ValidationJob:
         self.txids = tuple(txids)
         self.network = network
         self.fetch_hook = fetch_hook
+        self.graph_search_running = False
+        self.graph_search_complete = False
+        self.graph_search_skipped = False
+        self.graph_search_fail = None
         self.validitycache = {} if validitycache is None else validitycache
         self.download_limit = download_limit
         if depth_limit is None:
@@ -344,9 +350,23 @@ class ValidationJob:
         self.graph.root.set_parents(target_nodes)
         self.graph.run_sched()
 
+        def skip_callback(txid):
+            print("########################################## SKIPPING " + txid + " ###########################################")
+            node = self.graph.get_node(txid)
+            node.set_validity(False,2)
+            
+            # temp for debugging
+            f = open("dag-"+self.txids[0][0:5]+".txt","a")
+            f.write(txid+","+str(self.currentdepth)+",false,\n")
+
         def dl_callback(tx):
             #will be called by self.get_txes
             txid = tx.txid_fast()
+
+            # temp for debugging
+            f = open("dag-"+self.txids[0][0:5]+".txt","a")
+            f.write(txid+","+str(self.currentdepth)+",true,\n")
+
             node = self.graph.get_node(txid)
             try:
                 val = self.validitycache[txid]
@@ -397,7 +417,7 @@ class ValidationJob:
 
             # Download and load up results; this is the main command that
             # will take time in this loop.
-            txids_missing = self.get_txes(interested_txids, dl_callback)
+            txids_missing = self.get_txes(interested_txids, dl_callback, skip_callback)
 
             # do graph maintenance (ping() validation, depth recalculations)
             self.graph.run_sched()
@@ -420,13 +440,13 @@ class ValidationJob:
         raise RuntimeError('loop ended')
 
 
-    def get_txes(self, txid_iterable, callback, errors='print'):
+    def get_txes(self, txid_iterable, dl_callback, skip_callback, errors='print'):
         """
         Get multiple txes 'in parallel' (requests all sent at once), and
         block while waiting. We first take txes via fetch_hook, and only if
         missing do we then we ask the network.
 
-        As they are received, we call `callback(tx)` in the current thread.
+        As they are received, we call `dl_callback(tx)` in the current thread.
 
         Returns a set of txids that could not be obtained, for whatever
         reason.
@@ -435,17 +455,38 @@ class ValidationJob:
         """
 
         txid_set = set(txid_iterable)
-
+        #search_id = ''.join(list(self.txids)) + "_" + str(self.currentdepth)
         # first try to get from cache
         if self.fetch_hook:
-            cached = list(self.fetch_hook(txid_set))
+            txns_cache, cache_source = self.fetch_hook(txid_set, self)
+            cached = list(txns_cache)
             for tx in cached:
                 # remove known txes from list
                 txid = tx.txid_fast()
                 txid_set.remove(txid)
         else:
             cached = []
+            cache_source = dict()
 
+        # Graph Search Hack
+        # =====
+        # Here we determine if missing txids can just be inferred to be invalid
+        #   because they are not currently in graph search results. The benefit is to
+        #   prevent network calls to fetch non-contributing/invalid txns.
+        #
+        #   This optimization requires all cache item source are equal to "graph_search"
+        # 
+        if self.graph_search_complete and \
+                len(set(cache_source.values())) == 1 and \
+                next(iter(cache_source.values())) == 'graph_search':
+            # processing cached txes.
+            for tx in cached:
+                dl_callback(tx)
+            for txid in txid_set:
+                skip_callback(txid)
+            txid_set.clear()
+            return txid_set
+        
         # build requests list from remaining txids.
         requests = []
         if self.network:
@@ -458,7 +499,7 @@ class ValidationJob:
 
         # Now that the net request is going, start processing cached txes.
         for tx in cached:
-            callback(tx)
+            dl_callback(tx)
 
         # And start processing downloaded txes:
         for _ in requests: # fetch as many responses as were requested.
@@ -488,7 +529,7 @@ class ValidationJob:
                 else:
                     raise ValueError(errors)
             else:
-                callback(tx)
+                dl_callback(tx)
 
         return txid_set
 

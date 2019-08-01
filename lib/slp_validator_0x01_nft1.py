@@ -18,6 +18,9 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error
 from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
 
+from . import slp_proxying # loading this module starts a thread.
+from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
+
 class GraphContext_NFT1(GraphContext):
     ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
     ValidationJobManager to validate SLP tokens.  '''
