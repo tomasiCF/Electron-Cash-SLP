@@ -263,13 +263,12 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(1, QHeaderView.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
-
-class SlpdbListWidget(QTreeWidget):
+class SlpdbJobListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('SLPDB Server'), _('Status')])
+        self.setHeaderLabels([_('Symbol'), _('JobId'), _('TxCount'), _('Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
 
@@ -284,6 +283,66 @@ class SlpdbListWidget(QTreeWidget):
 
     def select_slpdb_server(self, server):
         self.network.slpdb_host = server
+        self.parent.config.set_key('slpdb_host', self.network.slpdb_host)
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            item, col = self.currentItem(), self.currentColumn()
+            if item and col > -1:
+                self.on_activated(item, col)
+        else:
+            QTreeWidget.keyPressEvent(self, event)
+
+    def on_activated(self, item, column):
+        # on 'enter' we show the menu
+        pt = self.visualItemRect(item).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def update(self):
+        self.clear()
+        self.addChild = self.addTopLevelItem
+        slpdbs = networks.net.SLPDB_SERVERS
+        n_slpdbs = len(slpdbs)
+        for k, items in slpdbs.items():
+            if n_slpdbs > 1:
+                star = ' ◀' if k == "TBD" else ''
+                x = QTreeWidgetItem([k+star, 'NA'])
+                x.setData(0, Qt.UserRole, 1)
+                x.setData(1, Qt.UserRole, k)
+                self.addTopLevelItem(x)
+        h = self.header()
+        h.setStretchLastSection(False)
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+
+class SlpServeListWidget(QTreeWidget):
+    def __init__(self, parent):
+        QTreeWidget.__init__(self)
+        self.parent = parent
+        self.network = parent.network
+        self.setHeaderLabels([_('SLP Server'), _('Status')])
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.create_menu)
+        host = self.parent.config.get('slpdb_host', None)
+        if not host:
+            host = next(iter(networks.net.SLPDB_SERVERS))
+            self.parent.config.set_key('slpdb_host', host)
+        self.network.slpdb_host = host
+
+    def create_menu(self, position):
+        item = self.currentItem()
+        if not item:
+            return
+        menu = QMenu()
+        server = item.data(1, Qt.UserRole)
+        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def select_slpdb_server(self, server):
+        self.network.slpdb_host = server
+        self.parent.config.set_key('slpdb_host', self.network.slpdb_host)
         self.update()
 
     def keyPressEvent(self, event):
@@ -309,10 +368,9 @@ class SlpdbListWidget(QTreeWidget):
             if n_slpdbs > 1:
                 star = ' ◀' if k == self.network.slpdb_host else ''
                 x = QTreeWidgetItem([k+star, 'NA'])
-                x.setData(0, Qt.UserRole, 0)
+                x.setData(0, Qt.UserRole, 1)
                 x.setData(1, Qt.UserRole, k)
                 self.addTopLevelItem(x)
-
         h = self.header()
         h.setStretchLastSection(False)
         h.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -473,12 +531,16 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         # SLP Validation Tab
         grid = QGridLayout(slp_tab)
-        self.slpdb_cb = QCheckBox(_('Use SLPDB Graph Search'))
+        self.slpdb_cb = QCheckBox(_('Use SLP Graph Search'))
         self.slpdb_cb.clicked.connect(self.use_slpdb)
+        self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
         grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
-        self.slpdb_list_widget = SlpdbListWidget(self)
-        self.slpdb_list_widget.setDisabled(True)
+        self.slpdb_list_widget = SlpServeListWidget(self)
         grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
+        grid.addWidget(QLabel(_("Graph Search Job History:")), 2, 0)
+        self.slp_job_list_widget = SlpdbJobListWidget(self)
+        self.slp_job_list_widget.setDisabled(True)
+        grid.addWidget(self.slp_job_list_widget, 3, 0, 1, 5)
 
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
@@ -522,9 +584,10 @@ class NetworkChoiceLayout(QObject, PrintError):
 
     def use_slpdb(self):
         if self.slpdb_cb.isChecked():
-            self.slpdb_list_widget.setEnabled(True)
+            self.config.set_key('slp_validator_graphsearch_enabled', True)
         else:
-            self.slpdb_list_widget.setEnabled(False)
+            self.config.set_key('slp_validator_graphsearch_enabled', False)
+        self.slpdb_list_widget.update()
 
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
