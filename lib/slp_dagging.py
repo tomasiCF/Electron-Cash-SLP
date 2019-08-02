@@ -25,6 +25,7 @@ import queue
 import traceback
 import weakref
 import collections
+from abc import ABC, abstractmethod
 from .transaction import Transaction
 
 INF_DEPTH=2147483646  # 'infinity' value for node depths. 2**31 - 2
@@ -41,7 +42,7 @@ class hardref:
 class DoubleLoadException(Exception):
     pass
 
-class ValidatorGeneric:
+class ValidatorGeneric(ABC):
     """
     The specific colored coin implementation will need to make a 'validator'
     object according to this template.
@@ -63,7 +64,8 @@ class ValidatorGeneric:
         2: 'Invalid',
         }
 
-    def get_info(self,tx):
+    @abstractmethod
+    def get_info(self, tx):
         """ This will be called with a Transaction object; use it to extract
         all information necessary during the validation process (after call,
         the Transaction object will be forgotten).
@@ -90,6 +92,7 @@ class ValidatorGeneric:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def check_needed(self, myinfo, out_n):
         """
         As each input gets downloaded and its get_info() gets computed, we
@@ -102,6 +105,7 @@ class ValidatorGeneric:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def validate(self, myinfo, inputs_info):
         """
         Run validation. Only gets called after filtering through check_needed.

@@ -11,22 +11,13 @@ import warnings
 from .transaction import Transaction
 from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
-from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager
+from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
 from .slp_validator_0x01 import Validator_SLP1
 
 from . import slp_proxying # loading this module starts a thread.
 
-### Uncomment one of the following options:
-
-# Have a shared thread for validating all SLP token_ids sequentially
-shared_jobmgr = ValidationJobManager(threadname="Validation_NFT1")
-
-## Each token_id gets its own thread (thread spam?)
-#shared_jobmgr = None
-
-###
 
 proxy, config = None, None
 
@@ -211,7 +202,7 @@ class GraphContext:
         return job
 
 
-class Validator_NFT1:
+class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
 
     validity_states = {
@@ -424,7 +415,7 @@ class Validator_NFT1:
 
         def restart_nft_job(val):
             self.nft_parent_validity = val
-            shared_jobmgr.unpause_job(self.nft_child_job)
+            self.validation_jobmgr.unpause_job(self.nft_child_job)
 
         def start_nft_parent_validation():
             self.start_NFT_parent_job(restart_nft_job)

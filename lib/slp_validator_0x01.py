@@ -11,7 +11,7 @@ import warnings
 from .transaction import Transaction
 from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
-from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager
+from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
 
@@ -193,7 +193,7 @@ class GraphContext:
         return job
 
 
-class Validator_SLP1:
+class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
 
     validity_states = {
