@@ -6,6 +6,7 @@ This uses the graph searching mechanism from slp_dagging.py
 
 import threading
 import queue
+import warnings
 
 from .transaction import Transaction
 from . import slp
@@ -45,54 +46,53 @@ def setup_config(config_set):
 class GraphContext:
     ''' Per wallet instance of NFT1 DAG cache '''
 
-    def __init__(self):
+    def __init__(self, name="GraphContextNFT1"):
         # Global db for shared graphs (each token_id_hex has its own graph).
         self.graph_db_lock = threading.Lock()
-        self.graph_db = dict()   # token_id_hex -> (TokenGraph, ValidationJobManager)
+        self.graph_db = dict()   # token_id_hex -> TokenGraph
+        self.name = name
+        self._create_job_mgr()
 
-    def get_graph(self, token_id_hex, token_type, job_mgr=None):
+    def _create_job_mgr(self):
+        self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager', graph_db=self)
+
+    def get_graph(self, token_id_hex, token_type):
         with self.graph_db_lock:
             try:
                 return self.graph_db[token_id_hex]
             except KeyError:
                 pass
-            if not job_mgr:
-                if shared_jobmgr:
-                    job_mgr = shared_jobmgr
-                else:
-                    job_mgr = ValidationJobManager(threadname="Validation_NFT1_token_id_%.10s"%(token_id_hex,))
 
             if token_type == 129:
                 val = Validator_SLP1(token_id_hex, enforced_token_type=129)
             elif token_type == 65:
-                val = Validator_NFT1(token_id_hex, job_mgr)
+                val = Validator_NFT1(token_id_hex, self.job_mgr)
 
             graph = TokenGraph(val)
 
-            item = (graph, job_mgr)
-            self.graph_db[token_id_hex] = item
+            self.graph_db[token_id_hex] = graph
 
-            return item
+            return graph
 
     def kill_graph(self, token_id_hex):
         try:
-            graph, jobmgr = self.graph_db.pop(token_id_hex)
+            graph = self.graph_db.pop(token_id_hex)
         except KeyError:
             return
-        if jobmgr != shared_jobmgr:
-            jobmgr.kill()
+        #if jobmgr != shared_jobmgr:
+        #    jobmgr.kill()
         graph.reset()
 
-    def killed_mgr(self, mgr):
+    def kill(self):
         with self.graph_db_lock:
-            for token_id_hex, tup in self.graph_db.copy().items():
-                graph, job_mgr = tup
-                if job_mgr == mgr:
-                    graph_db.pop(token_id_hex, None)
-                    graph.reset()
+            for token_id_hex, graph in self.graph_db.items():
+                graph.reset()
+            self.graph_db.clear()
+        self.job_mgr.kill()
+        self._create_job_mgr()  # re-create a new, clean instance
 
 
-    def setup_job(self, tx, reset=False, job_mgr=None):
+    def setup_job(self, tx, reset=False):
         """ Perform setup steps before validation for a given transaction. """
         slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
@@ -101,23 +101,24 @@ class GraphContext:
 
         if slpMsg.transaction_type == 'GENESIS':
             token_id_hex = tx.txid()
-        elif slpMsg.transaction_type == 'SEND' or slpMsg.transaction_type == 'MINT':
+        elif slpMsg.transaction_type in ('MINT', 'SEND'):
             token_id_hex = slpMsg.op_return_fields['token_id_hex']
         else:
             return None
 
         if reset:
+            warnings.warn("setup_job with reset is unstable and/or not well specified")
             try:
                 self.kill_graph(token_id_hex)
             except KeyError:
                 pass
 
-        graph, job_mgr = self.get_graph(token_id_hex, slpMsg.token_type, job_mgr=job_mgr)
+        graph = self.get_graph(token_id_hex, slpMsg.token_type)
 
-        return graph, job_mgr
+        return graph
 
 
-    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, job_mgr=None, **kwargs):
+    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
         """
         Basic validation job maker for a single transaction.
 
@@ -129,17 +130,17 @@ class GraphContext:
         """
         # This should probably be redone into a class, it is getting messy.
 
-        try:
+        if config:
             limit_dls   = config.get('slp_validator_download_limit', None)
             limit_depth = config.get('slp_validator_depth_limit', None)
             proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        except NameError: # in daemon mode (no GUI) 'config' is not defined
+        else: # in daemon mode (no GUI) 'config' is not defined
             limit_dls = None
             limit_depth = None
             proxy_enable = False
 
         try:
-            graph, job_mgr = self.setup_job(tx, reset=reset, job_mgr=job_mgr)
+            graph = self.setup_job(tx, reset=reset)
         except (SlpParsingError, IndexError):
             return
 
@@ -205,7 +206,7 @@ class GraphContext:
                     wallet.slpv1_validity[t] = val
         job.add_callback(done_callback)
 
-        job_mgr.add_job(job)
+        self.job_mgr.add_job(job)
 
         return job
 
@@ -396,7 +397,7 @@ class Validator_NFT1:
                 wallet.tx_tokinfo[self.nft_parent_tx.txid()]['validity'] = val
                 wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = val
             wallet.save_transactions(True)
-            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+            ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
                 ui_cb(self.genesis_tx.txid(), val)
@@ -404,7 +405,7 @@ class Validator_NFT1:
                 done_callback(val)
 
         tx = self.nft_parent_tx
-        job = self.validation_jobmgr.graph_db.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset, job_mgr=self.validation_jobmgr)
+        job = self.validation_jobmgr.graph_db and self.validation_jobmgr.graph_db.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)
         else:

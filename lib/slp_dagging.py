@@ -473,9 +473,8 @@ class ValidationJobManager:
     """
     def __init__(self, threadname="ValidationJobManager", graph_db=None):
         # ---
-        self.jobs_lock = threading.Lock()
-        # the following things are locked
         self.graph_db = graph_db
+        self.jobs_lock = threading.Lock()
         self.job_current = None
         self.jobs_pending  = []   # list of jobs waiting to run.
         self.jobs_finished = weakref.WeakSet()   # list of jobs finished normally.
@@ -539,8 +538,7 @@ class ValidationJobManager:
             self.job_current.stop()
         except:
             pass
-        if self.graph_db:
-            self.graph_db.killed_mgr(self)
+        self.graph_db = None
 
     def mainloop(self,):
         try:

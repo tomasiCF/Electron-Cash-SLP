@@ -686,7 +686,7 @@ class Commands(PrintError):
         from queue import Queue, Empty
 
         graph_db, graph_db_nft1 = slp_validator_0x01.GraphContext(), slp_validator_0x01_nft1.GraphContext()
-        job_mgr, job_mgr_nft = (ValidationJobManager(threadname="Validate", graph_db=graph_db),
+        job_mgr, job_mgr_nft = (graph_db.job_mgr,
                                 ValidationJobManager(threadname="Validate-NFT", graph_db=graph_db_nft1))
 
 
