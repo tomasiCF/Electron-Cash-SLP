@@ -335,7 +335,7 @@ class Validator_NFT1(ValidatorGeneric):
                         'validity': 0,
                     }
                     wallet.tx_tokinfo[tx.txid()] = tti
-            wallet.save_transactions(True)
+            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             self.genesis_tx = tx
             if done_callback:
                 done_callback()
@@ -363,7 +363,7 @@ class Validator_NFT1(ValidatorGeneric):
                     else:
                         tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
                     wallet.tx_tokinfo[tx.txid()] = tti
-            wallet.save_transactions(True)
+            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             self.nft_parent_tx = tx
             if done_callback:
                 done_callback()
@@ -387,7 +387,7 @@ class Validator_NFT1(ValidatorGeneric):
                 wallet.token_types[self.genesis_tx.txid()]['group_id'] = group_id
                 wallet.tx_tokinfo[self.nft_parent_tx.txid()]['validity'] = val
                 wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = val
-            wallet.save_transactions(True)
+            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
@@ -405,7 +405,7 @@ class Validator_NFT1(ValidatorGeneric):
         else:
             with wallet.lock, wallet.transaction_lock:
                 wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4
-            wallet.save_transactions(True)
+            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
             if ui_cb:
                 ui_cb(self.genesis_tx.txid(), 4)
