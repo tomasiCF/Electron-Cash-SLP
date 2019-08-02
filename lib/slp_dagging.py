@@ -471,13 +471,14 @@ class ValidationJobManager:
     """
     A single thread that processes validation jobs sequentially.
     """
-    def __init__(self, threadname="ValidationJobManager"):
+    def __init__(self, threadname="ValidationJobManager", graph_db=None):
         # ---
         self.jobs_lock = threading.Lock()
         # the following things are locked
+        self.graph_db = graph_db
         self.job_current = None
         self.jobs_pending  = []   # list of jobs waiting to run.
-        self.jobs_finished = []   # list of jobs finished normally.
+        self.jobs_finished = weakref.WeakSet()   # list of jobs finished normally.
         self.jobs_paused   = []   # list of jobs that stopped without finishing.
         self.all_jobs = weakref.WeakSet()
         self.wakeup = threading.Event()  # for kicking the mainloop to wake up if it has fallen asleep
@@ -538,6 +539,8 @@ class ValidationJobManager:
             self.job_current.stop()
         except:
             pass
+        if self.graph_db:
+            self.graph_db.killed_mgr(self)
 
     def mainloop(self,):
         try:
@@ -566,7 +569,7 @@ class ValidationJobManager:
                     self.jobs_paused.append(self.job_current)
                 else:
                     if retval is True:
-                        self.jobs_finished.append(self.job_current)
+                        self.jobs_finished.add(self.job_current)
                     else:
                         self.jobs_paused.append(self.job_current)
         except:
@@ -1008,7 +1011,7 @@ class Node:
                 return
             if not anyactive:
                 raise RuntimeError("Undecided with finalized parents",
-                                   self.txid, self.myinfo, valinfo)                         
+                                   self.txid, self.myinfo, valinfo)
             return
         else: # decided
             self.graph.debug("%.10s... judgement based on inputs: %s",

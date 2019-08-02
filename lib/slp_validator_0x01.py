@@ -27,38 +27,10 @@ shared_jobmgr = ValidationJobManager(threadname="Validation_SLP1")
 
 ###
 
-
-# Global db for shared graphs (each token_id_hex has its own graph).
-graph_db_lock = threading.Lock()
-graph_db = dict()   # token_id_hex -> (TokenGraph, ValidationJobManager)
-def get_graph(token_id_hex):
-    with graph_db_lock:
-        try:
-            return graph_db[token_id_hex]
-        except KeyError:
-            val = Validator_SLP1(token_id_hex)
-
-            graph = TokenGraph(val)
-
-            if shared_jobmgr:
-                jobmgr = shared_jobmgr
-            else:
-                jobmgr = ValidationJobManager(threadname="Validation_SLP1_token_id_%.10s"%(token_id_hex,))
-
-            graph_db[token_id_hex] = (graph, jobmgr)
-
-            return graph_db[token_id_hex]
-def kill_graph(token_id_hex):
-    try:
-        graph, jobmgr = graph_db.pop(token_id_hex)
-    except KeyError:
-        return
-    if jobmgr != shared_jobmgr:
-        jobmgr.kill()
-    graph.reset()
+proxy, config = None, None
 
 def setup_config(config_set):
-    """ Called by main_window.py before wallet even gets loaded.
+    """ Called by wallet.py as part of network setup.
 
     - Limits on downloading DAG.
     - Proxy requests.
@@ -70,115 +42,164 @@ def setup_config(config_set):
     config = config_set
 
 
-def setup_job(tx, reset=False):
-    """ Perform setup steps before validation for a given transaction. """
-    slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
-    if slpMsg.transaction_type == 'GENESIS':
-        token_id_hex = tx.txid()
-    elif slpMsg.transaction_type in ('MINT', 'SEND'):
-        token_id_hex = slpMsg.op_return_fields['token_id_hex']
-    else:
-        return None
+class GraphContext:
+    ''' Per wallet instance DAG cache '''
 
-    if reset:
-        try:
-            kill_graph(token_id_hex)
-        except KeyError:
-            pass
+    def __init__(self):
+        # Global db for shared graphs (each token_id_hex has its own graph).
+        self.graph_db_lock = threading.Lock()
+        self.graph_db = dict()   # token_id_hex -> (TokenGraph, ValidationJobManager)
 
-    graph, jobmgr = get_graph(token_id_hex)
-
-    return graph, jobmgr
-
-
-def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
-    """
-    Basic validation job maker for a single transaction.
-
-    Creates job and starts it running in the background thread.
-
-    Before calling this you have to call setup_config().
-
-    Returns job, or None if it was not a validatable type
-    """
-    # This should probably be redone into a class, it is getting messy.
-
-    try:
-        limit_dls   = config.get('slp_validator_download_limit', None)
-        limit_depth = config.get('slp_validator_depth_limit', None)
-        proxy_enable = config.get('slp_validator_proxy_enabled', False)
-    except NameError: # in daemon mode (no GUI) 'config' is not defined
-        limit_dls = None
-        limit_depth = None
-        proxy_enable = False
-
-    try:
-        graph, jobmgr = setup_job(tx, reset=reset)
-    except (SlpParsingError, IndexError):
-        return
-
-    txid = tx.txid()
-
-    num_proxy_requests = 0
-    proxyqueue = queue.Queue()
-
-    def proxy_cb(txids, results):
-        newres = {}
-        # convert from 'true/false' to (True,1) or (False,3)
-        for t,v in results.items():
-            if v:
-                newres[t] = (True, 1)
-            else:
-                newres[t] = (True, 3)
-        proxyqueue.put(newres)
-
-    def fetch_hook(txids):
-        l = []
-        for txid in txids:
+    def get_graph(self, token_id_hex, job_mgr=None):
+        with self.graph_db_lock:
             try:
-                l.append(wallet.transactions[txid])
+                return self.graph_db[token_id_hex]
             except KeyError:
                 pass
-        if proxy_enable:
-            proxy.add_job(txids, proxy_cb)
-            nonlocal num_proxy_requests
-            num_proxy_requests += 1
-        return l
 
-    job = ValidationJob(graph, [txid], network,
-                        fetch_hook=fetch_hook,
-                        validitycache=wallet.slpv1_validity,
-                        download_limit=limit_dls,
-                        depth_limit=limit_depth,
-                        debug=debug,
-                        **kwargs)
-    def done_callback(job):
-        # wait for proxy stuff to roll in
-        results = {}
+            val = Validator_SLP1(token_id_hex)
+
+            graph = TokenGraph(val)
+
+
+            if not job_mgr:
+                if shared_jobmgr:
+                    job_mgr = shared_jobmgr
+                else:
+                    job_mgr = ValidationJobManager(threadname="Validation_SLP1_token_id_%.10s"%(token_id_hex,))
+
+            item = (graph, job_mgr)
+            self.graph_db[token_id_hex] = item
+
+            return item
+    def kill_graph(self, token_id_hex):
+        with self.graph_db_lock:
+            try:
+                graph, jobmgr = self.graph_db.pop(token_id_hex)
+            except KeyError:
+                return
+        if jobmgr != shared_jobmgr:
+            jobmgr.kill()
+        graph.reset()
+
+    def killed_mgr(self, mgr):
+        with self.graph_db_lock:
+            for token_id_hex, tup in self.graph_db.copy().items():
+                graph, job_mgr = tup
+                if job_mgr == mgr:
+                    self.graph_db.pop(token_id_hex, None)
+                    graph.reset()
+
+    def setup_job(self, tx, reset=False, job_mgr=None):
+        """ Perform setup steps before validation for a given transaction. """
+        slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+
+        if slpMsg.transaction_type == 'GENESIS':
+            token_id_hex = tx.txid()
+        elif slpMsg.transaction_type in ('MINT', 'SEND'):
+            token_id_hex = slpMsg.op_return_fields['token_id_hex']
+        else:
+            return None
+
+        if reset:
+            try:
+                self.kill_graph(token_id_hex)
+            except KeyError:
+                pass
+
+        graph, job_mgr = self.get_graph(token_id_hex, job_mgr=job_mgr)
+
+        return graph, job_mgr
+
+
+    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, job_mgr=None, **kwargs):
+        """
+        Basic validation job maker for a single transaction.
+
+        Creates job and starts it running in the background thread.
+
+        Before calling this you have to call setup_config().
+
+        Returns job, or None if it was not a validatable type
+        """
+        # This should probably be redone into a class, it is getting messy.
+
         try:
-            for _ in range(num_proxy_requests):
-                r = proxyqueue.get(timeout=5)
-                results.update(r)
-        except queue.Empty:
-            pass
+            limit_dls   = config.get('slp_validator_download_limit', None)
+            limit_depth = config.get('slp_validator_depth_limit', None)
+            proxy_enable = config.get('slp_validator_proxy_enabled', False)
+        except NameError: # in daemon mode (no GUI) 'config' is not defined
+            limit_dls = None
+            limit_depth = None
+            proxy_enable = False
 
-        if proxy_enable:
-            graph.finalize_from_proxy(results)
+        try:
+            graph, job_mgr = self.setup_job(tx, reset=reset, job_mgr=job_mgr)
+        except (SlpParsingError, IndexError):
+            return
 
-        # Do consistency check here
-        # XXXXXXX
+        txid = tx.txid()
 
-        # Save validity
-        for t,n in job.nodes.items():
-            val = n.validity
-            if val != 0:
-                wallet.slpv1_validity[t] = val
-    job.add_callback(done_callback)
+        num_proxy_requests = 0
+        proxyqueue = queue.Queue()
 
-    jobmgr.add_job(job)
+        def proxy_cb(txids, results):
+            newres = {}
+            # convert from 'true/false' to (True,1) or (False,3)
+            for t,v in results.items():
+                if v:
+                    newres[t] = (True, 1)
+                else:
+                    newres[t] = (True, 3)
+            proxyqueue.put(newres)
 
-    return job
+        def fetch_hook(txids):
+            l = []
+            for txid in txids:
+                try:
+                    l.append(wallet.transactions[txid])
+                except KeyError:
+                    pass
+            if proxy_enable:
+                proxy.add_job(txids, proxy_cb)
+                nonlocal num_proxy_requests
+                num_proxy_requests += 1
+            return l
+
+        job = ValidationJob(graph, [txid], network,
+                            fetch_hook=fetch_hook,
+                            validitycache=wallet.slpv1_validity,
+                            download_limit=limit_dls,
+                            depth_limit=limit_depth,
+                            debug=debug,
+                            **kwargs)
+        def done_callback(job):
+            # wait for proxy stuff to roll in
+            results = {}
+            try:
+                for _ in range(num_proxy_requests):
+                    r = proxyqueue.get(timeout=5)
+                    results.update(r)
+            except queue.Empty:
+                pass
+
+            if proxy_enable:
+                graph.finalize_from_proxy(results)
+
+            # Do consistency check here
+            # XXXXXXX
+
+            # Save validity
+            for t,n in job.nodes.items():
+                val = n.validity
+                if val != 0:
+                    wallet.slpv1_validity[t] = val
+        job.add_callback(done_callback)
+
+        job_mgr.add_job(job)
+
+        return job
 
 
 class Validator_SLP1:
