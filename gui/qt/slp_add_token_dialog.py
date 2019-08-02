@@ -194,7 +194,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         self.view_tx_button.setDisabled(False)
 
         txid = tx.txid()
-        token_id = self.token_id_e.text().strip()
+        token_id = self.token_id_e.text().strip().lower()  # tolerate user to paste of uppercase hex with whitespace around it
         if token_id and txid != token_id:
             return self.fail_genesis_info(_('TXID does not match token ID!'))
         self.newtoken_token_id = txid
