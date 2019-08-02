@@ -421,6 +421,7 @@ class Validator_NFT1(ValidatorGeneric):
         def restart_nft_job(val):
             self.nft_parent_validity = val
             self.validation_jobmgr.unpause_job(self.nft_child_job)
+            self.nft_child_job = None # release reference
 
         def start_nft_parent_validation():
             self.start_NFT_parent_job(restart_nft_job)
