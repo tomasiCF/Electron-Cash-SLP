@@ -440,6 +440,43 @@ class Abstract_Wallet(PrintError):
         self.save_transactions(bool(write_storage))
         return True
 
+    def add_token_from_genesis_tx(self, tx_or_raw, *, error_callback=None, allow_overwrite=True) -> SlpMessage:
+        ''' Returns None on failure, optionally calling error_callback
+        with a translated UI-suitable error message. Returns a valid
+        SlpMessage object on success. In exceptional circumstances (garbage
+        inputs), may raise.
+
+        Note that unlike the other add_token_* functions, this version defaults
+        to allow_overwrite = True.'''
+        tx = tx_or_raw
+        if not isinstance(tx, Transaction):
+            tx = Transaction(tx)
+
+        def fail(msg):
+            if error_callback:
+                error_callback(msg)
+            return None
+
+        token_id = tx.txid()
+
+        try:
+            slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+        except SlpUnsupportedSlpTokenType as e:
+            return fail(_("Unsupported SLP token version/type - %r.")%(e.args[0],))
+        except SlpInvalidOutputMessage as e:
+            return fail(_("This transaction does not contain a valid SLP message.\nReason: %r.")%(e.args,))
+        if slpMsg.transaction_type != 'GENESIS':
+            return fail(_("This is an SLP transaction, however it is not a genesis transaction."))
+
+        token_name = slpMsg.op_return_fields['ticker'].decode('utf-8') or slpMsg.op_return_fields['token_name'].decode('utf-8')
+        decimals = slpMsg.op_return_fields['decimals']
+        token_class = 'SLP%d' % (slpMsg.token_type,)
+
+        if self.add_token_safe(token_class, token_id, token_name, decimals, error_callback=fail, allow_overwrite=allow_overwrite):
+            return slpMsg
+        else:
+            return None
+
     def save_verified_tx(self, write=False):
         with self.lock:
             self.storage.put('verified_tx3', self.verified_tx)

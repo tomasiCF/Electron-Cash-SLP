@@ -574,6 +574,24 @@ class Commands(PrintError):
         tx = self._mktx_slp(token_id, destination_slp, amount_slp, tx_fee, change_addr, domain, unsigned, password, locktime)
         return tx.as_dict()
 
+    @command('wp')
+    def slp_add_token(self, token_id, password=None):
+        ''' Add an SLP token to this wallet, kicking off validation if appropriate.
+        Returns True on success. '''
+        if not self.wallet.is_slp:
+            raise RuntimeError('Not an SLP wallet')
+        token_id = token_id.strip().lower()
+        tx = self.network.synchronous_get(('blockchain.transaction.get', [token_id]), timeout=10.0)  # may raise
+        if not tx:
+            raise RuntimeError('Could not get token genesis tx')
+        errmsg = ''
+        def on_error(msg):
+            nonlocal errmsg
+            errmsg = msg
+        if not self.wallet.add_token_from_genesis_tx(tx, error_callback=on_error):
+            raise RuntimeError(errmsg or 'Failed to add token')
+        return True
+
     @command('w')
     def history(self, year=None, show_addresses=False, show_fiat=False):
         """Wallet history. Returns the transaction history of your wallet."""
