@@ -1935,8 +1935,8 @@ class Abstract_Wallet(PrintError):
                 # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
                 slp_validator_0x01.setup_config(self.network.config)
                 slp_validator_0x01_nft1.setup_config(self.network.config)
-                self.slp_graph_0x01 = slp_validator_0x01.GraphContext(f"{self.basename()}/GraphContext_0x01")
-                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.GraphContext(f"{self.basename()}/GraphContext_NFT")
+                self.slp_graph_0x01 = slp_validator_0x01.shared_context
+                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.shared_context
                 self.activate_slp()
                 self.network.register_callback(self._slp_callback_on_status, ['status'])
         else:
@@ -1947,8 +1947,10 @@ class Abstract_Wallet(PrintError):
         if self.network:
             if self.is_slp:
                 self.network.unregister_callback(self._slp_callback_on_status)
-                self.slp_graph_0x01.kill()
-                self.slp_graph_0x01_nft.kill()
+                n_stopped = self.slp_graph_0x01.stop_all_for_wallet(self)
+                self.print_error("Stopped", n_stopped, "slp_0x01 jobs")
+                n_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
+                self.print_error("Stopped", n_stopped, "slp_0x01_nft jobs")
                 self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
             # Note: syncrhonizer and verifier will remove themselves from the
             # network thread the next time they run, as a result of the below

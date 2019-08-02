@@ -167,7 +167,7 @@ class ValidationJob:
                  fetch_hook=None,
                  validitycache=None,
                  download_limit=None, depth_limit=None,
-                 debug=False, was_reset=False):
+                 debug=False, was_reset=False, ref=None):
         """
         graph should be a TokenGraph instance with the appropriate validator.
 
@@ -193,6 +193,7 @@ class ValidationJob:
 
         depth_limit sets the maximum graph depth to dig to.
         """
+        self.ref = ref and weakref.ref(ref)
         self.graph = graph
         self.txids = tuple(txids)
         self.network = network
@@ -220,6 +221,9 @@ class ValidationJob:
                 state = 'waiting'
         return "<%s object (%s) for txids=%r>"%(type(self).__qualname__, state, self.txids)
 
+    def belongs_to(self, ref):
+        return ref is (self.ref and self.ref())
+
     ## Job state management
 
     def run(self,):
@@ -228,6 +232,7 @@ class ValidationJob:
             if self.running:
                 raise RuntimeError("Job running already", self)
             self.stopping = False
+            self.paused = False
             self.running = True
             self.stop_reason = None
             self.has_never_run = False
@@ -262,6 +267,14 @@ class ValidationJob:
             else:
                 return False
 
+    def pause(self):
+        with self._statelock:
+            if self.running:
+                self.paused = True
+                return True
+            else:
+                return False
+
     #@property
     #def runstatus(self,):
         #with self._statelock:
@@ -269,6 +282,8 @@ class ValidationJob:
                 #return "stopping"
             #elif self.running:
                 #return "running"
+            #elif self.paused:
+                #return "paused"
             #else:
                 #return "stopped"
 
@@ -343,6 +358,10 @@ class ValidationJob:
             if self.stopping:
                 self.graph.debug("stop requested")
                 return "stopped"
+
+            if self.paused:
+                self.graph.debug("pause requested")
+                return "paused"
 
             if not any(n.active for n in target_nodes):
                 # Normal finish - the targets are known.
@@ -481,7 +500,8 @@ class ValidationJobManager:
         self.jobs_lock = threading.Lock()
         self.job_current = None
         self.jobs_pending  = []   # list of jobs waiting to run.
-        self.jobs_finished = weakref.WeakSet()   # list of jobs finished normally.
+        self.jobs_finished = weakref.WeakSet()   # set of jobs finished normally.
+        self.jobs_stopped = weakref.WeakSet()  # set of jobs stopped by calling .stop()
         self.jobs_paused   = []   # list of jobs that stopped without finishing.
         self.all_jobs = weakref.WeakSet()
         self.wakeup = threading.Event()  # for kicking the mainloop to wake up if it has fallen asleep
@@ -502,6 +522,30 @@ class ValidationJobManager:
             self.jobs_pending.append(job)
         self.wakeup.set()
 
+    def stop_all_for(self, ref):
+        ctr = 0
+        with self.jobs_lock:
+            for job in list(self.all_jobs):
+                if job.belongs_to(ref):
+                    if job.stop():
+                        ctr += 1
+                    else:
+                        # Job wasn't running -- try and remove it from the
+                        # pending and paused lists
+                        try:
+                            self.jobs_pending.remove(job)
+                            ctr += 1
+                            continue
+                        except ValueError:
+                            pass
+                        try:
+                            self.jobs_paused.remove(job)
+                            ctr += 1
+                            continue
+                        except ValueError:
+                            pass
+        return ctr
+
     def pause_job(self, job):
         """
         Returns True if job was running or pending.
@@ -509,7 +553,7 @@ class ValidationJobManager:
         """
         with self.jobs_lock:
             if job is self.job_current:
-                if job.stop():
+                if job.pause():
                     return True
                 else:
                     # rare situation
@@ -572,8 +616,11 @@ class ValidationJobManager:
                 else:
                     if retval is True:
                         self.jobs_finished.add(self.job_current)
+                    elif retval == 'stopped':
+                        self.jobs_stopped.add(self.job_current)
                     else:
                         self.jobs_paused.append(self.job_current)
+                    self.job_current = None
         except:
             traceback.print_exc()
             print("Thread %s crashed :("%(self.thread.name,), file=sys.stderr)

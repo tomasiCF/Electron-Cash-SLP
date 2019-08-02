@@ -35,7 +35,7 @@ def setup_config(config_set):
 
 
 class GraphContext:
-    ''' Per wallet instance DAG cache '''
+    ''' Instance of the DAG cache '''
 
     def __init__(self, name='GraphContext'):
         # Global db for shared graphs (each token_id_hex has its own graph).
@@ -103,6 +103,18 @@ class GraphContext:
 
         return graph
 
+    def get_validation_config(self):
+        if config:
+            limit_dls   = config.get('slp_validator_download_limit', None)
+            limit_depth = config.get('slp_validator_depth_limit', None)
+            proxy_enable = config.get('slp_validator_proxy_enabled', False)
+        else: # in daemon mode (no GUI) 'config' is not defined
+            limit_dls = None
+            limit_depth = None
+            proxy_enable = False
+
+        return limit_dls, limit_depth, proxy_enable
+
 
     def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
         """
@@ -116,14 +128,7 @@ class GraphContext:
         """
         # This should probably be redone into a class, it is getting messy.
 
-        if config:
-            limit_dls   = config.get('slp_validator_download_limit', None)
-            limit_depth = config.get('slp_validator_depth_limit', None)
-            proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        else: # in daemon mode (no GUI) 'config' is not defined
-            limit_dls = None
-            limit_depth = None
-            proxy_enable = False
+        limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
             graph = self.setup_job(tx, reset=reset)
@@ -163,7 +168,7 @@ class GraphContext:
                             validitycache=wallet.slpv1_validity,
                             download_limit=limit_dls,
                             depth_limit=limit_depth,
-                            debug=debug,
+                            debug=debug, ref=wallet,
                             **kwargs)
         def done_callback(job):
             # wait for proxy stuff to roll in
@@ -192,6 +197,18 @@ class GraphContext:
 
         return job
 
+    def stop_all_for_wallet(self, wallet):
+        return self.job_mgr.stop_all_for(wallet)
+
+
+# App-wide instance. Wallets share the results of the DAG lookups.
+# This instance is shared so that we don't redundantly verify tokens for each
+# wallet, but rather do it app-wide.  Note that when wallet instances close
+# while a verification is in progress, all extant jobs for that wallet are
+# stopped -- ultimately stopping the entire DAG lookup for that token if all
+# wallets verifying a token are closed.  The next time a wallet containing that
+# token is opened, however, the validation continues where it left off.
+shared_context = GraphContext()
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

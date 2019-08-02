@@ -14,7 +14,7 @@ from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInv
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
-from .slp_validator_0x01 import Validator_SLP1
+from .slp_validator_0x01 import Validator_SLP1, GraphContext
 
 from . import slp_proxying # loading this module starts a thread.
 
@@ -34,15 +34,11 @@ def setup_config(config_set):
     config = config_set
 
 
-class GraphContext:
-    ''' Per wallet instance of NFT1 DAG cache '''
+class GraphContext_NFT1(GraphContext):
+    ''' Instance of the NFT1 DAG cache '''
 
-    def __init__(self, name="GraphContextNFT1"):
-        # Global db for shared graphs (each token_id_hex has its own graph).
-        self.graph_db_lock = threading.Lock()
-        self.graph_db = dict()   # token_id_hex -> TokenGraph
-        self.name = name
-        self._create_job_mgr()
+    def __init__(self, name="GraphContext_NFT1"):
+        super().__init__(name=name)
 
     def _create_job_mgr(self):
         self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager', graph_context=self)
@@ -64,23 +60,6 @@ class GraphContext:
             self.graph_db[token_id_hex] = graph
 
             return graph
-
-    def kill_graph(self, token_id_hex):
-        try:
-            graph = self.graph_db.pop(token_id_hex)
-        except KeyError:
-            return
-        #if jobmgr != shared_jobmgr:
-        #    jobmgr.kill()
-        graph.reset()
-
-    def kill(self):
-        with self.graph_db_lock:
-            for token_id_hex, graph in self.graph_db.items():
-                graph.reset()
-            self.graph_db.clear()
-        self.job_mgr.kill()
-        self._create_job_mgr()  # re-create a new, clean instance
 
 
     def setup_job(self, tx, reset=False):
@@ -121,20 +100,14 @@ class GraphContext:
         """
         # This should probably be redone into a class, it is getting messy.
 
-        if config:
-            limit_dls   = config.get('slp_validator_download_limit', None)
-            limit_depth = config.get('slp_validator_depth_limit', None)
-            proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        else: # in daemon mode (no GUI) 'config' is not defined
-            limit_dls = None
-            limit_depth = None
-            proxy_enable = False
+        limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
             graph = self.setup_job(tx, reset=reset)
         except (SlpParsingError, IndexError):
             return
 
+        # fixme -- wouldn't subsequent wallet instances clobber previous ones?!
         graph.validator.wallet = wallet
         graph.validator.network = network
 
@@ -173,6 +146,7 @@ class GraphContext:
                             depth_limit=limit_depth,
                             debug=debug,
                             was_reset=reset,
+                            ref=wallet,
                             **kwargs)
         def done_callback(job):
             # wait for proxy stuff to roll in
@@ -201,6 +175,14 @@ class GraphContext:
 
         return job
 
+# App-wide instance. Wallets share the results of the DAG lookups.
+# This instance is shared so that we don't redundantly verify tokens for each
+# wallet, but rather do it app-wide.  Note that when wallet instances close
+# while a verification is in progress, all extant jobs for that wallet are
+# stopped -- ultimately stopping the entire DAG lookup for that token if all
+# wallets verifying a token are closed.  The next time a wallet containing that
+# token is opened, however, the validation continues where it left off.
+shared_context = GraphContext_NFT1()
 
 class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
