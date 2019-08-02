@@ -1950,6 +1950,10 @@ class Abstract_Wallet(PrintError):
         if self.network:
             if self.is_slp:
                 self.network.unregister_callback(self._slp_callback_on_status)
+                self.slp_job_mgr.kill()
+                self.slp_job_mgr_nft.kill()
+                self.slp_job_mgr, self.slp_job_mgr_nft = None, None
+                self.slp_graph_db_0x01, self.slp_graph_db_0x01_nft = None, None
             # Note: syncrhonizer and verifier will remove themselves from the
             # network thread the next time they run, as a result of the below
             # release() calls.
@@ -1961,10 +1965,6 @@ class Abstract_Wallet(PrintError):
             self.verifier.release()
             self.synchronizer = None
             self.verifier = None
-            self.slp_job_mgr.kill()
-            self.slp_job_mgr_nft.kill()
-            self.slp_job_mgr, self.slp_job_mgr_nft = None, None
-            self.slp_graph_db_0x01, self.slp_graph_db_0x01_nft = None, None
             # Now no references to the syncronizer or verifier
             # remain so they will be GC-ed
             self.storage.put('stored_height', self.get_local_height())

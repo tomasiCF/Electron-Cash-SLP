@@ -11,6 +11,7 @@ import json
 
 from lib import slp
 from lib import slp_validator_0x01
+from lib import slp_dagging
 
 import requests
 import os
@@ -144,12 +145,14 @@ class SLPConsensusTests(unittest.TestCase):
                     #should_validity[txid] = 2
                 #else:
                     #raise ValueError(d['valid'])
+            graph_context = slp_validator_0x01.GraphContext()
+            job_mgr = slp_dagging.ValidationJobManager(graph_db=graph_context)
 
             for i, d in enumerate(test['should']):
                 txid = d['txid']
                 with self.subTest(description=description, i=i):
                     try:
-                        graph, jobmgr = slp_validator_0x01.setup_job(txes[txid], reset=True)
+                        graph, jobmgr = graph_context.setup_job(txes[txid], reset=True)
                     except slp.SlpInvalidOutputMessage: # If output 0 is not OP_RETURN
                         self.assertEqual(d['valid'], False)
                         continue
@@ -184,4 +187,3 @@ class SLPConsensusTests(unittest.TestCase):
                         self.assertIn(n.validity, (2,3))
                     else:
                         raise ValueError(d['valid'])
-
