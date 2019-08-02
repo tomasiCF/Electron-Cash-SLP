@@ -4,7 +4,7 @@ from electroncash import slp
 class SlpCoinChooser:
 
     @staticmethod
-    def select_coins(wallet, token_id, amount, config, isInvoice=False):
+    def select_coins(wallet, token_id, amount, config, isInvoice=False, *, domain=None):
         amt = amount or 0
         valid_bal, _, _, unfrozen_bal, _ = wallet.get_slp_token_balance(token_id, config)
 
@@ -13,7 +13,7 @@ class SlpCoinChooser:
         if valid_bal >= amt > unfrozen_bal:
             raise NotEnoughUnfrozenFundsSlp()
 
-        slp_coins = wallet.get_slp_spendable_coins(token_id, None, config, isInvoice)
+        slp_coins = wallet.get_slp_spendable_coins(token_id, domain, config, isInvoice)
         slp_coins = sorted(slp_coins, key=lambda k: -k['token_value'])
 
         selected_slp_coins = []
@@ -39,4 +39,4 @@ class SlpCoinChooser:
             assert slp_op_return_msg
 
         return (selected_slp_coins, slp_op_return_msg)
-        
+

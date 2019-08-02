@@ -384,6 +384,7 @@ class BaseWizard(object):
         elif self.wallet_type == 'multisig':
             raise Exception('Wallet type is not handled in this version')
         elif self.wallet_type == 'slp_multisig':
+            self.storage.put('wallet_type', self.wallet_type)
             for i, k in enumerate(self.keystores):
                 self.storage.put('x%d/'%(i+1), k.dump())
             self.storage.write()

@@ -134,9 +134,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         self.gui_object = gui_object
         self.wallet = wallet
-        self.wallet.thread = None  # this attribute will be set with a TaskThread in load_wallet later in this function, but we want to make sure it's always defined.
         self.config = config = gui_object.config
-        self.is_slp_wallet = "slp_" in self.wallet.storage.get('wallet_type', '')
         self.non_slp_wallet_warning_shown = False
         self.force_use_single_change_addr = _('Change addresses behavior is not customizable for SLP wallets') if self.is_slp_wallet else False
 
@@ -262,6 +260,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         gui_object.timer.timeout.connect(self.timer_actions)
         self.fetch_alias()
+
+    @property
+    def is_slp_wallet(self):
+        return self.wallet.is_slp
 
     _first_shown = True
     def showEvent(self, event):
@@ -460,9 +462,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.request_list.update()
 
         if self.is_slp_wallet:
-            # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
-            slp_validator_0x01.setup_config(self.config)
-            slp_validator_0x01_nft1.setup_config(self.config)
             self.slp_history_list.update()
             self.token_list.update()
             self.update_token_type_combo()
@@ -961,7 +960,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if not self.is_slp_wallet:
                     text += "Tokens Disabled - "
                 else:
-                    self.wallet.activate_slp()
                     token_id = self.slp_token_id
                     try:
                         d = self.wallet.token_types[token_id]
@@ -4824,6 +4822,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.wallet.thread:  # guard against window close before load_wallet was called (#1554)
             self.wallet.thread.stop()
             self.wallet.thread.wait() # Join the thread to make sure it's really dead.
+        if self.wallet.ui_emit_validity_updated:
+            self.wallet.ui_emit_validity_updated = None  # detach callback
 
         self.tx_update_mgr.clean_up()  # disconnects some signals
 
@@ -5191,7 +5191,7 @@ class TxUpdateMgr(QObject, PrintError):
                         if is_relevant:
                             total_amount += v
                             n_ok += 1
-                        if "slp_" in parent.wallet.storage.get('wallet_type', ''):
+                        if parent.is_slp_wallet:
                             try:
                                 tti = parent.wallet.get_slp_token_info(tx.txid())
                                 tokens_included.add(parent.wallet.token_types.get(tti['token_id'],{}).get('name','unknown'))

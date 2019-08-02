@@ -33,7 +33,7 @@ from functools import wraps
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 
 from .import util
-from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes
+from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes, get_satoshis_nofloat, PrintError
 from .import bitcoin
 from .address import Address
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
@@ -41,6 +41,9 @@ from .i18n import _
 from .transaction import Transaction, multisig_script
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .plugins import run_hook
+from .slp_coinchooser import SlpCoinChooser
+from .slp_checker import SlpTransactionChecker
+from . import slp
 
 known_commands = {}
 
@@ -102,7 +105,7 @@ def command(s):
     return decorator
 
 
-class Commands:
+class Commands(PrintError):
 
     def __init__(self, config, wallet, network, callback = None):
         self.config = config
@@ -158,8 +161,13 @@ class Commands:
 
     @command('')
     def create(self):
-        """Create a new wallet"""
+        """Create a new standard (non-SLP) wallet"""
         raise BaseException('Not a JSON-RPC command')
+
+    @command('')
+    def create_slp(self):
+        '''Create a new SLP wallet'''
+        raise RuntimeError('Not a JSON-RPC command')
 
     @command('wn')
     def restore(self, text):
@@ -472,6 +480,8 @@ class Commands:
 
         coins = self.wallet.get_spendable_coins(domain, self.config)
         tx = self.wallet.make_unsigned_transaction(coins, final_outputs, self.config, fee, change_addr)
+        # Unconditionally check this tx is slp-kosher, even if not signing now.
+        assert SlpTransactionChecker.check_tx_slp(self.wallet, tx)
         if locktime != None:
             tx.locktime = locktime
         if not unsigned:
@@ -493,6 +503,75 @@ class Commands:
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
         tx = self._mktx(outputs, tx_fee, change_addr, domain, nocheck, unsigned, password, locktime)
+        return tx.as_dict()
+
+    def _mktx_slp(self, token_id, destination, amount, fee, change_addr, domain, unsigned, password, locktime):
+        ''' This code is basically lifted from main_window.py 'do_update_fee'
+        and 'read_send_tab' and modified to fit here. '''
+        selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, token_id, amount, self.config, domain=domain)
+        DUST = self.wallet.dust_threshold()  # 546 satoshis
+        if not slp_op_return_msg:
+            raise RuntimeError('Unable to find suitable SLP coin')
+        bch_outputs = [ slp_op_return_msg ]
+        bch_outputs.append((destination.kind, destination, DUST))  # hack: addr.kind == bitoin TYPE always in Address class
+        token_outputs = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
+        coins = self.wallet.get_spendable_coins(domain, self.config)
+        if len(token_outputs) > 1 and len(bch_outputs) < len(token_outputs):
+            """ start of logic copied from wallet.py """
+            addrs = self.wallet.get_change_addresses()[-self.wallet.gap_limit_for_change:]
+            if not change_addr:
+                if self.wallet.use_change and addrs:
+                    # New change addresses are created only after a few
+                    # confirmations.  Select the unused addresses within the
+                    # gap limit; if none take one at random
+                    change_addrs = [addr for addr in addrs if
+                                    self.wallet.get_num_tx(addr) == 0]
+                    if not change_addrs:
+                        import random
+                        change_addrs = [random.choice(addrs)]
+                        change_addr = change_addrs[0]
+                    elif len(change_addrs) > 1:
+                        change_addr = change_addrs[1]
+                    else:
+                        change_addr = change_addrs[0]
+                else:
+                    change_addr = coins[0]['address']
+            bch_outputs.append((change_addr.kind, change_addr, DUST))
+
+        tx = self.wallet.make_unsigned_transaction(coins, bch_outputs, self.config, fee, mandatory_coins=selected_slp_coins)
+        self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
+        # Unconditionally check this tx is slp-kosher, even if not signing now.
+        assert SlpTransactionChecker.check_tx_slp(self.wallet, tx)
+        if locktime != None:
+            tx.locktime = locktime
+        if not unsigned:
+            run_hook('sign_tx', self.wallet, tx)
+            self.wallet.sign_transaction(tx, password)
+        return tx
+
+    @command('wp')
+    def payto_slp(self, token_id, destination_slp, amount_slp, fee=None, from_addr=None, change_addr=None, unsigned=False, password=None, locktime=None):
+        """Create an SLP token transaction. """
+        if not self.wallet.is_slp:
+            raise RuntimeError('Not an SLP wallet')
+        token_id = token_id.lower()
+        if len(token_id) != 64 or bytes.fromhex(token_id).hex() != token_id:
+            raise RuntimeError('Invalid token_id; must be a 32-byte hex-encoded string (64 characters)')
+        tok = self.wallet.token_types.get(token_id)
+        if not tok:
+            raise RuntimeError('Unknown token id')
+        decimals = tok['decimals']
+        if not isinstance(decimals, int):
+            # token is unverified or other funny business -- has decimals field as '?'
+            raise RuntimeError("Unverified token-id; please verify this token before proceeding")
+        amount_slp = get_satoshis_nofloat(str(amount_slp), decimals)
+        assert amount_slp > 0
+        domain = [Address.from_string(a.strip()) for a in from_addr.split(',')] if from_addr else None  # may raise -- note that domain may be any address not just SLP address in wallet.
+        destination_slp = Address.from_slpaddr_string(destination_slp) if not isinstance(destination_slp, Address) else destination_slp
+        if change_addr and not isinstance(change_addr, Address):
+            change_addr = Address.from_string(change_addr)
+        tx_fee = satoshis(fee)
+        tx = self._mktx_slp(token_id, destination_slp, amount_slp, tx_fee, change_addr, domain, unsigned, password, locktime)
         return tx.as_dict()
 
     @command('w')
@@ -600,12 +679,12 @@ class Commands:
 
         if debug:
             print("Debug info will be printed to stderr.")
-        
+
         slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
         if slp_msg.token_type == 1:
             job = slp_validator_0x01.make_job(tx, self.wallet, self.network,
                                               debug=2, reset=reset)
-        else:            
+        else:
             job = slp_validator_0x01_nft1.make_job(tx, self.wallet, self.network,
                                               debug=2, reset=reset)
         job.add_callback(q.put, way='weakmethod')
@@ -615,7 +694,7 @@ class Commands:
             print("Validation job taking too long. Returning now as to not freeze UI for too long!")
             print("(returned job is still running in background)")
             return job
-        
+
         if not job.running and isinstance(job.graph.validator, Validator_NFT1):
             print("Validation job is taking too long. Returning now as to not freeze UI for too long!")
             print("(returned job is still running in background)")
@@ -777,17 +856,20 @@ class Commands:
 param_descriptions = {
     'privkey': 'Private key. Type \'?\' to get a prompt.',
     'destination': 'Bitcoin Cash address, contact or alias',
+    'destination_slp': 'SLP address; where to send the token',
     'address': 'Bitcoin Cash address',
     'seed': 'Seed phrase',
     'txid': 'Transaction ID',
     'pos': 'Position',
     'height': 'Block height',
+    'token_id': 'SLP token id (64 character hex string)',
     'tx': 'Serialized transaction (hexadecimal)',
     'key': 'Variable name',
     'pubkey': 'Public key',
     'message': 'Clear text message. Use quotes if it contains spaces.',
     'encrypted': 'Encrypted message',
     'amount': 'Amount to be sent (in BCH). Type \'!\' to send the maximum available.',
+    'amount_slp' : 'Amount to be sent (in token units, floats ok)',
     'requested_amount': 'Requested amount (in BCH).',
     'outputs': 'list of ["address", amount]',
     'redeem_script': 'redeem script (hexadecimal)',

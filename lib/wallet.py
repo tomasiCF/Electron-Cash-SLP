@@ -179,6 +179,7 @@ class Abstract_Wallet(PrintError):
         # verifier (SPV) and synchronizer are started in start_threads
         self.synchronizer = None
         self.verifier = None
+        self.ui_emit_validity_updated = None  # Qt GUI attaches a signal to this attribute -- see slp_check_validation
 
         # Cache of Address -> (c,u,x) balance. This cache is used by
         # get_addr_balance to significantly speed it up (it is called a lot).
@@ -255,6 +256,13 @@ class Abstract_Wallet(PrintError):
 
         # Print debug message on finalization
         finalization_print_error(self, "[{}/{}] finalized".format(__class__.__name__, self.diagnostic_name()))
+
+    @property
+    def is_slp(self):
+        ''' Note that the various Slp_* classes explicitly write to storage
+        to set the proper wallet_type on construction unconditionally, so
+        this should always be valid for SLP wallets. '''
+        return "slp_" in self.storage.get('wallet_type', '')
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -1216,7 +1224,7 @@ class Abstract_Wallet(PrintError):
                 }
         self.tx_tokinfo[tx_hash] = tti
 
-        if "slp_" in self.storage.get('wallet_type', ''): # Only start up validation if SLP enabled
+        if self.is_slp: # Only start up validation if SLP enabled
             self.slp_check_validation(tx_hash, tx)
 
     """
@@ -1233,7 +1241,7 @@ class Abstract_Wallet(PrintError):
                 (txid,node), = job.nodes.items()
                 val = node.validity
                 tti['validity'] = val
-                ui_cb = getattr(self, 'ui_emit_validity_updated', None)
+                ui_cb = self.ui_emit_validity_updated
                 if ui_cb:
                     ui_cb(txid, val)
 
@@ -1548,7 +1556,7 @@ class Abstract_Wallet(PrintError):
         return dust_threshold(self.network)
 
     def check_sufficient_slp_balance(self, slpMessage, config):
-        if "slp_" in self.storage.get('wallet_type', ''):
+        if self.is_slp:
             if slpMessage.transaction_type == 'SEND':
                 total_token_out = sum(slpMessage.op_return_fields['token_output'])
                 valid_token_balance, _, _, valid_unfrozen_token_balance, _ = self.get_slp_token_balance(slpMessage.op_return_fields['token_id_hex'], config)
@@ -1804,6 +1812,10 @@ class Abstract_Wallet(PrintError):
                 self.print_error("removing transaction", tx_hash)
                 self.transactions.pop(tx_hash)
 
+    def _slp_callback_on_status(self, event, *args):
+        if self.is_slp and args[0] == 'connected':
+            self.activate_slp()
+
     def start_threads(self, network):
         self.network = network
         if self.network is not None:
@@ -1813,12 +1825,20 @@ class Abstract_Wallet(PrintError):
             finalization_print_error(self.verifier, "[{}.{}] finalized".format(self.diagnostic_name(), self.verifier.diagnostic_name()))
             finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
             network.add_jobs([self.verifier, self.synchronizer])
+            if self.is_slp:
+                # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
+                slp_validator_0x01.setup_config(self.network.config)
+                slp_validator_0x01_nft1.setup_config(self.network.config)
+                self.activate_slp()
+                self.network.register_callback(self._slp_callback_on_status, ['status'])
         else:
             self.verifier = None
             self.synchronizer = None
 
     def stop_threads(self):
         if self.network:
+            if self.is_slp:
+                self.network.unregister_callback(self._slp_callback_on_status)
             # Note: syncrhonizer and verifier will remove themselves from the
             # network thread the next time they run, as a result of the below
             # release() calls.
@@ -2575,6 +2595,7 @@ class Slp_ImportedAddressWallet(ImportedAddressWallet):
 
     def __init__(self, storage):
         self._sorted = None
+        storage.put('wallet_type', self.wallet_type)
         super().__init__(storage)
 
 class ImportedPrivkeyWallet(ImportedWalletBase):
@@ -2667,6 +2688,7 @@ class Slp_ImportedPrivkeyWallet(ImportedPrivkeyWallet):
     wallet_type = 'slp_imported_privkey'
 
     def __init__(self, storage):
+        storage.put('wallet_type', self.wallet_type)
         Abstract_Wallet.__init__(self, storage)
 
 
@@ -2843,6 +2865,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 class Slp_Standard_Wallet(Standard_Wallet):
     wallet_type = 'slp_standard'
     def __init__(self, storage):
+        storage.put('wallet_type', self.wallet_type)
         super().__init__(storage)
 
 

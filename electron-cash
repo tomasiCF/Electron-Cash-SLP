@@ -136,7 +136,23 @@ def run_non_RPC(config):
         sys.exit("Error: Remove the existing wallet first!")
 
     def password_dialog():
-        return prompt_password("Password (hit return if you do not wish to encrypt your wallet):")
+        return prompt_password("Password (hit return if you do not wish to encrypt your wallet): ")
+
+    def create_common(wallet_type):
+        password = password_dialog()
+        passphrase = config.get('passphrase', '')
+        #seed_type = 'standard'  <--- This is no longer applicable with SLP version since it only uses BIP-39
+        seed = Mnemonic('en').make_seed()
+        k = keystore.from_seed(seed, passphrase, False)
+        storage.put('keystore', k.dump())
+        storage.put('wallet_type', wallet_type)
+        wallet = Wallet(storage)
+        wallet.update_password(None, password, True)
+        wallet.synchronize()
+        print_msg("Your wallet type is:", wallet_type)
+        print_msg("Your wallet generation seed is:\n\"%s\"" % seed)
+        print_msg("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        return wallet
 
     if cmdname == 'restore':
         text = config.get('text').strip()
@@ -173,18 +189,10 @@ def run_non_RPC(config):
         print_msg(msg)
 
     elif cmdname == 'create':
-        password = password_dialog()
-        passphrase = config.get('passphrase', '')
-        #seed_type = 'standard'  <--- This is no longer applicable with SLP version since it only uses BIP-39 
-        seed = Mnemonic('en').make_seed()
-        k = keystore.from_seed(seed, passphrase, False)
-        storage.put('keystore', k.dump())
-        storage.put('wallet_type', 'standard')
-        wallet = Wallet(storage)
-        wallet.update_password(None, password, True)
-        wallet.synchronize()
-        print_msg("Your wallet generation seed is:\n\"%s\"" % seed)
-        print_msg("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        wallet = create_common('standard')
+
+    elif cmdname == 'create_slp':
+        wallet = create_common('slp_standard')
 
     wallet.storage.write()
     print_msg("Wallet saved in '%s'" % wallet.storage.path)
@@ -388,7 +396,7 @@ if __name__ == '__main__':
     cmdname = config.get('cmd')
 
     # run non-RPC commands separately
-    if cmdname in ['create', 'restore']:
+    if cmdname in ['create', 'restore', 'create_slp']:
         run_non_RPC(config)
         sys.exit(0)
 
