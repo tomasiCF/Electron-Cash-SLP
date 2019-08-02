@@ -35,6 +35,7 @@ import time
 import json
 import copy
 import errno
+import re
 from collections import defaultdict
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
@@ -361,7 +362,14 @@ class Abstract_Wallet(PrintError):
                 except KeyError:
                     continue
 
+    _add_token_hex_re = re.compile('^[a-f0-9]{64}$')
     def add_token_type(self, token_id, entry):
+        if not isinstance(token_id, str) or not self._add_token_hex_re.match(token_id):
+            # Paranoia: we enforce canonical hex string as lowercase to avoid
+            # problems with the same token-id being added as upper or lowercase
+            # by client code.  This is because token_id becomes a dictionary key
+            # in various places and it not being identical would create chaos.
+            raise ValueError('token_id must be a lowercase hex string of exactly 64 characters!')
         with self.lock, self.transaction_lock:
             self.token_types[token_id] = dict(entry)
             self.storage.put('token_types', self.token_types)
@@ -373,6 +381,64 @@ class Abstract_Wallet(PrintError):
                         self.slp_check_validation(tx_hash, tx)
                 except KeyError: # This catches the case where tx_tokinfo was set to {}
                     continue
+
+    def add_token_safe(self, token_class: str, token_id: str, token_name: str,
+                       decimals_divisibility: int,
+                       *, error_callback=None, allow_overwrite=False,
+                       write_storage=True) -> bool:
+        ''' This code was refactored from main_window.py to allow other
+        subsystems (eg CLI/RPC, other platforms, etc) to add tokens.
+        This function does some minimal sanity checks and returns True
+        on success or False on failure.  The optional error_callback
+        is called on False return. The callback takes a single translated string
+        argument which is an error message (suitable for display to the user).
+
+        On success (True) return, this method ends up calling
+        self.add_token_type(), and also will end up saving the changes to
+        wallet storage if write_storage=True (the default).
+
+        This function is thread-safe. '''
+
+        token_name = token_name.strip()
+        token_id = token_id.strip().lower()
+
+        # Check for duplication error
+        d = self.token_types.get(token_id)
+        if d is not None and not allow_overwrite:
+            if error_callback:
+                error_callback(_('Token with this hash id already exists'))
+            return False
+        for tid, d in self.token_types.copy().items():  # <-- must take a snapshot-copy here since we aren't holding locks and other threads may modify this dict as we iterate
+            if d['name'] == token_name and tid != token_id:
+                token_name = token_name + "-" + token_id[:3]
+                break
+
+        #Hash id validation
+        gothex = self._add_token_hex_re.match(token_id)
+        if not gothex:
+            if error_callback:
+                error_callback(_('Invalid token_id hash'))
+            return False
+
+        #token name validation
+        if len(token_name) < 1 or len(token_name) > 20:
+            if error_callback:
+                error_callback(_('Token name should be 1-20 characters'))
+            return False
+
+
+        new_entry = {
+            'class'    : token_class,
+            'name'     : token_name,
+            'decimals' : decimals_divisibility,
+        }
+
+        if token_class == "SLP65":
+            new_entry['group_id'] = "?"
+
+        self.add_token_type(token_id, new_entry)
+        self.save_transactions(bool(write_storage))
+        return True
 
     def save_verified_tx(self, write=False):
         with self.lock:

@@ -94,7 +94,7 @@ def setup_job(tx, reset=False):
             pass
 
     graph, jobmgr = get_graph(token_id_hex, slpMsg.token_type)
-    
+
     return graph, jobmgr
 
 
@@ -178,7 +178,7 @@ def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=Non
 
         # Do consistency check here
         # XXXXXXX
-        
+
         # Save validity
         for t,n in job.nodes.items():
             val = n.validity
@@ -366,7 +366,7 @@ class Validator_NFT1:
         def callback(job):
             (txid,node), = job.nodes.items()
             val = node.validity
-            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid()]['token_id']                            
+            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid()]['token_id']
             if not wallet.token_types.get(group_id, None):
                 name = wallet.token_types[self.genesis_tx.txid()]['name'] + '-parent'
                 #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
@@ -388,7 +388,7 @@ class Validator_NFT1:
         from . import slp_validator_0x01_nft1
         job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
-            job.add_callback(callback)    
+            job.add_callback(callback)
         else:
             with wallet.lock, wallet.transaction_lock:
                 wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4

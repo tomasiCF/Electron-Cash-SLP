@@ -3044,47 +3044,32 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         run_hook('delete_contacts', removed_entries)
 
     def add_token_type(self, token_class, token_id, token_name, decimals_divisibility, *, error_callback=None, show_errors=True, allow_overwrite=False):
-        if error_callback is None:
+        # FIXME: are both args error_callback and show_errors both necessary?
+        # Maybe so if we want the default to be self.show_error...
+
+        if not show_errors:
+            # setting error_callback to None will suppress errors being shown
+            # iff show_errors is False
+            error_callback = None
+        if error_callback is None and show_errors:
+            # They asked for errors but supplied no callback. Use the standard
+            # one for main_window
             error_callback = self.show_error
 
-        token_name = token_name.strip()
-
-        # Check for duplication error
-        d = self.wallet.token_types.get(token_id)
-        if not (d is None or allow_overwrite):
-            if show_errors:
-                error_callback(_('Token with this hash id exists already'))
-            return False
-        for tid, d in self.wallet.token_types.items():
-            if d['name'] == token_name and tid != token_id:
-                token_name = token_name + "-" + token_id[:3]
-                break
-
-        #Hash id validation
-        hexregex='^[a-fA-F0-9]+$'
-        gothex=re.match(hexregex,token_id)
-        if gothex is None or len(token_id) is not 64:
-            if show_errors:
-                error_callback(_('Invalid Hash_Id'))
+        # The below call checks sanity and calls error_callback for us
+        # with an error message argument on failure, returning False.
+        # On success it will add the token, write to wallet storage,
+        # and potentially kick off the verifier.
+        if not self.wallet.add_token_safe(
+                token_class, token_id, token_name, decimals_divisibility,
+                error_callback=error_callback, allow_overwrite=allow_overwrite,
+                write_storage=True):
             return False
 
-        #token name validation
-        if len(token_name) < 1 or len(token_name)> 20:
-            if show_errors:
-                error_callback(_('Token name should be 1-20 characters'))
-            return False
-
-
-        new_entry=dict({'class':token_class,'name':token_name,'decimals':decimals_divisibility})
-        if token_class == "SLP65":
-            new_entry['group_id'] = "?"
-
-        self.wallet.add_token_type(token_id, new_entry)
-
+        # Great success! Update GUI.
         self.token_list.update()
         self.update_token_type_combo()
         self.slp_history_list.update()
-        self.wallet.save_transactions(True)
         return True
 
     def delete_slp_token(self, token_ids):
