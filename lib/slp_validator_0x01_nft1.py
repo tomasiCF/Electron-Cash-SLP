@@ -91,7 +91,7 @@ class GraphContext:
             raise SlpParsingError("NFT1 invalid if parent or child transaction is of SLP type " + str(slpMsg.token_type))
 
         if slpMsg.transaction_type == 'GENESIS':
-            token_id_hex = tx.txid()
+            token_id_hex = tx.txid_fast()
         elif slpMsg.transaction_type in ('MINT', 'SEND'):
             token_id_hex = slpMsg.op_return_fields['token_id_hex']
         else:
@@ -138,7 +138,7 @@ class GraphContext:
         graph.validator.wallet = wallet
         graph.validator.network = network
 
-        txid = tx.txid()
+        txid = tx.txid_fast()
 
         num_proxy_requests = 0
         proxyqueue = queue.Queue()
@@ -273,7 +273,7 @@ class Validator_NFT1(ValidatorGeneric):
             # outputs straight from the token amounts
             outputs = slpMsg.op_return_fields['token_output']
         elif slpMsg.transaction_type == 'GENESIS':
-            token_id_hex = tx.txid()
+            token_id_hex = tx.txid_fast()
 
             vin_mask = (False,)*len(tx.inputs()) # don't need to examine any inputs.
 
@@ -321,20 +321,21 @@ class Validator_NFT1(ValidatorGeneric):
                 raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
-            assert tx.txid() == self.token_id_hex
+            assert tx.txid_fast() == self.token_id_hex
+            txid = self.token_id_hex
             wallet = self.wallet
             with wallet.lock, wallet.transaction_lock:
-                if not wallet.transactions.get(tx.txid(), None):
-                    wallet.transactions[tx.txid()] = tx
-                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                if not wallet.transactions.get(txid, None):
+                    wallet.transactions[txid] = tx
+                if not wallet.tx_tokinfo.get(txid, None):
                     from .slp import SlpMessage
                     slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
                     tti = { 'type':'SLP%d'%(slpMsg.token_type,),
                         'transaction_type':slpMsg.transaction_type,
-                        'token_id': tx.txid(),
+                        'token_id': txid,
                         'validity': 0,
                     }
-                    wallet.tx_tokinfo[tx.txid()] = tti
+                    wallet.tx_tokinfo[txid] = tti
             wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             self.genesis_tx = tx
             if done_callback:
@@ -348,21 +349,22 @@ class Validator_NFT1(ValidatorGeneric):
                 raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
+            txid = tx.txid_fast()
             wallet = self.wallet
             with wallet.lock, wallet.transaction_lock:
-                if not wallet.transactions.get(tx.txid(), None):
-                    wallet.transactions[tx.txid()] = tx
-                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                if not wallet.transactions.get(txid, None):
+                    wallet.transactions[txid] = tx
+                if not wallet.tx_tokinfo.get(txid, None):
                     slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
                     tti = { 'type':'SLP%d'%(slpMsg.token_type,),
                         'transaction_type':slpMsg.transaction_type,
                         'validity': 0,
                     }
                     if slpMsg.transaction_type == 'GENESIS':
-                        tti['token_id'] = tx.txid()
+                        tti['token_id'] = txid
                     else:
                         tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
-                    wallet.tx_tokinfo[tx.txid()] = tti
+                    wallet.tx_tokinfo[txid] = tti
             wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             self.nft_parent_tx = tx
             if done_callback:
@@ -377,21 +379,21 @@ class Validator_NFT1(ValidatorGeneric):
         def callback(job):
             (txid,node), = job.nodes.items()
             val = node.validity
-            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid()]['token_id']
+            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['token_id']
             if not wallet.token_types.get(group_id, None):
-                name = wallet.token_types[self.genesis_tx.txid()]['name'] + '-parent'
+                name = wallet.token_types[self.genesis_tx.txid_fast()]['name'] + '-parent'
                 #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
                 parent_entry = dict({'class':'SLP129','name':name,'decimals':0}) # TODO: handle case where decimals is not 0
                 wallet.add_token_type(group_id, parent_entry)
             with wallet.lock, wallet.transaction_lock:
-                wallet.token_types[self.genesis_tx.txid()]['group_id'] = group_id
-                wallet.tx_tokinfo[self.nft_parent_tx.txid()]['validity'] = val
-                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = val
+                wallet.token_types[self.genesis_tx.txid_fast()]['group_id'] = group_id
+                wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['validity'] = val
+                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = val
             wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
-                ui_cb(self.genesis_tx.txid(), val)
+                ui_cb(self.genesis_tx.txid_fast(), val)
             if done_callback:
                 done_callback(val)
 
@@ -404,11 +406,11 @@ class Validator_NFT1(ValidatorGeneric):
             warnings.warn("Graph Context is None, JobManager was killed")
         else:
             with wallet.lock, wallet.transaction_lock:
-                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4
+                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = 4
             wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
             ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
             if ui_cb:
-                ui_cb(self.genesis_tx.txid(), 4)
+                ui_cb(self.genesis_tx.txid_fast(), 4)
             if done_callback:
                 done_callback(4)
 

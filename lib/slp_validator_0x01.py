@@ -86,7 +86,7 @@ class GraphContext:
         slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
         if slpMsg.transaction_type == 'GENESIS':
-            token_id_hex = tx.txid()
+            token_id_hex = tx.txid_fast()
         elif slpMsg.transaction_type in ('MINT', 'SEND'):
             token_id_hex = slpMsg.op_return_fields['token_id_hex']
         else:
@@ -130,7 +130,7 @@ class GraphContext:
         except (SlpParsingError, IndexError):
             return
 
-        txid = tx.txid()
+        txid = tx.txid_fast()
 
         num_proxy_requests = 0
         proxyqueue = queue.Queue()
@@ -254,7 +254,7 @@ class Validator_SLP1(ValidatorGeneric):
             # outputs straight from the token amounts
             outputs = slpMsg.op_return_fields['token_output']
         elif slpMsg.transaction_type == 'GENESIS':
-            token_id_hex = tx.txid()
+            token_id_hex = tx.txid_fast()
 
             vin_mask = (False,)*len(tx.inputs()) # don't need to examine any inputs.
 

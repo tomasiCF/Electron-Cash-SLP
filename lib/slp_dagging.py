@@ -328,7 +328,7 @@ class ValidationJob:
 
         def dl_callback(tx):
             #will be called by self.get_txes
-            txid = tx.txid()
+            txid = tx.txid_fast()
             node = self.graph.get_node(txid)
             try:
                 val = self.validitycache[txid]
@@ -419,7 +419,7 @@ class ValidationJob:
             cached = list(self.fetch_hook(txid_set))
             for tx in cached:
                 # remove known txes from list
-                txid = tx.txid()
+                txid = tx.txid_fast()
                 txid_set.remove(txid)
         else:
             cached = []
@@ -455,7 +455,7 @@ class ValidationJob:
             raw = resp.get('result')
             self.downloads += 1
             tx = Transaction(raw)
-            txid = tx.txid()
+            txid = tx.txid_fast()
             try:
                 txid_set.remove(txid)
             except KeyError:
@@ -846,8 +846,8 @@ class Node:
         if not self.waiting:
             raise DoubleLoadException(self)
 
-        if tx.txid() != self.txid:
-            raise ValueError("TXID mismatch", tx.txid(), self.txid)
+        if tx.txid_fast() != self.txid:
+            raise ValueError("TXID mismatch", tx.txid_fast(), self.txid)
 
         validator = self.graph.validator
         ret = validator.get_info(tx)
