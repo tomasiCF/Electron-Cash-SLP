@@ -45,7 +45,7 @@ class GraphContext:
         self._create_job_mgr()
 
     def _create_job_mgr(self):
-        self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager', graph_db=self)
+        self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager', graph_context=self)
 
     def get_graph(self, token_id_hex, token_type):
         with self.graph_db_lock:
@@ -396,9 +396,12 @@ class Validator_NFT1(ValidatorGeneric):
                 done_callback(val)
 
         tx = self.nft_parent_tx
-        job = self.validation_jobmgr.graph_db and self.validation_jobmgr.graph_db.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
+        job = self.validation_jobmgr.graph_context and self.validation_jobmgr.graph_context.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)
+        elif self.validation_jobmgr.graph_context is None:
+            # FIXME?
+            warnings.warn("Graph Context is None, JobManager was killed")
         else:
             with wallet.lock, wallet.transaction_lock:
                 wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4

@@ -475,9 +475,9 @@ class ValidationJobManager:
     """
     A single thread that processes validation jobs sequentially.
     """
-    def __init__(self, threadname="ValidationJobManager", graph_db=None):
+    def __init__(self, threadname="ValidationJobManager", graph_context=None):
         # ---
-        self.graph_db = graph_db
+        self.graph_context = graph_context
         self.jobs_lock = threading.Lock()
         self.job_current = None
         self.jobs_pending  = []   # list of jobs waiting to run.
@@ -542,7 +542,7 @@ class ValidationJobManager:
             self.job_current.stop()
         except:
             pass
-        self.graph_db = None
+        self.graph_context = None
 
     def mainloop(self,):
         try:
