@@ -501,8 +501,8 @@ class ValidationJobManager:
         self.job_current = None
         self.jobs_pending  = []   # list of jobs waiting to run.
         self.jobs_finished = weakref.WeakSet()   # set of jobs finished normally.
-        self.jobs_stopped = weakref.WeakSet()  # set of jobs stopped by calling .stop()
-        self.jobs_paused   = []   # list of jobs that stopped without finishing.
+        self.jobs_stopped = weakref.WeakSet()  # set of jobs stopped by calling .stop(), or that terminated abnormally with an error and/or crash
+        self.jobs_paused   = []   # list of jobs that stopped by calling .pause()
         self.all_jobs = weakref.WeakSet()
         self.wakeup = threading.Event()  # for kicking the mainloop to wake up if it has fallen asleep
         # ---
@@ -612,15 +612,16 @@ class ValidationJobManager:
                     print("vvvvv validation job error traceback", file=sys.stderr)
                     traceback.print_exc()
                     print("^^^^^ validation job %r error traceback"%(self.job_current,), file=sys.stderr)
-                    self.jobs_paused.append(self.job_current)
+                    self.jobs_stopped.add(self.job_current)
                 else:
-                    if retval is True:
-                        self.jobs_finished.add(self.job_current)
-                    elif retval == 'stopped':
-                        self.jobs_stopped.add(self.job_current)
-                    else:
-                        self.jobs_paused.append(self.job_current)
-                    self.job_current = None
+                    with self.jobs_lock:
+                        if retval is True:
+                            self.jobs_finished.add(self.job_current)
+                        elif retval == 'paused':
+                            self.jobs_paused.append(self.job_current)
+                        else:
+                            self.jobs_stopped.add(self.job_current)
+                        self.job_current = None
         except:
             traceback.print_exc()
             print("Thread %s crashed :("%(self.thread.name,), file=sys.stderr)
