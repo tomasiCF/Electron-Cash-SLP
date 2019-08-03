@@ -90,7 +90,6 @@ class ValidatorGeneric(ABC):
         Pruning is done by replacing node references with prunednodes[validity] .
         These will provide None as info for children.
         """
-        raise NotImplementedError
 
     @abstractmethod
     def check_needed(self, myinfo, out_n):
@@ -103,7 +102,6 @@ class ValidatorGeneric(ABC):
         Here we pass in `myinfo` from the tx, and `out_n` from the input
         tx's get_info(); if it was pruned then `out_n` will be None.
         """
-        raise NotImplementedError
 
     @abstractmethod
     def validate(self, myinfo, inputs_info):
@@ -136,7 +134,6 @@ class ValidatorGeneric(ABC):
         Typically (False, 2) and (True, 1) but you *could* use (True, 2)
         if it's necessary for children to know info from invalid parents.
         """
-        raise NotImplementedError
 
 
 ########
@@ -219,10 +216,13 @@ class ValidationJob:
                 state = 'stopped:%r'%(self.stop_reason,)
             except AttributeError:
                 state = 'waiting'
-        return "<%s object (%s) for txids=%r>"%(type(self).__qualname__, state, self.txids)
+        return "<%s object (%s) for txids=%r ref=%r>"%(type(self).__qualname__, state, self.txids, self.ref and self.ref())
 
     def belongs_to(self, ref):
         return ref is (self.ref and self.ref())
+
+    def has_txid(self, txid):
+        return txid in self.txids
 
     ## Job state management
 
@@ -522,28 +522,41 @@ class ValidationJobManager:
             self.jobs_pending.append(job)
         self.wakeup.set()
 
+    def _stop_all_common(self, job):
+        ''' Private method, properly stops a job (even if paused or pending),
+        checking the appropriate lists. Returns 1 on success or 0 if job was
+        not found in the appropriate lists.'''
+        if job.stop():
+            return 1
+        else:
+            # Job wasn't running -- try and remove it from the
+            # pending and paused lists
+            try:
+                self.jobs_pending.remove(job)
+                return 1
+            except ValueError:
+                pass
+            try:
+                self.jobs_paused.remove(job)
+                return 1
+            except ValueError:
+                pass
+        return 0
+
     def stop_all_for(self, ref):
         ctr = 0
         with self.jobs_lock:
             for job in list(self.all_jobs):
                 if job.belongs_to(ref):
-                    if job.stop():
-                        ctr += 1
-                    else:
-                        # Job wasn't running -- try and remove it from the
-                        # pending and paused lists
-                        try:
-                            self.jobs_pending.remove(job)
-                            ctr += 1
-                            continue
-                        except ValueError:
-                            pass
-                        try:
-                            self.jobs_paused.remove(job)
-                            ctr += 1
-                            continue
-                        except ValueError:
-                            pass
+                    ctr += self._stop_all_common(job)
+        return ctr
+
+    def stop_all_with_txid(self, txid):
+        ctr = 0
+        with self.jobs_lock:
+            for job in list(self.all_jobs):
+                if job.has_txid(txid):
+                    ctr += self._stop_all_common(job)
         return ctr
 
     def pause_job(self, job):

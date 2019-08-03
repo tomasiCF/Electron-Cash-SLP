@@ -682,11 +682,9 @@ class Commands(PrintError):
         from . import slp_validator_0x01, slp_validator_0x01_nft1
         from .slp_validator_0x01_nft1 import Validator_NFT1
         from .slp import SlpMessage
-        from .slp_dagging import ValidationJobManager
         from queue import Queue, Empty
 
         graph_db, graph_db_nft1 = slp_validator_0x01.GraphContext(), slp_validator_0x01_nft1.GraphContext_NFT1()
-        job_mgr, job_mgr_nft = (graph_db.job_mgr, graph_db_nft1.job_mgr)
 
 
         q = Queue()

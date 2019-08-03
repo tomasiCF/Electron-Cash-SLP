@@ -6,7 +6,7 @@ This uses the graph searching mechanism from slp_dagging.py
 
 import threading
 import queue
-import warnings
+from typing import Tuple
 
 from .transaction import Transaction
 from .simple_config import get_config
@@ -21,22 +21,50 @@ from . import slp_proxying # loading this module starts a thread.
 proxy = slp_proxying.tokengraph_proxy
 
 class GraphContext:
-    ''' Instance of the DAG cache '''
+    ''' Instance of the DAG cache. Uses a single per-instance
+    ValidationJobManager to validate SLP tokens if is_multi=False.
 
-    def __init__(self, name='GraphContext'):
+    If is_multi=True, will create 1 job manager (thread) per token_id it is
+    validating. '''
+
+    def __init__(self, name='GraphContext', is_multi=False):
         # Global db for shared graphs (each token_id_hex has its own graph).
         self.graph_db_lock = threading.Lock()
         self.graph_db = dict()   # token_id_hex -> TokenGraph
+        self.is_multi = is_multi
+        self.job_mgrs = dict()   # token_id_hex -> ValidationJobManager (only used if is_multi)
         self.name = name
-        self._create_job_mgr()
+        self._setup_job_mgr()
 
-    def _create_job_mgr(self):
-        self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager')
+    def _setup_job_mgr(self):
+        if self.is_multi:
+            self.job_mgr = None
+        else:
+            self.job_mgr = self._new_job_mgr()
 
-    def get_graph(self, token_id_hex):
+    def _new_job_mgr(self, suffix='') -> ValidationJobManager:
+        return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}')
+
+    def _get_or_make_mgr(self, token_id_hex: str) -> ValidationJobManager:
+        ''' Helper: This must be called with self.graph_db_lock held.
+        Creates a new job manager for token_id_hex if is_multi=True and one
+        doesn't already exist, and returns it.
+
+        Returns self.job_mgr if is_multi=False. '''
+        job_mgr = self.job_mgr or self.job_mgrs.get(token_id_hex) or self._new_job_mgr(token_id_hex[:4])
+        if job_mgr is not self.job_mgr:
+            # was an is_multi setup
+            assert not self.job_mgr and self.is_multi and job_mgr
+            self.job_mgrs[token_id_hex] = job_mgr
+        return job_mgr
+
+    def get_graph(self, token_id_hex) -> Tuple[TokenGraph, ValidationJobManager]:
+        ''' Returns an existing or new graph for a particular token.
+        A new job manager is created for that token if self.is_multi=True,
+        otherwise the shared job manager is used.'''
         with self.graph_db_lock:
             try:
-                return self.graph_db[token_id_hex]
+                return self.graph_db[token_id_hex], self._get_or_make_mgr(token_id_hex)
             except KeyError:
                 pass
 
@@ -44,30 +72,43 @@ class GraphContext:
 
             graph = TokenGraph(val)
 
-
             self.graph_db[token_id_hex] = graph
 
-            return graph
+            return graph, self._get_or_make_mgr(token_id_hex)
 
     def kill_graph(self, token_id_hex):
+        ''' Reset a graph. This will stop all the jobs for that token_id_hex. '''
         with self.graph_db_lock:
             try:
                 graph = self.graph_db.pop(token_id_hex)
+                job_mgr = self.job_mgrs.pop(token_id_hex, None)
             except KeyError:
                 return
-        #if jobmgr != shared_jobmgr:
-        #    jobmgr.kill()
+        if job_mgr:
+            assert job_mgr is not self.job_mgr
+            job_mgr.kill()
+        elif self.job_mgr:
+            # todo: see if we can put this in the above 'with' block (while
+            # holding locks). I was hesitant to do so for fear of deadlocks.
+            self.job_mgr.stop_all_with_txid(token_id_hex)
+
         graph.reset()
 
     def kill(self):
+        ''' Kills all jobs and resets this instance to the state it had
+        when freshly constructed '''
         with self.graph_db_lock:
             for token_id_hex, graph in self.graph_db.items():
                 graph.reset()
+                job_mgr = self.job_mgrs.pop(token_id_hex, None)
+                if job_mgr: job_mgr.kill()
             self.graph_db.clear()
-        self.job_mgr.kill()
-        self._create_job_mgr()  # re-create a new, clean instance
+            self.job_mgrs.clear()
+        if self.job_mgr:
+            self.job_mgr.kill()
+            self._setup_job_mgr()  # re-create a new, clean instance, if needed
 
-    def setup_job(self, tx, reset=False):
+    def setup_job(self, tx, reset=False) -> Tuple[TokenGraph, ValidationJobManager]:
         """ Perform setup steps before validation for a given transaction. """
         slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
@@ -78,18 +119,18 @@ class GraphContext:
         else:
             return None
 
-        if reset:
-            warnings.warn("setup_job with reset is unstable and/or not well specified")
+        if reset and not self.is_multi:
             try:
                 self.kill_graph(token_id_hex)
             except KeyError:
                 pass
 
-        graph = self.get_graph(token_id_hex)
+        graph, job_mgr = self.get_graph(token_id_hex)
 
-        return graph
+        return graph, job_mgr
 
-    def get_validation_config(self):
+    @staticmethod
+    def get_validation_config():
         config = get_config()
         if config:
             limit_dls   = config.get('slp_validator_download_limit', None)
@@ -103,7 +144,7 @@ class GraphContext:
         return limit_dls, limit_depth, proxy_enable
 
 
-    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
+    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
         """
         Basic validation job maker for a single transaction.
         Creates job and starts it running in the background thread.
@@ -115,7 +156,7 @@ class GraphContext:
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
-            graph = self.setup_job(tx, reset=reset)
+            graph, job_mgr = self.setup_job(tx, reset=reset)
         except (SlpParsingError, IndexError):
             return
 
@@ -147,13 +188,6 @@ class GraphContext:
                 num_proxy_requests += 1
             return l
 
-        job = ValidationJob(graph, [txid], network,
-                            fetch_hook=fetch_hook,
-                            validitycache=wallet.slpv1_validity,
-                            download_limit=limit_dls,
-                            depth_limit=limit_depth,
-                            debug=debug, ref=wallet,
-                            **kwargs)
         def done_callback(job):
             # wait for proxy stuff to roll in
             results = {}
@@ -175,14 +209,34 @@ class GraphContext:
                 val = n.validity
                 if val != 0:
                     wallet.slpv1_validity[t] = val
+
+
+        job = ValidationJob(graph, [txid], network,
+                            fetch_hook=fetch_hook,
+                            validitycache=wallet.slpv1_validity,
+                            download_limit=limit_dls,
+                            depth_limit=limit_depth,
+                            debug=debug, ref=wallet,
+                            **kwargs)
         job.add_callback(done_callback)
 
-        self.job_mgr.add_job(job)
+        job_mgr.add_job(job)
 
         return job
 
     def stop_all_for_wallet(self, wallet):
-        return self.job_mgr.stop_all_for(wallet)
+        ''' Stops all extant jobs for a particular wallet. This method is
+        intended to be called on wallet close so that all the work that
+        particular wallet enqueued can get cleaned up. This method properly
+        supports both is_multi and single mode. '''
+        if self.job_mgr:
+            # single job manager mode
+            return self.job_mgr.stop_all_for(wallet)
+        else:
+            # multi job-manager mode, iterate over all extant job managers
+            with self.graph_db_lock:
+                for txid, job_mgr in self.job_mgrs.items():
+                    job_mgr.stop_all_for(wallet)
 
 
 # App-wide instance. Wallets share the results of the DAG lookups.
@@ -192,7 +246,7 @@ class GraphContext:
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext()
+shared_context = GraphContext(is_multi=False)  # <-- Set is_multi=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

@@ -11,7 +11,6 @@ import json
 
 from lib import slp
 from lib import slp_validator_0x01
-from lib import slp_dagging
 
 import requests
 import os
@@ -151,7 +150,7 @@ class SLPConsensusTests(unittest.TestCase):
                 txid = d['txid']
                 with self.subTest(description=description, i=i):
                     try:
-                        graph = graph_context.setup_job(txes[txid], reset=True)
+                        graph, job_mgr = graph_context.setup_job(txes[txid], reset=True)
                     except slp.SlpInvalidOutputMessage: # If output 0 is not OP_RETURN
                         self.assertEqual(d['valid'], False)
                         continue
@@ -173,7 +172,7 @@ class SLPConsensusTests(unittest.TestCase):
                         #job.debugging_graph_state = True
                     q = Queue()
                     job.add_callback(q.put)
-                    graph_context.job_mgr.add_job(job)
+                    job_mgr.add_job(job)
                     try:
                         q.get(timeout=3) # unlimited timeout
                     except Empty:

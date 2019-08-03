@@ -67,7 +67,6 @@ from .contacts import Contacts
 
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpNoMintingBatonFound
 from . import slp_validator_0x01, slp_validator_0x01_nft1
-from .slp_dagging import ValidationJobManager
 
 def _(message): return message
 

@@ -6,6 +6,7 @@ This uses the graph searching mechanism from slp_dagging.py
 
 import threading
 import queue
+from typing import Tuple
 import warnings
 
 from .transaction import Transaction
@@ -17,18 +18,19 @@ from .util import print_error
 from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
 
 class GraphContext_NFT1(GraphContext):
-    ''' Instance of the NFT1 DAG cache '''
+    ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
+    ValidationJobManager to validate SLP tokens.  '''
 
-    def __init__(self, name="GraphContext_NFT1"):
-        super().__init__(name=name)
+    def __init__(self, name="GraphContext_NFT1", is_multi=False):
+        super().__init__(name=name, is_multi=is_multi)
 
-    def _create_job_mgr(self):
-        self.job_mgr = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager', graph_context=self)
+    def _new_job_mgr(self, suffix='') -> ValidationJobManager:
+        return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self)
 
-    def get_graph(self, token_id_hex, token_type):
+    def get_graph(self, token_id_hex, token_type) -> Tuple[TokenGraph, ValidationJobManager]:
         with self.graph_db_lock:
             try:
-                return self.graph_db[token_id_hex]
+                return self.graph_db[token_id_hex], self._get_or_make_mgr(token_id_hex)
             except KeyError:
                 pass
 
@@ -41,10 +43,10 @@ class GraphContext_NFT1(GraphContext):
 
             self.graph_db[token_id_hex] = graph
 
-            return graph
+            return graph, self._get_or_make_mgr(token_id_hex)
 
 
-    def setup_job(self, tx, reset=False):
+    def setup_job(self, tx, reset=False) -> Tuple[TokenGraph, ValidationJobManager]:
         """ Perform setup steps before validation for a given transaction. """
         slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
@@ -59,18 +61,17 @@ class GraphContext_NFT1(GraphContext):
             return None
 
         if reset:
-            warnings.warn("setup_job with reset is unstable and/or not well specified")
             try:
                 self.kill_graph(token_id_hex)
             except KeyError:
                 pass
 
-        graph = self.get_graph(token_id_hex, slpMsg.token_type)
+        graph, job_mgr = self.get_graph(token_id_hex, slpMsg.token_type)
 
-        return graph
+        return graph, job_mgr
 
 
-    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
+    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
         """
         Basic validation job maker for a single transaction.
         Creates job and starts it running in the background thread.
@@ -82,7 +83,7 @@ class GraphContext_NFT1(GraphContext):
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
-            graph = self.setup_job(tx, reset=reset)
+            graph, job_mgr = self.setup_job(tx, reset=reset)
         except (SlpParsingError, IndexError):
             return
 
@@ -118,15 +119,6 @@ class GraphContext_NFT1(GraphContext):
                 num_proxy_requests += 1
             return l
 
-        job = ValidationJob(graph, [txid], network,
-                            fetch_hook=fetch_hook,
-                            validitycache=None, #wallet.slpv1_validity,
-                            download_limit=limit_dls,
-                            depth_limit=limit_depth,
-                            debug=debug,
-                            was_reset=reset,
-                            ref=wallet,
-                            **kwargs)
         def done_callback(job):
             # wait for proxy stuff to roll in
             results = {}
@@ -148,9 +140,20 @@ class GraphContext_NFT1(GraphContext):
                 val = n.validity
                 if val != 0:
                     wallet.slpv1_validity[t] = val
+
+
+        job = ValidationJob(graph, [txid], network,
+                            fetch_hook=fetch_hook,
+                            validitycache=None, #wallet.slpv1_validity,
+                            download_limit=limit_dls,
+                            depth_limit=limit_depth,
+                            debug=debug,
+                            was_reset=reset,
+                            ref=wallet,
+                            **kwargs)
         job.add_callback(done_callback)
 
-        self.job_mgr.add_job(job)
+        job_mgr.add_job(job)
 
         return job
 
