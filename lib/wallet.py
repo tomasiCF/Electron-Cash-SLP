@@ -1924,33 +1924,29 @@ class Abstract_Wallet(PrintError):
     def start_threads(self, network):
         self.network = network
         if self.network is not None:
-            self.prepare_for_verifier()
-            self.verifier = SPV(self.network, self)
-            self.synchronizer = Synchronizer(self, network)
-            finalization_print_error(self.verifier, "[{}.{}] finalized".format(self.diagnostic_name(), self.verifier.diagnostic_name()))
-            finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
-            network.add_jobs([self.verifier, self.synchronizer])
             if self.is_slp:
+                # Note: it's important that SLP data structures are defined
+                # before the network (SPV/Synchronizer) callbacks are installed
+                # otherwise we may receive a tx from the network thread
+                # before SLP objects are properly constructed.
                 self.slp_graph_0x01 = slp_validator_0x01.shared_context
                 # For now, NFT validation uses a per-wallet instance until we
                 # iron out some of the bugs.
                 self.slp_graph_0x01_nft = slp_validator_0x01_nft1.GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
                 self.activate_slp()
                 self.network.register_callback(self._slp_callback_on_status, ['status'])
+            self.prepare_for_verifier()
+            self.verifier = SPV(self.network, self)
+            self.synchronizer = Synchronizer(self, network)
+            finalization_print_error(self.verifier, "[{}.{}] finalized".format(self.diagnostic_name(), self.verifier.diagnostic_name()))
+            finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
+            network.add_jobs([self.verifier, self.synchronizer])
         else:
             self.verifier = None
             self.synchronizer = None
 
     def stop_threads(self):
         if self.network:
-            if self.is_slp:
-                self.network.unregister_callback(self._slp_callback_on_status)
-                n_stopped = self.slp_graph_0x01.stop_all_for_wallet(self)
-                self.print_error("Stopped", n_stopped, "slp_0x01 jobs")
-                #n_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
-                #self.print_error("Stopped", n_stopped, "slp_0x01_nft jobs")
-                self.slp_graph_0x01_nft.kill()
-                self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
             # Note: syncrhonizer and verifier will remove themselves from the
             # network thread the next time they run, as a result of the below
             # release() calls.
@@ -1964,6 +1960,16 @@ class Abstract_Wallet(PrintError):
             self.verifier = None
             # Now no references to the syncronizer or verifier
             # remain so they will be GC-ed
+            if self.is_slp:
+                # NB: it's important this be done here after network
+                # callbacks are torn down in the above lines.
+                self.network.unregister_callback(self._slp_callback_on_status)
+                n_stopped = self.slp_graph_0x01.stop_all_for_wallet(self)
+                self.print_error("Stopped", n_stopped, "slp_0x01 jobs")
+                #n_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
+                #self.print_error("Stopped", n_stopped, "slp_0x01_nft jobs")
+                self.slp_graph_0x01_nft.kill()
+                self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
             self.storage.put('stored_height', self.get_local_height())
         self.save_transactions()
         self.save_verified_tx()
