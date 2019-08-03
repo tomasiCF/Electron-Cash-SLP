@@ -1932,10 +1932,9 @@ class Abstract_Wallet(PrintError):
             finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
             network.add_jobs([self.verifier, self.synchronizer])
             if self.is_slp:
-                # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
-                slp_validator_0x01.setup_config(self.network.config)
-                slp_validator_0x01_nft1.setup_config(self.network.config)
                 self.slp_graph_0x01 = slp_validator_0x01.shared_context
+                # For now, NFT validation uses a per-wallet instance until we
+                # iron out some of the bugs.
                 self.slp_graph_0x01_nft = slp_validator_0x01_nft1.GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
                 self.activate_slp()
                 self.network.register_callback(self._slp_callback_on_status, ['status'])

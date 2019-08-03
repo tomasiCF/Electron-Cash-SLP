@@ -9,6 +9,7 @@ import queue
 import warnings
 
 from .transaction import Transaction
+from .simple_config import get_config
 from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
@@ -17,22 +18,7 @@ from .util import print_error
 
 from . import slp_proxying # loading this module starts a thread.
 
-
-proxy, config = None, None
-
-def setup_config(config_set):
-    """ Called by wallet.py as part of network setup.
-
-    - Limits on downloading DAG.
-    - Proxy requests.
-    """
-    global proxy
-    global config
-
-    proxy = slp_proxying.tokengraph_proxy
-    config = config_set
-
-
+proxy = slp_proxying.tokengraph_proxy
 
 class GraphContext:
     ''' Instance of the DAG cache '''
@@ -104,6 +90,7 @@ class GraphContext:
         return graph
 
     def get_validation_config(self):
+        config = get_config()
         if config:
             limit_dls   = config.get('slp_validator_download_limit', None)
             limit_depth = config.get('slp_validator_depth_limit', None)
@@ -119,12 +106,11 @@ class GraphContext:
     def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
         """
         Basic validation job maker for a single transaction.
-
         Creates job and starts it running in the background thread.
+        Returns job, or None if it was not a validatable type.
 
-        Before calling this you have to call setup_config().
-
-        Returns job, or None if it was not a validatable type
+        Note that the app-global 'config' object from simpe_config should be
+        defined before this is called.
         """
         # This should probably be redone into a class, it is getting messy.
 

@@ -14,25 +14,7 @@ from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInv
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
-from .slp_validator_0x01 import Validator_SLP1, GraphContext
-
-from . import slp_proxying # loading this module starts a thread.
-
-
-proxy, config = None, None
-
-def setup_config(config_set):
-    """ Called by wallet.py as part of network setup.
-
-    - Limits on downloading DAG.
-    - Proxy requests.
-    """
-    global proxy
-    global config
-
-    proxy = slp_proxying.tokengraph_proxy
-    config = config_set
-
+from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
 
 class GraphContext_NFT1(GraphContext):
     ''' Instance of the NFT1 DAG cache '''
@@ -93,8 +75,6 @@ class GraphContext_NFT1(GraphContext):
         Basic validation job maker for a single transaction.
 
         Creates job and starts it running in the background thread.
-
-        Before calling this you have to call setup_config().
 
         Returns job, or None if it was not a validatable type
         """
@@ -318,7 +298,7 @@ class Validator_NFT1(ValidatorGeneric):
                         'validity': 0,
                     }
                     wallet.tx_tokinfo[txid] = tti
-            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
+                wallet.save_transactions()
             self.genesis_tx = tx
             if done_callback:
                 done_callback()
@@ -347,7 +327,7 @@ class Validator_NFT1(ValidatorGeneric):
                     else:
                         tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
                     wallet.tx_tokinfo[txid] = tti
-            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
+                wallet.save_transactions()
             self.nft_parent_tx = tx
             if done_callback:
                 done_callback()
@@ -371,7 +351,7 @@ class Validator_NFT1(ValidatorGeneric):
                 wallet.token_types[self.genesis_tx.txid_fast()]['group_id'] = group_id
                 wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['validity'] = val
                 wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = val
-            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
+                wallet.save_transactions()
             ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
@@ -389,8 +369,8 @@ class Validator_NFT1(ValidatorGeneric):
         else:
             with wallet.lock, wallet.transaction_lock:
                 wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = 4
-            wallet.save_transactions(True)  # FIXME: You can't save to storage in anything but the daemon thread
-            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+                wallet.save_transactions()
+            ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(self.genesis_tx.txid_fast(), 4)
             if done_callback:
