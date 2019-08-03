@@ -73,13 +73,12 @@ class GraphContext_NFT1(GraphContext):
     def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
         """
         Basic validation job maker for a single transaction.
-
         Creates job and starts it running in the background thread.
+        Returns job, or None if it was not a validatable type.
 
-        Returns job, or None if it was not a validatable type
+        Note that the app-global 'config' object from simpe_config should be
+        defined before this is called.
         """
-        # This should probably be redone into a class, it is getting messy.
-
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
@@ -162,7 +161,7 @@ class GraphContext_NFT1(GraphContext):
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-#shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instaed use a per-wallet context.
+#shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instead use a per-wallet context.
 
 class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

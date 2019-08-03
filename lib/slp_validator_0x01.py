@@ -112,8 +112,6 @@ class GraphContext:
         Note that the app-global 'config' object from simpe_config should be
         defined before this is called.
         """
-        # This should probably be redone into a class, it is getting messy.
-
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
 
         try:
