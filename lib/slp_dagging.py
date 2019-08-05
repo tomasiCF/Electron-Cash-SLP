@@ -198,10 +198,8 @@ class ValidationJob:
         self.txids = tuple(txids)
         self.network = network
         self.fetch_hook = fetch_hook
-        self.graph_search_running = False
-        self.graph_search_complete = False
+        self.graph_search_job = None
         self.graph_search_skipped = False
-        self.graph_search_fail = None
         self.validitycache = {} if validitycache is None else validitycache
         self.download_limit = download_limit
         if depth_limit is None:
@@ -458,7 +456,7 @@ class ValidationJob:
         #search_id = ''.join(list(self.txids)) + "_" + str(self.currentdepth)
         # first try to get from cache
         if self.fetch_hook:
-            txns_cache, cache_source = self.fetch_hook(txid_set, self)
+            txns_cache = self.fetch_hook(txid_set, self)
             cached = list(txns_cache)
             for tx in cached:
                 # remove known txes from list
@@ -466,7 +464,6 @@ class ValidationJob:
                 txid_set.remove(txid)
         else:
             cached = []
-            cache_source = dict()
 
         # Graph Search Hack
         # =====
@@ -476,10 +473,7 @@ class ValidationJob:
         #
         #   This optimization requires all cache item source are equal to "graph_search"
         # 
-        if self.graph_search_complete and \
-                len(set(cache_source.values())) == 1 and \
-                next(iter(cache_source.values())) == 'graph_search':
-            # processing cached txes.
+        if self.graph_search_job and self.graph_search_job.search_success:
             for tx in cached:
                 dl_callback(tx)
             for txid in txid_set:

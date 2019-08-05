@@ -18,7 +18,7 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
+from .slp_graph_search import SlpGraphSearch # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
@@ -133,23 +133,32 @@ class GraphContext(PrintError):
         graph, job_mgr = self.get_graph(token_id_hex)
 
         return graph, job_mgr
-        
+
     @staticmethod
     def get_validation_config():
         config = get_config()
         try:
-            network.slpdb_host = config.get('slpdb_host', None)
-            graphsearch_enable = config.get('slp_validator_graphsearch_enabled', False)
             limit_dls   = config.get('slp_validator_download_limit', None)
             limit_depth = config.get('slp_validator_depth_limit', None)
             proxy_enable = config.get('slp_validator_proxy_enabled', False)
-            graphsearch_enable = config.get('slp_validator_graphsearch_enabled', True)
         except NameError: # in daemon mode (no GUI) 'config' is not defined
             limit_dls = None
             limit_depth = None
             proxy_enable = False
 
         return limit_dls, limit_depth, proxy_enable
+
+    @staticmethod
+    def get_gs_config():
+        config = get_config()
+        try:
+            gs_enable = config.get('slp_validator_graphsearch_enabled', False)
+            gs_host = config.get('slpdb_host', None)
+        except NameError: # in daemon mode (no GUI) 'config' is not defined
+            gs_enable = False
+            gs_host = None
+
+        return gs_enable, gs_host
 
 
     def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
@@ -162,6 +171,8 @@ class GraphContext(PrintError):
         defined before this is called.
         """
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
+        gs_enable, gs_host = self.get_gs_config()
+        network.slpdb_host = gs_host
 
         try:
             graph, job_mgr = self.setup_job(tx, reset=reset)
@@ -183,31 +194,27 @@ class GraphContext(PrintError):
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
             
-        def fetch_hook(txids, job):
+        def fetch_hook(txids, val_job):
             l = []
-            source = dict()
-
-            if graphsearch_enable:
-                if not job.graph_search_running and not job.graph_search_skipped and network.slpdb_host:
-                    job.graph_search_running = True
-                    graphsearch = slp_graph_search.SlpGraphSearch(network, wallet)
-                    graphsearch.add_search_job(txids, validation_job=job)
-                elif not job.graph_search_running and not job.graph_search_skipped:
-                    print("[SLP Graph Search] Skipping graph search since no network selected.")
-                    job.graph_search_skipped = True
+            nonlocal gs_enable, gs_host
+            if gs_enable and gs_host and not val_job.graph_search_job:
+                val_job.graph_search_running = True
+                gs = SlpGraphSearch.new_search(val_job.txids, network=network, wallet=wallet)
+                val_job.graph_search_job = gs
+            elif not val_job.graph_search_job:
+                gs_enable, gs_host = self.get_gs_config()
+                network.slpdb_host = gs_host
 
             for txid in txids:
-                txn = slp_graph_search.SlpGraphSearch.tx_cache_get(txid)
+                txn = SlpGraphSearch.tx_cache_get(txid)
                 if txn:
                     l.append(txn)
-                    source[txid] = 'graph_search'
                 else:
                     try:
                         l.append(wallet.transactions[txid])
-                        source[txid] = 'wallet'
                     except KeyError:
                         pass
-
+            return l
 
         def done_callback(job):
             # wait for proxy stuff to roll in
