@@ -8,6 +8,7 @@ import threading
 import queue
 from typing import Tuple
 import warnings
+import weakref
 
 from .transaction import Transaction
 from . import slp
@@ -25,7 +26,9 @@ class GraphContext_NFT1(GraphContext):
         super().__init__(name=name, is_parallel=is_parallel)
 
     def _new_job_mgr(self, suffix='') -> ValidationJobManager:
-        return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self)
+        ret = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self, exit_when_done=self.is_parallel)
+        weakref.finalize(ret, print_error, f'{ret.threadname} finalized')
+        return ret
 
     def get_graph(self, token_id_hex, token_type) -> Tuple[TokenGraph, ValidationJobManager]:
         with self.graph_db_lock:

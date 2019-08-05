@@ -27,6 +27,7 @@ import weakref
 import collections
 from abc import ABC, abstractmethod
 from .transaction import Transaction
+from .util import PrintError
 
 INF_DEPTH=2147483646  # 'infinity' value for node depths. 2**31 - 2
 
@@ -206,6 +207,8 @@ class ValidationJob:
         self.debug = debug
         self.was_reset = was_reset # used only by NFT1
 
+        self.exited = threading.Event()
+
         self._statelock = threading.Lock()
 
     def __repr__(self,):
@@ -243,6 +246,7 @@ class ValidationJob:
             retval = 'crashed'
             raise
         finally:
+            self.exited.set()
             with self._statelock:
                 self.stop_reason = retval
                 self.running = False
@@ -490,11 +494,11 @@ class ValidationJob:
         return txid_set
 
 
-class ValidationJobManager:
+class ValidationJobManager(PrintError):
     """
     A single thread that processes validation jobs sequentially.
     """
-    def __init__(self, threadname="ValidationJobManager", graph_context=None):
+    def __init__(self, threadname="ValidationJobManager", graph_context=None, exit_when_done=False):
         # ---
         self.graph_context = graph_context
         self.jobs_lock = threading.Lock()
@@ -505,13 +509,22 @@ class ValidationJobManager:
         self.jobs_paused   = []   # list of jobs that stopped by calling .pause()
         self.all_jobs = weakref.WeakSet()
         self.wakeup = threading.Event()  # for kicking the mainloop to wake up if it has fallen asleep
+        self.exited = threading.Event()  # for synchronously waiting for jobmgr to exit
         # ---
+
+        self._exit_when_done = exit_when_done
 
         self._killing = False  # set by .kill()
 
         # Kick off the thread
         self.thread = threading.Thread(target=self.mainloop, name=threadname, daemon=True)
         self.thread.start()
+
+    @property
+    def threadname(self):
+        return (self.thread and self.thread.name) or ''
+
+    def diagnostic_name(self): return self.threadname
 
     def add_job(self, job):
         """ Throws ValueError if job is already pending. """
@@ -527,37 +540,39 @@ class ValidationJobManager:
         checking the appropriate lists. Returns 1 on success or 0 if job was
         not found in the appropriate lists.'''
         if job.stop():
-            return 1
+            return True
         else:
             # Job wasn't running -- try and remove it from the
             # pending and paused lists
             try:
                 self.jobs_pending.remove(job)
-                return 1
+                return True
             except ValueError:
                 pass
             try:
                 self.jobs_paused.remove(job)
-                return 1
+                return True
             except ValueError:
                 pass
-        return 0
+        return False
 
     def stop_all_for(self, ref):
-        ctr = 0
+        ret = []
         with self.jobs_lock:
             for job in list(self.all_jobs):
                 if job.belongs_to(ref):
-                    ctr += self._stop_all_common(job)
-        return ctr
+                    if self._stop_all_common(job):
+                        ret.append(job)
+        return ret
 
     def stop_all_with_txid(self, txid):
-        ctr = 0
+        ret = []
         with self.jobs_lock:
             for job in list(self.all_jobs):
                 if job.has_txid(txid):
-                    ctr += self._stop_all_common(job)
-        return ctr
+                    if self._stop_all_common(job):
+                        ret.append(job)
+        return ret
 
     def pause_job(self, job):
         """
@@ -602,6 +617,7 @@ class ValidationJobManager:
         self.graph_context = None
 
     def mainloop(self,):
+        ran_ctr = 0
         try:
             if threading.current_thread() is not self.thread:
                 raise RuntimeError('wrong thread')
@@ -610,18 +626,26 @@ class ValidationJobManager:
                     return
                 with self.jobs_lock:
                     self.wakeup.clear()
+                    has_paused_jobs = bool(len(self.jobs_paused))
                     try:
                         self.job_current = self.jobs_pending.pop(0)
                     except IndexError:
                         # prepare to sleep, outside lock
                         self.job_current = None
                 if self.job_current is None:
+                    if self._exit_when_done and not has_paused_jobs and ran_ctr:
+                        # we already finished our enqueued jobs, nothing is paused, so just exit since _exit_when_done == True
+                        return  # exit thread when done
                     self.wakeup.wait()
                     continue
 
                 try:
                     retval = self.job_current.run()
+                    ran_ctr += 1
                 except BaseException as e:
+                    # NB: original code used print here rather than self.print_error
+                    # for unconditional printing even if not running with -v.
+                    # We preserve that behavior, for now.
                     print("vvvvv validation job error traceback", file=sys.stderr)
                     traceback.print_exc()
                     print("^^^^^ validation job %r error traceback"%(self.job_current,), file=sys.stderr)
@@ -638,6 +662,9 @@ class ValidationJobManager:
         except:
             traceback.print_exc()
             print("Thread %s crashed :("%(self.thread.name,), file=sys.stderr)
+        finally:
+            self.exited.set()
+            self.print_error("Thread exited")
 
 
 ########

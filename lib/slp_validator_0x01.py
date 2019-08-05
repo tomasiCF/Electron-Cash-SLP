@@ -6,7 +6,8 @@ This uses the graph searching mechanism from slp_dagging.py
 
 import threading
 import queue
-from typing import Tuple
+from typing import Tuple, List
+import weakref
 
 from .transaction import Transaction
 from .simple_config import get_config
@@ -14,13 +15,13 @@ from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
-from .util import print_error
+from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
 
 proxy = slp_proxying.tokengraph_proxy
 
-class GraphContext:
+class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
     ValidationJobManager to validate SLP tokens if is_parallel=False.
 
@@ -32,9 +33,12 @@ class GraphContext:
         self.graph_db_lock = threading.Lock()
         self.graph_db = dict()   # token_id_hex -> TokenGraph
         self.is_parallel = is_parallel
-        self.job_mgrs = dict()   # token_id_hex -> ValidationJobManager (only used if is_parallel)
+        self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
         self._setup_job_mgr()
+
+    def diagnostic_name():
+        return self.name
 
     def _setup_job_mgr(self):
         if self.is_parallel:
@@ -43,7 +47,9 @@ class GraphContext:
             self.job_mgr = self._new_job_mgr()
 
     def _new_job_mgr(self, suffix='') -> ValidationJobManager:
-        return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}')
+        ret = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', exit_when_done=self.is_parallel)
+        weakref.finalize(ret, print_error, f'[{ret.threadname}] finalized')  # track object lifecycle
+        return ret
 
     def _get_or_make_mgr(self, token_id_hex: str) -> ValidationJobManager:
         ''' Helper: This must be called with self.graph_db_lock held.
@@ -224,19 +230,29 @@ class GraphContext:
 
         return job
 
-    def stop_all_for_wallet(self, wallet):
+    def stop_all_for_wallet(self, wallet, timeout=None) -> List[ValidationJob]:
         ''' Stops all extant jobs for a particular wallet. This method is
         intended to be called on wallet close so that all the work that
         particular wallet enqueued can get cleaned up. This method properly
-        supports both is_parallel and single mode. '''
+        supports both is_parallel and single mode.  Will return all the jobs
+        that matched as a list or the empty list if no jobs matched.
+
+        Optional arg timeout, if not None and positive, will make this function
+        wait for the jobs to complete for up to timeout seconds per job.'''
+        jobs = []
         if self.job_mgr:
             # single job manager mode
-            return self.job_mgr.stop_all_for(wallet)
+            jobs = self.job_mgr.stop_all_for(wallet)
         else:
             # multi job-manager mode, iterate over all extant job managers
             with self.graph_db_lock:
-                for txid, job_mgr in self.job_mgrs.items():
-                    job_mgr.stop_all_for(wallet)
+                for txid, job_mgr in dict(self.job_mgrs).items():
+                    jobs += job_mgr.stop_all_for(wallet)
+        if timeout is not None and timeout > 0:
+            for job in jobs:
+                if job.running:
+                    job.exited.wait(timeout=timeout) or self.print_error(f"Warning: Job {job} wait timed out (timeout={timeout})")
+        return jobs
 
 
 # App-wide instance. Wallets share the results of the DAG lookups.
@@ -246,7 +262,7 @@ class GraphContext:
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext(is_parallel=False)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
+shared_context = GraphContext(is_parallel=True)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

@@ -1964,10 +1964,10 @@ class Abstract_Wallet(PrintError):
                 # NB: it's important this be done here after network
                 # callbacks are torn down in the above lines.
                 self.network.unregister_callback(self._slp_callback_on_status)
-                n_stopped = self.slp_graph_0x01.stop_all_for_wallet(self)
-                self.print_error("Stopped", n_stopped, "slp_0x01 jobs")
-                #n_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
-                #self.print_error("Stopped", n_stopped, "slp_0x01_nft jobs")
+                jobs_stopped = self.slp_graph_0x01.stop_all_for_wallet(self, timeout=2.0)
+                self.print_error("Stopped", len(jobs_stopped), "slp_0x01 jobs")
+                #jobs_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
+                #self.print_error("Stopped", len(jobs_stopped), "slp_0x01_nft jobs")
                 self.slp_graph_0x01_nft.kill()
                 self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
             self.storage.put('stored_height', self.get_local_height())
