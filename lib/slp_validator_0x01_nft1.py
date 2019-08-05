@@ -16,7 +16,7 @@ from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInv
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
-from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
+from .slp_validator_0x01 import Validator_SLP1, GraphContext
 
 from . import slp_proxying # loading this module starts a thread.
 from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache

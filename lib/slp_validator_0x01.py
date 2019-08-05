@@ -133,18 +133,21 @@ class GraphContext(PrintError):
         graph, job_mgr = self.get_graph(token_id_hex)
 
         return graph, job_mgr
-
-    try:
-        network.slpdb_host = config.get('slpdb_host', None)
-        graphsearch_enable = config.get('slp_validator_graphsearch_enabled', False)
-        limit_dls   = config.get('slp_validator_download_limit', None)
-        limit_depth = config.get('slp_validator_depth_limit', None)
-        proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        graphsearch_enable = config.get('slp_validator_graphsearch_enabled', True)
-    except NameError: # in daemon mode (no GUI) 'config' is not defined
-        limit_dls = None
-        limit_depth = None
-        proxy_enable = False
+        
+    @staticmethod
+    def get_validation_config():
+        config = get_config()
+        try:
+            network.slpdb_host = config.get('slpdb_host', None)
+            graphsearch_enable = config.get('slp_validator_graphsearch_enabled', False)
+            limit_dls   = config.get('slp_validator_download_limit', None)
+            limit_depth = config.get('slp_validator_depth_limit', None)
+            proxy_enable = config.get('slp_validator_proxy_enabled', False)
+            graphsearch_enable = config.get('slp_validator_graphsearch_enabled', True)
+        except NameError: # in daemon mode (no GUI) 'config' is not defined
+            limit_dls = None
+            limit_depth = None
+            proxy_enable = False
 
         return limit_dls, limit_depth, proxy_enable
 
