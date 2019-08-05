@@ -69,7 +69,6 @@ from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
 from .util import *
 
 import electroncash.slp as slp
-from electroncash import slp_validator_0x01, slp_validator_0x01_nft1
 from electroncash.slp_coinchooser import SlpCoinChooser
 from electroncash.slp_checker import SlpTransactionChecker
 from .amountedit import SLPAmountEdit

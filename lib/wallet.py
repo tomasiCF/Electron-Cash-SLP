@@ -181,6 +181,7 @@ class Abstract_Wallet(PrintError):
         self.synchronizer = None
         self.verifier = None
         self.ui_emit_validity_updated = None  # Qt GUI attaches a signal to this attribute -- see slp_check_validation
+        self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
 
         # Cache of Address -> (c,u,x) balance. This cache is used by
         # get_addr_balance to significantly speed it up (it is called a lot).
@@ -351,8 +352,8 @@ class Abstract_Wallet(PrintError):
 
     def activate_slp(self):
         # This gets called in two situations:
-        # - Upon wallet startup once GUI is loaded, it checks config to see if SLP should be enabled.
-        # - During wallet operation, SLP can be freely enabled/disabled by user.
+        # - Upon wallet startup, it checks config to see if SLP should be enabled.
+        # - During wallet operation, on a network reconnect, to "wake up" the validator -- According to JSCramer this is required.  TODO: Investigate why that is
         with self.lock, self.transaction_lock:
             for tx_hash, tti in self.tx_tokinfo.items():
                 # Fire up validation on unvalidated txes
@@ -1349,14 +1350,15 @@ class Abstract_Wallet(PrintError):
                     ui_cb(txid, val)
 
             if tti['type'] in ['SLP1']:
-                job = slp_validator_0x01.make_job(tx, self, self.network,
-                                                    debug=2, reset=False)
+                job = self.slp_graph_0x01.make_job(tx, self, self.network,
+                                                   debug=2, reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
-                job = slp_validator_0x01_nft1.make_job(tx, self, self.network,
-                                                    debug=2, reset=False)
+                job = self.slp_graph_0x01_nft.make_job(tx, self, self.network,
+                                                       debug=2, reset=False)
 
             if job is not None:
                 job.add_callback(callback)
+                finalization_print_error(job, f"[{self.basename()}] Job for {tx_hash} type {tti['type']} finalized")
 
     def rebuild_slp(self,):
         """Wipe away old SLP transaction data and rerun on the entire tx set.
@@ -1922,26 +1924,29 @@ class Abstract_Wallet(PrintError):
     def start_threads(self, network):
         self.network = network
         if self.network is not None:
+            if self.is_slp:
+                # Note: it's important that SLP data structures are defined
+                # before the network (SPV/Synchronizer) callbacks are installed
+                # otherwise we may receive a tx from the network thread
+                # before SLP objects are properly constructed.
+                self.slp_graph_0x01 = slp_validator_0x01.shared_context
+                # For now, NFT validation uses a per-wallet instance until we
+                # iron out some of the bugs.
+                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
+                self.activate_slp()
+                self.network.register_callback(self._slp_callback_on_status, ['status'])
             self.prepare_for_verifier()
             self.verifier = SPV(self.network, self)
             self.synchronizer = Synchronizer(self, network)
             finalization_print_error(self.verifier, "[{}.{}] finalized".format(self.diagnostic_name(), self.verifier.diagnostic_name()))
             finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
             network.add_jobs([self.verifier, self.synchronizer])
-            if self.is_slp:
-                # Set up SLP proxy here -- needs to be done before wallet.activate_slp is called.
-                slp_validator_0x01.setup_config(self.network.config)
-                slp_validator_0x01_nft1.setup_config(self.network.config)
-                self.activate_slp()
-                self.network.register_callback(self._slp_callback_on_status, ['status'])
         else:
             self.verifier = None
             self.synchronizer = None
 
     def stop_threads(self):
         if self.network:
-            if self.is_slp:
-                self.network.unregister_callback(self._slp_callback_on_status)
             # Note: syncrhonizer and verifier will remove themselves from the
             # network thread the next time they run, as a result of the below
             # release() calls.
@@ -1955,6 +1960,16 @@ class Abstract_Wallet(PrintError):
             self.verifier = None
             # Now no references to the syncronizer or verifier
             # remain so they will be GC-ed
+            if self.is_slp:
+                # NB: it's important this be done here after network
+                # callbacks are torn down in the above lines.
+                self.network.unregister_callback(self._slp_callback_on_status)
+                n_stopped = self.slp_graph_0x01.stop_all_for_wallet(self)
+                self.print_error("Stopped", n_stopped, "slp_0x01 jobs")
+                #n_stopped = self.slp_graph_0x01_nft.stop_all_for_wallet(self)
+                #self.print_error("Stopped", n_stopped, "slp_0x01_nft jobs")
+                self.slp_graph_0x01_nft.kill()
+                self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
             self.storage.put('stored_height', self.get_local_height())
         self.save_transactions()
         self.save_verified_tx()

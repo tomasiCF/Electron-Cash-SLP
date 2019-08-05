@@ -6,192 +6,167 @@ This uses the graph searching mechanism from slp_dagging.py
 
 import threading
 import queue
+from typing import Tuple
+import warnings
 
 from .transaction import Transaction
 from . import slp
 from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
-from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager
+from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
-from .slp_validator_0x01 import Validator_SLP1
+from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
 
-from . import slp_proxying # loading this module starts a thread.
+class GraphContext_NFT1(GraphContext):
+    ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
+    ValidationJobManager to validate SLP tokens.  '''
 
-### Uncomment one of the following options:
+    def __init__(self, name="GraphContext_NFT1", is_multi=False):
+        super().__init__(name=name, is_multi=is_multi)
 
-# Have a shared thread for validating all SLP token_ids sequentially
-shared_jobmgr = ValidationJobManager(threadname="Validation_NFT1")
+    def _new_job_mgr(self, suffix='') -> ValidationJobManager:
+        return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self)
 
-## Each token_id gets its own thread (thread spam?)
-#shared_jobmgr = None
-
-###
-
-
-# Global db for shared graphs (each token_id_hex has its own graph).
-graph_db_lock = threading.Lock()
-graph_db = dict()   # token_id_hex -> (TokenGraph, ValidationJobManager)
-def get_graph(token_id_hex, token_type):
-    with graph_db_lock:
-        try:
-            return graph_db[token_id_hex]
-        except KeyError:
-            if shared_jobmgr:
-                jobmgr = shared_jobmgr
-            else:
-                jobmgr = ValidationJobManager(threadname="Validation_NFT1_token_id_%.10s"%(token_id_hex,))
+    def get_graph(self, token_id_hex, token_type) -> Tuple[TokenGraph, ValidationJobManager]:
+        with self.graph_db_lock:
+            try:
+                return self.graph_db[token_id_hex], self._get_or_make_mgr(token_id_hex)
+            except KeyError:
+                pass
 
             if token_type == 129:
                 val = Validator_SLP1(token_id_hex, enforced_token_type=129)
             elif token_type == 65:
-                val = Validator_NFT1(token_id_hex, jobmgr)
+                val = Validator_NFT1(token_id_hex, self.job_mgr)
 
             graph = TokenGraph(val)
 
-            graph_db[token_id_hex] = (graph, jobmgr)
+            self.graph_db[token_id_hex] = graph
 
-            return graph_db[token_id_hex]
-def kill_graph(token_id_hex):
-    try:
-        graph, jobmgr = graph_db.pop(token_id_hex)
-    except KeyError:
-        return
-    if jobmgr != shared_jobmgr:
-        jobmgr.kill()
-    graph.reset()
-
-def setup_config(config_set):
-    """ Called by main_window.py before wallet even gets loaded.
-
-    - Limits on downloading DAG.
-    - Proxy requests.
-    """
-    global proxy
-    global config
-
-    proxy = slp_proxying.tokengraph_proxy
-    config = config_set
+            return graph, self._get_or_make_mgr(token_id_hex)
 
 
-def setup_job(tx, reset=False):
-    """ Perform setup steps before validation for a given transaction. """
-    slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+    def setup_job(self, tx, reset=False) -> Tuple[TokenGraph, ValidationJobManager]:
+        """ Perform setup steps before validation for a given transaction. """
+        slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
 
-    if slpMsg.token_type not in [65, 129]:
-        raise SlpParsingError("NFT1 invalid if parent or child transaction is of SLP type " + str(slpMsg.token_type))
+        if slpMsg.token_type not in [65, 129]:
+            raise SlpParsingError("NFT1 invalid if parent or child transaction is of SLP type " + str(slpMsg.token_type))
 
-    if slpMsg.transaction_type == 'GENESIS':
-        token_id_hex = tx.txid()
-    elif slpMsg.transaction_type == 'SEND' or slpMsg.transaction_type == 'MINT':
-        token_id_hex = slpMsg.op_return_fields['token_id_hex']
-    else:
-        return None
+        if slpMsg.transaction_type == 'GENESIS':
+            token_id_hex = tx.txid_fast()
+        elif slpMsg.transaction_type in ('MINT', 'SEND'):
+            token_id_hex = slpMsg.op_return_fields['token_id_hex']
+        else:
+            return None
 
-    if reset:
-        try:
-            kill_graph(token_id_hex)
-        except KeyError:
-            pass
-
-    graph, jobmgr = get_graph(token_id_hex, slpMsg.token_type)
-
-    return graph, jobmgr
-
-
-def make_job(tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs):
-    """
-    Basic validation job maker for a single transaction.
-
-    Creates job and starts it running in the background thread.
-
-    Before calling this you have to call setup_config().
-
-    Returns job, or None if it was not a validatable type
-    """
-    # This should probably be redone into a class, it is getting messy.
-
-    try:
-        limit_dls   = config.get('slp_validator_download_limit', None)
-        limit_depth = config.get('slp_validator_depth_limit', None)
-        proxy_enable = config.get('slp_validator_proxy_enabled', False)
-    except NameError: # in daemon mode (no GUI) 'config' is not defined
-        limit_dls = None
-        limit_depth = None
-        proxy_enable = False
-
-    try:
-        graph, jobmgr = setup_job(tx, reset=reset)
-    except (SlpParsingError, IndexError):
-        return
-
-    graph.validator.wallet = wallet
-    graph.validator.network = network
-
-    txid = tx.txid()
-
-    num_proxy_requests = 0
-    proxyqueue = queue.Queue()
-
-    def proxy_cb(txids, results):
-        newres = {}
-        # convert from 'true/false' to (True,1) or (False,3)
-        for t,v in results.items():
-            if v:
-                newres[t] = (True, 1)
-            else:
-                newres[t] = (True, 3)
-        proxyqueue.put(newres)
-
-    def fetch_hook(txids):
-        l = []
-        for txid in txids:
+        if reset:
             try:
-                l.append(wallet.transactions[txid])
+                self.kill_graph(token_id_hex)
             except KeyError:
                 pass
-        if proxy_enable:
-            proxy.add_job(txids, proxy_cb)
-            nonlocal num_proxy_requests
-            num_proxy_requests += 1
-        return l
 
-    job = ValidationJob(graph, [txid], network,
-                        fetch_hook=fetch_hook,
-                        validitycache=None, #wallet.slpv1_validity,
-                        download_limit=limit_dls,
-                        depth_limit=limit_depth,
-                        debug=debug,
-                        was_reset=reset,
-                        **kwargs)
-    def done_callback(job):
-        # wait for proxy stuff to roll in
-        results = {}
+        graph, job_mgr = self.get_graph(token_id_hex, slpMsg.token_type)
+
+        return graph, job_mgr
+
+
+    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
+        """
+        Basic validation job maker for a single transaction.
+        Creates job and starts it running in the background thread.
+        Returns job, or None if it was not a validatable type.
+
+        Note that the app-global 'config' object from simpe_config should be
+        defined before this is called.
+        """
+        limit_dls, limit_depth, proxy_enable = self.get_validation_config()
+
         try:
-            for _ in range(num_proxy_requests):
-                r = proxyqueue.get(timeout=5)
-                results.update(r)
-        except queue.Empty:
-            pass
+            graph, job_mgr = self.setup_job(tx, reset=reset)
+        except (SlpParsingError, IndexError):
+            return
 
-        if proxy_enable:
-            graph.finalize_from_proxy(results)
+        # fixme -- wouldn't subsequent wallet instances clobber previous ones?!
+        graph.validator.wallet = wallet
+        graph.validator.network = network
 
-        # Do consistency check here
-        # XXXXXXX
+        txid = tx.txid_fast()
 
-        # Save validity
-        for t,n in job.nodes.items():
-            val = n.validity
-            if val != 0:
-                wallet.slpv1_validity[t] = val
-    job.add_callback(done_callback)
+        num_proxy_requests = 0
+        proxyqueue = queue.Queue()
 
-    jobmgr.add_job(job)
+        def proxy_cb(txids, results):
+            newres = {}
+            # convert from 'true/false' to (True,1) or (False,3)
+            for t,v in results.items():
+                if v:
+                    newres[t] = (True, 1)
+                else:
+                    newres[t] = (True, 3)
+            proxyqueue.put(newres)
 
-    return job
+        def fetch_hook(txids):
+            l = []
+            for txid in txids:
+                try:
+                    l.append(wallet.transactions[txid])
+                except KeyError:
+                    pass
+            if proxy_enable:
+                proxy.add_job(txids, proxy_cb)
+                nonlocal num_proxy_requests
+                num_proxy_requests += 1
+            return l
+
+        def done_callback(job):
+            # wait for proxy stuff to roll in
+            results = {}
+            try:
+                for _ in range(num_proxy_requests):
+                    r = proxyqueue.get(timeout=5)
+                    results.update(r)
+            except queue.Empty:
+                pass
+
+            if proxy_enable:
+                graph.finalize_from_proxy(results)
+
+            # Do consistency check here
+            # XXXXXXX
+
+            # Save validity
+            for t,n in job.nodes.items():
+                val = n.validity
+                if val != 0:
+                    wallet.slpv1_validity[t] = val
 
 
-class Validator_NFT1:
+        job = ValidationJob(graph, [txid], network,
+                            fetch_hook=fetch_hook,
+                            validitycache=None, #wallet.slpv1_validity,
+                            download_limit=limit_dls,
+                            depth_limit=limit_depth,
+                            debug=debug,
+                            was_reset=reset,
+                            ref=wallet,
+                            **kwargs)
+        job.add_callback(done_callback)
+
+        job_mgr.add_job(job)
+
+        return job
+
+# App-wide instance. Wallets share the results of the DAG lookups.
+# This instance is shared so that we don't redundantly verify tokens for each
+# wallet, but rather do it app-wide.  Note that when wallet instances close
+# while a verification is in progress, all extant jobs for that wallet are
+# stopped -- ultimately stopping the entire DAG lookup for that token if all
+# wallets verifying a token are closed.  The next time a wallet containing that
+# token is opened, however, the validation continues where it left off.
+#shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instead use a per-wallet context.
+
+class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
 
     validity_states = {
@@ -262,7 +237,7 @@ class Validator_NFT1:
             # outputs straight from the token amounts
             outputs = slpMsg.op_return_fields['token_output']
         elif slpMsg.transaction_type == 'GENESIS':
-            token_id_hex = tx.txid()
+            token_id_hex = tx.txid_fast()
 
             vin_mask = (False,)*len(tx.inputs()) # don't need to examine any inputs.
 
@@ -310,21 +285,22 @@ class Validator_NFT1:
                 raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
-            assert tx.txid() == self.token_id_hex
+            assert tx.txid_fast() == self.token_id_hex
+            txid = self.token_id_hex
             wallet = self.wallet
             with wallet.lock, wallet.transaction_lock:
-                if not wallet.transactions.get(tx.txid(), None):
-                    wallet.transactions[tx.txid()] = tx
-                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                if not wallet.transactions.get(txid, None):
+                    wallet.transactions[txid] = tx
+                if not wallet.tx_tokinfo.get(txid, None):
                     from .slp import SlpMessage
                     slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
                     tti = { 'type':'SLP%d'%(slpMsg.token_type,),
                         'transaction_type':slpMsg.transaction_type,
-                        'token_id': tx.txid(),
+                        'token_id': txid,
                         'validity': 0,
                     }
-                    wallet.tx_tokinfo[tx.txid()] = tti
-            wallet.save_transactions(True)
+                    wallet.tx_tokinfo[txid] = tti
+                wallet.save_transactions()
             self.genesis_tx = tx
             if done_callback:
                 done_callback()
@@ -337,22 +313,23 @@ class Validator_NFT1:
                 raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
+            txid = tx.txid_fast()
             wallet = self.wallet
             with wallet.lock, wallet.transaction_lock:
-                if not wallet.transactions.get(tx.txid(), None):
-                    wallet.transactions[tx.txid()] = tx
-                if not wallet.tx_tokinfo.get(tx.txid(), None):
+                if not wallet.transactions.get(txid, None):
+                    wallet.transactions[txid] = tx
+                if not wallet.tx_tokinfo.get(txid, None):
                     slpMsg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
                     tti = { 'type':'SLP%d'%(slpMsg.token_type,),
                         'transaction_type':slpMsg.transaction_type,
                         'validity': 0,
                     }
                     if slpMsg.transaction_type == 'GENESIS':
-                        tti['token_id'] = tx.txid()
+                        tti['token_id'] = txid
                     else:
                         tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
-                    wallet.tx_tokinfo[tx.txid()] = tti
-            wallet.save_transactions(True)
+                    wallet.tx_tokinfo[txid] = tti
+                wallet.save_transactions()
             self.nft_parent_tx = tx
             if done_callback:
                 done_callback()
@@ -366,36 +343,38 @@ class Validator_NFT1:
         def callback(job):
             (txid,node), = job.nodes.items()
             val = node.validity
-            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid()]['token_id']
+            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['token_id']
             if not wallet.token_types.get(group_id, None):
-                name = wallet.token_types[self.genesis_tx.txid()]['name'] + '-parent'
+                name = wallet.token_types[self.genesis_tx.txid_fast()]['name'] + '-parent'
                 #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
                 parent_entry = dict({'class':'SLP129','name':name,'decimals':0}) # TODO: handle case where decimals is not 0
                 wallet.add_token_type(group_id, parent_entry)
             with wallet.lock, wallet.transaction_lock:
-                wallet.token_types[self.genesis_tx.txid()]['group_id'] = group_id
-                wallet.tx_tokinfo[self.nft_parent_tx.txid()]['validity'] = val
-                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = val
-            wallet.save_transactions(True)
-            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+                wallet.token_types[self.genesis_tx.txid_fast()]['group_id'] = group_id
+                wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['validity'] = val
+                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = val
+                wallet.save_transactions()
+            ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
-                ui_cb(self.genesis_tx.txid(), val)
+                ui_cb(self.genesis_tx.txid_fast(), val)
             if done_callback:
                 done_callback(val)
 
         tx = self.nft_parent_tx
-        from . import slp_validator_0x01_nft1
-        job = slp_validator_0x01_nft1.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
+        job = self.validation_jobmgr.graph_context and self.validation_jobmgr.graph_context.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)
+        elif self.validation_jobmgr.graph_context is None:
+            # FIXME?
+            warnings.warn("Graph Context is None, JobManager was killed")
         else:
             with wallet.lock, wallet.transaction_lock:
-                wallet.tx_tokinfo[self.genesis_tx.txid()]['validity'] = 4
-            wallet.save_transactions(True)
-            ui_cb = getattr(wallet, 'ui_emit_validity_updated', None)
+                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = 4
+                wallet.save_transactions()
+            ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
-                ui_cb(self.genesis_tx.txid(), 4)
+                ui_cb(self.genesis_tx.txid_fast(), 4)
             if done_callback:
                 done_callback(4)
 
@@ -405,7 +384,8 @@ class Validator_NFT1:
 
         def restart_nft_job(val):
             self.nft_parent_validity = val
-            shared_jobmgr.unpause_job(self.nft_child_job)
+            self.validation_jobmgr.unpause_job(self.nft_child_job)
+            self.nft_child_job = None # release reference
 
         def start_nft_parent_validation():
             self.start_NFT_parent_job(restart_nft_job)

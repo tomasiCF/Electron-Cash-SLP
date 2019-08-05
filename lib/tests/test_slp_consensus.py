@@ -144,12 +144,13 @@ class SLPConsensusTests(unittest.TestCase):
                     #should_validity[txid] = 2
                 #else:
                     #raise ValueError(d['valid'])
+            graph_context = slp_validator_0x01.GraphContext()
 
             for i, d in enumerate(test['should']):
                 txid = d['txid']
                 with self.subTest(description=description, i=i):
                     try:
-                        graph, jobmgr = slp_validator_0x01.setup_job(txes[txid], reset=True)
+                        graph, job_mgr = graph_context.setup_job(txes[txid], reset=True)
                     except slp.SlpInvalidOutputMessage: # If output 0 is not OP_RETURN
                         self.assertEqual(d['valid'], False)
                         continue
@@ -171,7 +172,7 @@ class SLPConsensusTests(unittest.TestCase):
                         #job.debugging_graph_state = True
                     q = Queue()
                     job.add_callback(q.put)
-                    jobmgr.add_job(job)
+                    job_mgr.add_job(job)
                     try:
                         q.get(timeout=3) # unlimited timeout
                     except Empty:
@@ -184,4 +185,3 @@ class SLPConsensusTests(unittest.TestCase):
                         self.assertIn(n.validity, (2,3))
                     else:
                         raise ValueError(d['valid'])
-

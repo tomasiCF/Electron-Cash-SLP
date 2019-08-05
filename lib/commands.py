@@ -684,6 +684,9 @@ class Commands(PrintError):
         from .slp import SlpMessage
         from queue import Queue, Empty
 
+        graph_db, graph_db_nft1 = slp_validator_0x01.GraphContext(), slp_validator_0x01_nft1.GraphContext_NFT1()
+
+
         q = Queue()
 
         if self.wallet and txid in self.wallet.transactions:
@@ -693,29 +696,27 @@ class Commands(PrintError):
             if raw:
                 tx = Transaction(raw)
             else:
-                raise BaseException("Unknown transaction")
+                raise RuntimeError("Unknown transaction")
 
         if debug:
-            print("Debug info will be printed to stderr.")
+            self.print_error("Debug info will be printed to stderr.")
 
         slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
         if slp_msg.token_type == 1:
-            job = slp_validator_0x01.make_job(tx, self.wallet, self.network,
-                                              debug=2, reset=reset)
+            job = graph_db.make_job(tx, self.wallet, self.network, debug=2, reset=reset)
         else:
-            job = slp_validator_0x01_nft1.make_job(tx, self.wallet, self.network,
-                                              debug=2, reset=reset)
+            job = graph_db_nft1.make_job(tx, self.wallet, self.network, debug=2, reset=reset)
         job.add_callback(q.put, way='weakmethod')
         try:
             q.get(timeout=3)
         except Empty:
-            print("Validation job taking too long. Returning now as to not freeze UI for too long!")
-            print("(returned job is still running in background)")
+            self.print_error("Validation job taking too long. Returning now as to not freeze UI for too long!")
+            self.print_error("(returned job is still running in background)")
             return job
 
         if not job.running and isinstance(job.graph.validator, Validator_NFT1):
-            print("Validation job is taking too long. Returning now as to not freeze UI for too long!")
-            print("(returned job is still running in background)")
+            self.print_error("Validation job is taking too long. Returning now as to not freeze UI for too long!")
+            self.print_error("(returned job is still running in background)")
             return job
 
         n = next(iter(job.nodes.values()))
