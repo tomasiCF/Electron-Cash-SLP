@@ -354,16 +354,16 @@ class ValidationJob:
             node.set_validity(False,2)
             
             # temp for debugging
-            f = open("dag-"+self.txids[0][0:5]+".txt","a")
-            f.write(txid+","+str(self.currentdepth)+",false,\n")
+            # f = open("dag-"+self.txids[0][0:5]+".txt","a")
+            # f.write(txid+","+str(self.currentdepth)+",false,\n")
 
         def dl_callback(tx):
             #will be called by self.get_txes
             txid = tx.txid_fast()
 
             # temp for debugging
-            f = open("dag-"+self.txids[0][0:5]+".txt","a")
-            f.write(txid+","+str(self.currentdepth)+",true,\n")
+            # f = open("dag-"+self.txids[0][0:5]+".txt","a")
+            # f.write(txid+","+str(self.currentdepth)+",true,\n")
 
             node = self.graph.get_node(txid)
             try:

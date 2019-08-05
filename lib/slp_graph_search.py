@@ -32,9 +32,9 @@ class SlpGraphSearch:
         self.search_error_msg=None
         self.txn_count_total = 0
         self.txn_count_progress = 0
-
-        # search settings
-        self.max_txn_dl = 1000
+        self.current_depth = 0
+        self.target_depth = None
+        self.last_search_url = None
 
         # Create a single use queue on a new thread
         self.cache_lock = threading.Lock()  # used to lock thread-shared attrs below
@@ -65,17 +65,20 @@ class SlpGraphSearch:
             except Exception as e:
                 print("error in graph search query", e, file=sys.stderr)
                 self.search_error_msg = str(e)
+                self.search_success = False
                 return
 
             # loop through each txid to get txns
             try:
                 for item in metadatas:
                     self.txn_count_total+=metadatas[item]['txcount']
-                    self.search_query(item, metadatas[item])
-
+                    self.search_query([item], metadatas[item])
+                if not metadatas:
+                    raise Exception("Graph metadata is missing")
             except Exception as e:
                 print("error in graph search query", e, file=sys.stderr)
                 self.search_error_msg = str(e)
+                self.search_success = False
                 return
             else:
                 self.search_success = True
@@ -87,20 +90,38 @@ class SlpGraphSearch:
     def metadata_query(self, txids):
         if not txids:
             raise RuntimeError("No txids provided for graph search query.")
-        requrl = self.metadata_url(txids, self.max_txn_dl)
+        requrl = self.metadata_url(txids)
         print("[SLP Graph Search] depth search url = " + requrl, file=sys.stderr)
         reqresult = requests.get(requrl, timeout=10)
         res = dict()
         for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
-            o = { 'queryDepth': resp['queryDepth'], 'txcount': resp['txcount'], 'totalDepth': resp['totalDepth'] }
+            o = { 'depthMap': resp['depthMap'], 'txcount': resp['txcount'], 'totalDepth': resp['totalDepth'] }
             res[resp['txid']] = o
             self.search_metadata[resp['txid']] = o
         return res
 
-    def search_query(self, txid, metadata): 
-        requrl = self.search_url([txid], metadata['queryDepth']) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
-        print("[SLP Graph Search] txn search url = " + requrl, file=sys.stderr)
+    def search_query(self, txids, metadata, depthMapIndex=0): 
+        depth, txn_count = metadata['depthMap'][str((depthMapIndex+1)*1000)]  # we query for chunks with up to 1000 txns
+        if depthMapIndex > 0:
+            queryDepth = depth - metadata['depthMap'][str((depthMapIndex)*1000)][0]
+            txn_count = txn_count - metadata['depthMap'][str((depthMapIndex)*1000)][1]
+        else:
+            queryDepth = depth
+        self.target_depth = queryDepth
+        print("==== Graph Search Query ====")
+        print("txids: ", str(txids))
+        print("total depth: ", str(metadata['totalDepth']))
+        print("target depth: ", str(depth))
+        print("txn_count: ", str(txn_count))
+        print("query depth: ", str(queryDepth))
+        requrl = self.search_url(txids, queryDepth) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+        print("txn search url = " + requrl, file=sys.stderr)
+        print("============================")
+        self.last_search_url = requrl
+        # f = open("dag-"+str(metadata['totalDepth'])+".txt","a")
+        # f.write(str(queryDepth)+","+str(depth)+","+str(txn_count)+"\n")
         reqresult = requests.get(requrl, timeout=60)
+        self.current_depth = metadata['depthMap'][str((depthMapIndex+1)*1000)]
         dependsOn = []
         depths = []
         for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
@@ -111,14 +132,12 @@ class SlpGraphSearch:
         with self.cache_lock:
             for tx in txns:
                 SlpGraphSearch.tx_cache_put(tx[1])
-        if metadata['queryDepth'] < metadata['totalDepth']:
-            txids = [ tx[1].txid_fast() for tx in txns if tx[0] == metadata['queryDepth'] ]
-            metadatas = self.metadata_query(txids)
-            for item in metadatas:
-                self.txn_count_total+=metadatas[item]['txcount']
-                self.search_query(item, metadatas[item])
+        if depth < metadata['totalDepth']:
+            txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
+            depthMapIndex+=1
+            self.search_query(txids, metadata, depthMapIndex)
 
-    def metadata_url(self, txids, txMax=1000):
+    def metadata_url(self, txids):
         txids_q = []
         for txid in txids:
             txids_q.append({"graphTxn.txid": txid})
@@ -132,7 +151,7 @@ class SlpGraphSearch:
                             "txid": "$graphTxn.txid",
                             "txcount": "$graphTxn.stats.txcount",
                             "totalDepth": "$graphTxn.stats.depth",
-                            "queryDepth": "$graphTxn.stats.depthMap."+str(txMax)
+                            "depthMap": "$graphTxn.stats.depthMap"
                         }
                     }
                 ],

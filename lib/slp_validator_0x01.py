@@ -199,7 +199,7 @@ class GraphContext(PrintError):
             nonlocal gs_enable, gs_host
             if gs_enable and gs_host and not val_job.graph_search_job:
                 val_job.graph_search_running = True
-                gs = SlpGraphSearch.new_search(val_job.txids, network=network, wallet=wallet)
+                gs = SlpGraphSearch.new_search(val_job.txids, network=network, wallet=wallet)  #TODO: Add cancel hook.
                 val_job.graph_search_job = gs
             elif not val_job.graph_search_job:
                 gs_enable, gs_host = self.get_gs_config()
