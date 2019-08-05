@@ -21,8 +21,8 @@ class GraphContext_NFT1(GraphContext):
     ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
     ValidationJobManager to validate SLP tokens.  '''
 
-    def __init__(self, name="GraphContext_NFT1", is_multi=False):
-        super().__init__(name=name, is_multi=is_multi)
+    def __init__(self, name="GraphContext_NFT1", is_parallel=False):
+        super().__init__(name=name, is_parallel=is_parallel)
 
     def _new_job_mgr(self, suffix='') -> ValidationJobManager:
         return ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self)

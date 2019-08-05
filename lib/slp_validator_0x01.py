@@ -22,22 +22,22 @@ proxy = slp_proxying.tokengraph_proxy
 
 class GraphContext:
     ''' Instance of the DAG cache. Uses a single per-instance
-    ValidationJobManager to validate SLP tokens if is_multi=False.
+    ValidationJobManager to validate SLP tokens if is_parallel=False.
 
-    If is_multi=True, will create 1 job manager (thread) per token_id it is
+    If is_parallel=True, will create 1 job manager (thread) per token_id it is
     validating. '''
 
-    def __init__(self, name='GraphContext', is_multi=False):
+    def __init__(self, name='GraphContext', is_parallel=False):
         # Global db for shared graphs (each token_id_hex has its own graph).
         self.graph_db_lock = threading.Lock()
         self.graph_db = dict()   # token_id_hex -> TokenGraph
-        self.is_multi = is_multi
-        self.job_mgrs = dict()   # token_id_hex -> ValidationJobManager (only used if is_multi)
+        self.is_parallel = is_parallel
+        self.job_mgrs = dict()   # token_id_hex -> ValidationJobManager (only used if is_parallel)
         self.name = name
         self._setup_job_mgr()
 
     def _setup_job_mgr(self):
-        if self.is_multi:
+        if self.is_parallel:
             self.job_mgr = None
         else:
             self.job_mgr = self._new_job_mgr()
@@ -47,20 +47,20 @@ class GraphContext:
 
     def _get_or_make_mgr(self, token_id_hex: str) -> ValidationJobManager:
         ''' Helper: This must be called with self.graph_db_lock held.
-        Creates a new job manager for token_id_hex if is_multi=True and one
+        Creates a new job manager for token_id_hex if is_parallel=True and one
         doesn't already exist, and returns it.
 
-        Returns self.job_mgr if is_multi=False. '''
+        Returns self.job_mgr if is_parallel=False. '''
         job_mgr = self.job_mgr or self.job_mgrs.get(token_id_hex) or self._new_job_mgr(token_id_hex[:4])
         if job_mgr is not self.job_mgr:
-            # was an is_multi setup
-            assert not self.job_mgr and self.is_multi and job_mgr
+            # was an is_parallel setup
+            assert not self.job_mgr and self.is_parallel and job_mgr
             self.job_mgrs[token_id_hex] = job_mgr
         return job_mgr
 
     def get_graph(self, token_id_hex) -> Tuple[TokenGraph, ValidationJobManager]:
         ''' Returns an existing or new graph for a particular token.
-        A new job manager is created for that token if self.is_multi=True,
+        A new job manager is created for that token if self.is_parallel=True,
         otherwise the shared job manager is used.'''
         with self.graph_db_lock:
             try:
@@ -119,7 +119,7 @@ class GraphContext:
         else:
             return None
 
-        if reset and not self.is_multi:
+        if reset and not self.is_parallel:
             try:
                 self.kill_graph(token_id_hex)
             except KeyError:
@@ -228,7 +228,7 @@ class GraphContext:
         ''' Stops all extant jobs for a particular wallet. This method is
         intended to be called on wallet close so that all the work that
         particular wallet enqueued can get cleaned up. This method properly
-        supports both is_multi and single mode. '''
+        supports both is_parallel and single mode. '''
         if self.job_mgr:
             # single job manager mode
             return self.job_mgr.stop_all_for(wallet)
@@ -246,7 +246,7 @@ class GraphContext:
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext(is_multi=False)  # <-- Set is_multi=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
+shared_context = GraphContext(is_parallel=False)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
