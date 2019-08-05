@@ -157,6 +157,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.tl_windows = []
         self.tx_external_keypairs = {}
         self._tx_dialogs = Weak.Set()
+        self._slp_dialogs = Weak.Set()
         self.tx_update_mgr = TxUpdateMgr(self)  # manages network callbacks for 'new_transaction' and 'verified2', and collates GUI updates from said callbacks as a performance optimization
         self.is_schnorr_enabled = self.wallet.is_schnorr_enabled  # This is a function -- Support for plugins that may be using the 4.0.3 & 4.0.4 API -- this function used to live in this class, before being moved to Abstract_Wallet.
         self.send_tab_opreturn_widgets, self.receive_tab_opreturn_widgets = [], []  # defaults to empty list
@@ -4836,6 +4837,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # to us that will be invalidated
             d.prompt_if_unsaved = False  # make sure to unconditionally close
             d.close()
+        for d in list(self._slp_dialogs):
+            d.close()  # make sure dialogs we created are properly closed!
         self._close_wallet()
 
 

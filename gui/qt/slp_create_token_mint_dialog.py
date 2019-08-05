@@ -18,7 +18,7 @@ from electroncash.plugins import run_hook
 
 from .util import *
 
-from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, PrintError
+from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, PrintError, finalization_print_error
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpNoMintingBatonFound, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildMintOpReturnOutput_V1
 
@@ -33,7 +33,12 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
 
     def __init__(self, main_window, token_id_hex):
         # We want to be a top-level window
-        QDialog.__init__(self, parent=main_window)
+        QDialog.__init__(self, parent=None)
+        from .main_window import ElectrumWindow
+
+        assert isinstance(main_window, ElectrumWindow)
+        main_window._slp_dialogs.add(self)
+        finalization_print_error(self)  # Track object lifecycle
 
         self.main_window = main_window
         self.wallet = main_window.wallet
@@ -277,11 +282,12 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
         self.close()
 
     def closeEvent(self, event):
+        super().closeEvent(event)
         event.accept()
-        try:
-            dialogs.remove(self)
-        except ValueError:
-            pass
+        def remove_self():
+            try: dialogs.remove(self)
+            except ValueError: pass  # wasn't in list.
+        QTimer.singleShot(0, remove_self)  # need to do this some time later. Doing it from within this function causes crashes. See #35
 
     def update(self):
         return

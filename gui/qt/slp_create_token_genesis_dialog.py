@@ -16,7 +16,7 @@ from electroncash.plugins import run_hook
 
 from .util import *
 
-from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee
+from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, finalization_print_error
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildGenesisOpReturnOutput_V1
 from electroncash.slp_checker import SlpTransactionChecker
@@ -34,7 +34,12 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
     def __init__(self, main_window, *, nft_parent_id=None):
         #self.provided_token_name = token_name
         # We want to be a top-level window
-        QDialog.__init__(self, parent=main_window)
+        QDialog.__init__(self, parent=None)
+        from .main_window import ElectrumWindow
+
+        assert isinstance(main_window, ElectrumWindow)
+        main_window._slp_dialogs.add(self)
+        finalization_print_error(self)  # track object lifecycle
 
         self.main_window = main_window
         self.wallet = main_window.wallet
@@ -319,15 +324,15 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     if coin['token_value'] == 1:
                         selected_coin = coin
                         break
-    
+
                 # if yes, proceed with genesis
                 if selected_coin:
-                    tx = self.main_window.wallet.make_unsigned_transaction(coins, 
+                    tx = self.main_window.wallet.make_unsigned_transaction(coins,
                             outputs, self.main_window.config, fee, None, mandatory_coins=[selected_coin])
                 else:
                     raise Exception('Must have a parent NFT coin with value of 1 first.')
             else:
-                tx = self.main_window.wallet.make_unsigned_transaction(coins, 
+                tx = self.main_window.wallet.make_unsigned_transaction(coins,
                                     outputs, self.main_window.config, fee, None)
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
@@ -379,13 +384,13 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
-        
+
         # check transaction SLP validity before signing
         try:
             assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
-            return 
+            return
 
         # call hook to see if plugin needs gui interaction
         run_hook('sign_tx', self, tx)
@@ -444,12 +449,15 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         WaitingDialog(self, 'Creating SLP Token...', broadcast_thread, broadcast_done, None)
 
+
     def closeEvent(self, event):
+        super().closeEvent(event)
+        event.accept()
         self.main_window.create_token_dialog = None
-        try:
-            dialogs.remove(self)
-        except ValueError:
-            pass
+        def remove_self():
+            try: dialogs.remove(self)
+            except ValueError: pass  # wasn't in list.
+        QTimer.singleShot(0, remove_self)  # need to do this some time later. Doing it from within this function causes crashes. See #35
 
     def update(self):
         return

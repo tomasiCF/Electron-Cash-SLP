@@ -20,7 +20,7 @@ from electroncash.plugins import run_hook
 from electroncash.util import bfh
 from .util import *
 
-from electroncash.util import format_satoshis_nofloat
+from electroncash.util import format_satoshis_nofloat, finalization_print_error
 from electroncash.transaction import Transaction
 from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage
 
@@ -45,6 +45,11 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
     def __init__(self, main_window, token_id_hex=None, token_name=None, allow_overwrite=False):
         # We want to be a top-level window
         QDialog.__init__(self, parent=None)
+        from .main_window import ElectrumWindow
+
+        assert isinstance(main_window, ElectrumWindow)
+        main_window._slp_dialogs.add(self)
+        finalization_print_error(self)  # Track object lifecycle
 
         self.provided_token_name = token_name
         self.allow_overwrite = allow_overwrite
@@ -162,7 +167,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
             def remove_self():
                 try: dialogs.remove(self)
                 except ValueError: pass  # wasn't in list.
-            QTimer.singleShot(100, remove_self)  # need to do this some time later. Doing it from within this function causes crashes. See #35
+            QTimer.singleShot(0, remove_self)  # need to do this some time later. Doing it from within this function causes crashes. See #35
 
     def download_info(self):
         txid = self.token_id_e.text()
