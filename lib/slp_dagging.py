@@ -163,7 +163,7 @@ class ValidationJob:
     stop_reason = None
     has_never_run = True
 
-    def __init__(self, graph, txids, network,
+    def __init__(self, graph, txid, network,
                  fetch_hook=None,
                  validitycache=None,
                  download_limit=None, depth_limit=None,
@@ -171,6 +171,7 @@ class ValidationJob:
         """
         graph should be a TokenGraph instance with the appropriate validator.
 
+        txid is the root of the graph to be validated.
         txids is a list of the desired transactions.
 
         network is a lib.network.Network object, will be used to download when
@@ -195,7 +196,8 @@ class ValidationJob:
         """
         self.ref = ref and weakref.ref(ref)
         self.graph = graph
-        self.txids = tuple(txids)
+        self.root_txid = txid
+        self.txids = tuple([txid])
         self.network = network
         self.fetch_hook = fetch_hook
         self.graph_search_job = None

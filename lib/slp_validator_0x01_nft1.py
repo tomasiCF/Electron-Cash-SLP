@@ -148,7 +148,7 @@ class GraphContext_NFT1(GraphContext):
                     wallet.slpv1_validity[t] = val
 
         if nft_type == 'SLP65':
-            job = ValidationJobNFT1Child(graph, [txid], network,
+            job = ValidationJobNFT1Child(graph, txid, network,
                                 fetch_hook=fetch_hook,
                                 validitycache=None, #wallet.slpv1_validity,
                                 download_limit=limit_dls,
@@ -158,7 +158,7 @@ class GraphContext_NFT1(GraphContext):
                                 ref=wallet,
                                 **kwargs)
         elif nft_type == 'SLP129':
-            job = ValidationJob(graph, [txid], network,
+            job = ValidationJob(graph, txid, network,
                                 fetch_hook=fetch_hook,
                                 validitycache=None, #wallet.slpv1_validity,
                                 download_limit=limit_dls,

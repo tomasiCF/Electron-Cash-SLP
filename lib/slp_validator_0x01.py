@@ -239,7 +239,7 @@ class GraphContext(PrintError):
                     wallet.slpv1_validity[t] = val
 
 
-        job = ValidationJob(graph, [txid], network,
+        job = ValidationJob(graph, txid, network,
                             fetch_hook=fetch_hook,
                             validitycache=wallet.slpv1_validity,
                             download_limit=limit_dls,
