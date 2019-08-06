@@ -18,13 +18,13 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-from .slp_graph_search import SlpGraphSearch # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
+from .slp_graph_search import SlpGraphSearchManager # thread doesn't start until needed
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
     ValidationJobManager to validate SLP tokens if is_parallel=False.
 
-    If is_parallel=True, will create 1 job manager (thread) per token_id it is
+    If is_parallel=True, will create 1 job manager (thread) per tokenid it is
     validating. '''
 
     def __init__(self, name='GraphContext', is_parallel=False):
@@ -34,6 +34,7 @@ class GraphContext(PrintError):
         self.is_parallel = is_parallel
         self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
+        self.graph_search_mgr = SlpGraphSearchManager()
         self._setup_job_mgr()
 
     def diagnostic_name(self):
@@ -197,16 +198,16 @@ class GraphContext(PrintError):
         def fetch_hook(txids, val_job):
             l = []
             nonlocal gs_enable, gs_host
-            if gs_enable and gs_host and not val_job.graph_search_job:
-                val_job.graph_search_running = True
-                gs = SlpGraphSearch.new_search(val_job.txids, network=network, wallet=wallet)  #TODO: Add cancel hook.
-                val_job.graph_search_job = gs
-            elif not val_job.graph_search_job:
+            if gs_enable and gs_host:
+                if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys():
+                    search_job = self.graph_search_mgr.new_search(val_job)  #TODO: Add a cancel hook (or utilize val_job ref within GS mgr to trigger)
+                    val_job.graph_search_job = search_job if search_job else None
+            else:
                 gs_enable, gs_host = self.get_gs_config()
                 network.slpdb_host = gs_host
 
             for txid in txids:
-                txn = SlpGraphSearch.tx_cache_get(txid)
+                txn = SlpGraphSearchManager.tx_cache_get(txid)
                 if txn:
                     l.append(txn)
                 else:

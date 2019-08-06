@@ -16,126 +16,43 @@ import requests
 from .transaction import Transaction
 from .caches import ExpiringCache
 
-class SlpGraphSearch:
-    """
-    A single thread that processes graph search requests sequentially.
-    """
-    def __init__(self, network, wallet, threadname="SlpGraphSearch", errors='print'):
-        self.network = network
-        self.wallet = wallet
-        self.errors = errors
+class GraphSearchJob:
+    def __init__(self, txid, valjob_ref):
+        self.root_txid = txid
+        self.valjob=valjob_ref
 
-        # status indicators
-        self.search_metadata=dict()
-        self.job_complete=False
+        # metadata fetched from back end
+        self.depth_map = None
+        self.total_depth= None
+        self.txn_count_total = None
+
+        # job status info
+        self.search_started=False
         self.search_success=None
-        self.search_error_msg=None
-        self.txn_count_total = 0
+        self.job_complete=False
+        self.error_msg=None
+        self.depth_completed = 0
+        self.depth_current_query = None
         self.txn_count_progress = 0
-        self.current_depth = 0
-        self.target_depth = None
         self.last_search_url = None
 
-        # Create a single use queue on a new thread
-        self.graph_search_queue = queue.Queue()
-        self.txn_dl_queue = queue.Queue()
-        self.thread = threading.Thread(target=self.main, name=threadname, daemon=True)
-        self.thread.start()
+    def get_metadata(self):
+        res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
+        self.total_depth = res['totalDepth']
+        self.txn_count_total = res['txcount']
+        self.depth_map = res['depthMap']
 
-    @classmethod
-    def new_search(self, txids, network, wallet):
-        """ start a search job on new thread """
-        gs = SlpGraphSearch(network, wallet)
-        gs.graph_search_queue.put((list(txids)))
-        return gs
-
-    def main(self,):
-        try:
-            try:
-                job = self.graph_search_queue.get()
-            except queue.Empty:
-                return
-
-            txids = job
-
-            # get max depths using txn's depthMap
-            try:
-                metadatas = self.metadata_query(txids)
-            except Exception as e:
-                print("error in graph search query", e, file=sys.stderr)
-                self.search_error_msg = str(e)
-                self.search_success = False
-                return
-
-            # loop through each txid to get txns
-            try:
-                for item in metadatas:
-                    self.txn_count_total+=metadatas[item]['txcount']
-                    self.search_query([item], metadatas[item])
-                if not metadatas:
-                    raise Exception("Graph metadata is missing")
-            except Exception as e:
-                print("error in graph search query", e, file=sys.stderr)
-                self.search_error_msg = str(e)
-                self.search_success = False
-                return
-            else:
-                self.search_success = True
-                print("[SLP Graph Search] job success")
-        finally:
-            self.job_complete = True
-            print("[SLP Graph Search] SearchGraph thread completed.", file=sys.stderr)
-
-    def metadata_query(self, txids):
-        if not txids:
-            raise RuntimeError("No txids provided for graph search query.")
-        requrl = self.metadata_url(txids)
+    def metadata_query(self, txid, slpdb_host):
+        requrl = self.metadata_url([txid], slpdb_host)
         print("[SLP Graph Search] depth search url = " + requrl, file=sys.stderr)
         reqresult = requests.get(requrl, timeout=10)
         res = dict()
         for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
             o = { 'depthMap': resp['depthMap'], 'txcount': resp['txcount'], 'totalDepth': resp['totalDepth'] }
-            res[resp['txid']] = o
-            self.search_metadata[resp['txid']] = o
+            res = o
         return res
 
-    def search_query(self, txids, metadata, depthMapIndex=0): 
-        depth, txn_count = metadata['depthMap'][str((depthMapIndex+1)*1000)]  # we query for chunks with up to 1000 txns
-        if depthMapIndex > 0:
-            queryDepth = depth - metadata['depthMap'][str((depthMapIndex)*1000)][0]
-            txn_count = txn_count - metadata['depthMap'][str((depthMapIndex)*1000)][1]
-        else:
-            queryDepth = depth
-        self.target_depth = queryDepth
-        print("==== Graph Search Query ====")
-        print("txids: ", str(txids))
-        print("total depth: ", str(metadata['totalDepth']))
-        print("target depth: ", str(depth))
-        print("txn_count: ", str(txn_count))
-        print("query depth: ", str(queryDepth))
-        requrl = self.search_url(txids, queryDepth) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
-        print("txn search url = " + requrl, file=sys.stderr)
-        print("============================")
-        self.last_search_url = requrl
-        # f = open("dag-"+str(metadata['totalDepth'])+".txt","a")
-        # f.write(str(queryDepth)+","+str(depth)+","+str(txn_count)+"\n")
-        reqresult = requests.get(requrl, timeout=60)
-        self.current_depth = metadata['depthMap'][str((depthMapIndex+1)*1000)]
-        dependsOn = []
-        depths = []
-        for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
-            dependsOn.extend(resp['dependsOn'])
-            depths.extend(resp['depths'])
-        txns = [ (d, Transaction(base64.b64decode(tx).hex())) for d,tx in zip(depths, dependsOn) ]
-        self.txn_count_progress+=len(txns)
-        for tx in txns:
-            SlpGraphSearch.tx_cache_put(tx[1])
-        if depth < metadata['totalDepth']:
-            txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
-            depthMapIndex+=1
-            self.search_query(txids, metadata, depthMapIndex)
-
-    def metadata_url(self, txids):
+    def metadata_url(self, txids, host):
         txids_q = []
         for txid in txids:
             txids_q.append({"graphTxn.txid": txid})
@@ -158,12 +75,127 @@ class SlpGraphSearch:
         }
         s = json.dumps(q)
         q = base64.b64encode(s.encode('utf-8'))
-        if not self.network.slpdb_host:
-            print("SLPDB host is not set in network.")
-        url = self.network.slpdb_host + "/q/" + q.decode('utf-8')
+        url = host + "/q/" + q.decode('utf-8')
         return url
 
-    def search_url(self, txids, max_depth, validity_cache=[]):
+
+class SlpGraphSearchManager:
+    """
+    A single thread that processes graph search requests sequentially.
+    """
+    def __init__(self, threadname="SlpGraphSearch"):
+        # holds the job history and status
+        self.search_jobs = dict()
+
+        # Create a single use queue on a new thread
+        self.new_job_queue = queue.Queue()  # this is a queue for performing metadata 
+        self.search_queue = queue.Queue()
+        self.thread = None
+        self.threadname=threadname
+
+    def new_search(self, valjob_ref):
+        """ start a search job on new thread, returns weakref of new GS jobber object"""
+        txid = valjob_ref.root_txid
+        if txid not in self.search_jobs.keys():
+            job = GraphSearchJob(txid, valjob_ref)
+            self.search_jobs[txid] = job
+            self.new_job_queue.put(job)
+            if not self.thread:
+                self.thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
+                self.thread.start()
+            return job
+        return None
+
+    def mainloop(self,):
+        try:
+            while True:
+                # NOTE: the purpose of inner while loop is to fetch graph metadata and prioritize search jobs based on metadata results (see TODO below.)
+                while True:
+                    try:
+                        _job = self.new_job_queue.get(block=False)
+                        if not _job.valjob.network.slpdb_host:
+                            raise Exception("SLPDB host not set")
+                        _job.get_metadata()
+                    except queue.Empty:
+                        break
+                    except Exception as e:
+                        print("error in graph search query", str(e), file=sys.stderr)
+                        continue
+                    else:
+                        self.search_queue.put(_job)
+                    
+                        # TODO IF new job queue is finally empty, here we should prioritize order of search jobs queue based on:
+                        #       (1) remove any items whose validation job has finished
+                        #       (2) sort queue by DAG size, largest jobs will benefit from GS the most.
+                        #       (3) check to see if the root_txid is already in validity cache from previous job
+
+                try:
+                    job = self.search_queue.get(block=False)
+                except queue.Empty:
+                    if self.new_job_queue.empty():
+                        self.thread = None
+                        break
+                else:
+                    try:
+                        # TODO: before starting job, check to see if the root_txid is already in validity cache from previous job
+
+                        # search_query is a recursive call, most time will be spent here
+                        job.search_started = True
+                        self.search_query(job)
+                    except Exception as e:
+                        print("error in graph search query", e, file=sys.stderr)
+                        job.error_msg = str(e)
+                        job.search_success = False
+                        job.job_complete = True
+                        return
+                    else:
+                        pass
+        finally:
+            print("[SLP Graph Search] SearchGraph thread completed.", file=sys.stderr)
+
+    def search_query(self, job, txids=None, depth_map_index=0):
+        if depth_map_index == 0:
+            txids = [job.root_txid]
+        job.depth_current_query, txn_count = job.depth_map[str((depth_map_index+1)*1000)]  # we query for chunks with up to 1000 txns
+        if depth_map_index > 0:
+            queryDepth = job.depth_current_query - job.depth_map[str((depth_map_index)*1000)][0]
+            txn_count = txn_count - job.depth_map[str((depth_map_index)*1000)][1]
+        else:
+            queryDepth = job.depth_current_query
+        # f = open("gs-"+job.root_txid+".txt","a")
+        # f.write(str(queryDepth)+","+str(job.depth_current_query)+","+str(txn_count)+"\n")
+        # f.write("==== Graph Search Query ===="+"\n")
+        # f.write("txids: "+str(txids)+"\n")
+        # f.write("total depth: "+str(job.total_depth)+"\n")
+        # f.write("this query's depth: "+str(job.depth_current_query)+"\n")
+        # f.write("expected query txn count: "+str(txn_count)+"\n")
+        # f.write("query depth: "+str(queryDepth)+"\n")
+        # f.write("txn search url = " + requrl+"\n")
+        # f.write("============================"+"\n")
+        requrl = self.search_url(txids, queryDepth, job.valjob.network.slpdb_host) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+        job.last_search_url = requrl
+        reqresult = requests.get(requrl, timeout=60)
+        job.depth_completed = job.depth_map[str((depth_map_index+1)*1000)][0]
+        dependsOn = []
+        depths = []
+        for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
+            dependsOn.extend(resp['dependsOn'])
+            depths.extend(resp['depths'])
+        txns = [ (d, Transaction(base64.b64decode(tx).hex())) for d,tx in zip(depths, dependsOn) ]
+        job.txn_count_progress+=len(txns)
+        for tx in txns:
+            SlpGraphSearchManager.tx_cache_put(tx[1])
+        if job.depth_completed < job.total_depth:
+            # TODO: check to see if the validation job is still running, if not then should raise ValidationJobFinished and conitinue in while loop
+            txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
+            depth_map_index+=1
+            self.search_query(job, txids, depth_map_index)
+        else:
+            job.search_success = True
+            job.job_complete = True
+            print("[SLP Graph Search] job success")
+
+    def search_url(self, txids, max_depth, host, validity_cache=[]):
         print("[SLP Graph Search] " + str(txids))
         txids_q = []
         for txid in txids:
@@ -274,14 +306,12 @@ class SlpGraphSearch:
                         }
                     }
                 ],
-                "limit": len(txids)
+                "limit": 2000 #len(txids)
             }
             }
         s = json.dumps(q)
         q = base64.b64encode(s.encode('utf-8'))
-        if not self.network.slpdb_host:
-            raise Exception("SLPDB host is not set in network.")
-        url = self.network.slpdb_host + "/q/" + q.decode('utf-8')
+        url = host + "/q/" + q.decode('utf-8')
         return url
 
     # This cache stores foreign (non-wallet) tx's we fetched from the network
@@ -297,7 +327,7 @@ class SlpGraphSearch:
     # savings optimization.  Please maintain that invariant if you modify this
     # code, otherwise the cache may grow to 10x memory consumption if you
     # put deserialized tx's in here.
-    _fetched_tx_cache = ExpiringCache(maxlen=1000, name="GraphSearchTxnFetchCache")
+    _fetched_tx_cache = ExpiringCache(maxlen=100000, name="GraphSearchTxnFetchCache")
 
     @classmethod
     def tx_cache_get(cls, txid : str) -> object:

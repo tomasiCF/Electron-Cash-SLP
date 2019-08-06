@@ -201,7 +201,6 @@ class ValidationJob:
         self.network = network
         self.fetch_hook = fetch_hook
         self.graph_search_job = None
-        self.graph_search_skipped = False
         self.validitycache = {} if validitycache is None else validitycache
         self.download_limit = download_limit
         if depth_limit is None:
