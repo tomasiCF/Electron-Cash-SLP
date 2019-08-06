@@ -215,7 +215,7 @@ class SlpGraphSearchManager:
                         "maxDepth": max_depth,
                         "depthField": "depth",
                         "restrictSearchWithMatch": { #TODO: add tokenId restriction to this for NFT1 application
-                            "graphTxn.txid": {"$nin": validity_cache}} 
+                            "graphTxn.txid": {"$nin": txids }} #validity_cache}}  # TODO: add validity_cache here also 
                     }},
                     {"$project":{
                         "_id":0,
@@ -306,7 +306,7 @@ class SlpGraphSearchManager:
                         }
                     }
                 ],
-                "limit": 2000 #len(txids)
+                "limit": 1001 #len(txids)
             }
             }
         s = json.dumps(q)
