@@ -37,7 +37,6 @@ class SlpGraphSearch:
         self.last_search_url = None
 
         # Create a single use queue on a new thread
-        self.cache_lock = threading.Lock()  # used to lock thread-shared attrs below
         self.graph_search_queue = queue.Queue()
         self.txn_dl_queue = queue.Queue()
         self.thread = threading.Thread(target=self.main, name=threadname, daemon=True)
@@ -129,9 +128,8 @@ class SlpGraphSearch:
             depths.extend(resp['depths'])
         txns = [ (d, Transaction(base64.b64decode(tx).hex())) for d,tx in zip(depths, dependsOn) ]
         self.txn_count_progress+=len(txns)
-        with self.cache_lock:
-            for tx in txns:
-                SlpGraphSearch.tx_cache_put(tx[1])
+        for tx in txns:
+            SlpGraphSearch.tx_cache_put(tx[1])
         if depth < metadata['totalDepth']:
             txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
             depthMapIndex+=1
