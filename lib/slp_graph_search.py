@@ -175,7 +175,6 @@ class SlpGraphSearchManager:
         requrl = self.search_url(txids, queryDepth, job.valjob.network.slpdb_host) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
         job.last_search_url = requrl
         reqresult = requests.get(requrl, timeout=60)
-        job.depth_completed = job.depth_map[str((depth_map_index+1)*1000)][0]
         dependsOn = []
         depths = []
         for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
@@ -185,6 +184,8 @@ class SlpGraphSearchManager:
         job.txn_count_progress+=len(txns)
         for tx in txns:
             SlpGraphSearchManager.tx_cache_put(tx[1])
+        if txns:
+            job.depth_completed = job.depth_map[str((depth_map_index+1)*1000)][0]
         if job.depth_completed < job.total_depth:
             # TODO: check to see if the validation job is still running, if not then should raise ValidationJobFinished and conitinue in while loop
             txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
