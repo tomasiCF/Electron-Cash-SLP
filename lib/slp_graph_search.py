@@ -306,7 +306,7 @@ class SlpGraphSearchManager:
                         }
                     }
                 ],
-                "limit": 1001 #len(txids)
+                "limit": len(txids)  # we will get a maximum of len(txids) results in form of the final $projection
             }
             }
         s = json.dumps(q)
