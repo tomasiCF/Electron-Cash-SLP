@@ -23,14 +23,14 @@ class GraphSearchJob:
 
         # metadata fetched from back end
         self.depth_map = None
-        self.total_depth= None
+        self.total_depth = None
         self.txn_count_total = None
 
         # job status info
-        self.search_started=False
-        self.search_success=None
-        self.job_complete=False
-        self.error_msg=None
+        self.search_started = False
+        self.search_success = None
+        self.job_complete = False
+        self.error_msg = None
         self.depth_completed = 0
         self.depth_current_query = None
         self.txn_count_progress = 0
@@ -120,6 +120,7 @@ class SlpGraphSearchManager:
                         break
                     except Exception as e:
                         print("error in graph search query", str(e), file=sys.stderr)
+                        _job.error_msg = str(e)
                         continue
                     else:
                         self.search_queue.put(_job)
