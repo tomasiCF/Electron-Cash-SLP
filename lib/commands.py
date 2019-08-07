@@ -513,7 +513,7 @@ class Commands(PrintError):
         if not slp_op_return_msg:
             raise RuntimeError('Unable to find suitable SLP coin')
         bch_outputs = [ slp_op_return_msg ]
-        bch_outputs.append((destination.kind, destination, DUST))  # hack: addr.kind == bitoin TYPE always in Address class
+        bch_outputs.append((TYPE_ADDRESS, destination, DUST))
         token_outputs = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
         coins = self.wallet.get_spendable_coins(domain, self.config)
         if len(token_outputs) > 1 and len(bch_outputs) < len(token_outputs):
@@ -536,7 +536,7 @@ class Commands(PrintError):
                         change_addr = change_addrs[0]
                 else:
                     change_addr = coins[0]['address']
-            bch_outputs.append((change_addr.kind, change_addr, DUST))
+            bch_outputs.append((TYPE_ADDRESS, change_addr, DUST))
 
         tx = self.wallet.make_unsigned_transaction(coins, bch_outputs, self.config, fee, mandatory_coins=selected_slp_coins)
         self.wallet.check_sufficient_slp_balance(slp.SlpMessage.parseSlpOutputScript(slp_op_return_msg[1]), self.config)
