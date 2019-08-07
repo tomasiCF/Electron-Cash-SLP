@@ -188,7 +188,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                                 selected_slp_coins.append(coin)
                                 total_amt_added+=coin['token_value']
                 if total_amt_added > burn_amt:
-                    token_type = self.wallet.token_types[token_id_hex]['class']
+                    token_type = self.wallet.token_types[self.token_id_e.text()]['class']
                     slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt], token_type)
                     outputs.append(slp_op_return_msg)
                     outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
