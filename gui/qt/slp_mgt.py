@@ -201,3 +201,4 @@ class SlpMgt(MyTreeWidget):
                 self.addTopLevelItem(item)
             elif i["class"] == "SLP1":
                 self.addTopLevelItem(item)
+        self.expandAll()
