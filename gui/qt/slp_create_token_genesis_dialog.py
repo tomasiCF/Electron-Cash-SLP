@@ -52,6 +52,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         else:
             self.token_type = 1
 
+        if not self.network:
+            self.main_window.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'))
+            return
+
         self.setWindowTitle(_("Create a New Token"))
 
         vbox = QVBoxLayout()

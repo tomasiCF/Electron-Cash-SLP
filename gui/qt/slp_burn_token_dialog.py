@@ -42,6 +42,10 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.network = main_window.network
         self.app = main_window.app
 
+        if not self.network:
+            self.main_window.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'))
+            return
+        
         self.baton_txo = None
         try:
             self.baton_txo = self.main_window.wallet.get_slp_token_baton(token_id_hex)
