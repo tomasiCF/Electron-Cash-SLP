@@ -58,6 +58,10 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         self.network = main_window.network
         self.app = main_window.app
 
+        if not self.network:
+            self.main_window.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'))
+            return
+
         if self.provided_token_name:
             self.setWindowTitle(_("SLP Token Details"))
         else:
