@@ -2215,7 +2215,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     return
                 """ Guard against bad address encoding """
                 if not self.payto_e.payto_address:
-                    self.show_error(_("Enter SLP address."))
+                    self.show_error(_("Receiver SLP address is missing."))
                     return
                 """ Require SLPADDR prefix in 'Pay To' field. """
                 if networks.net.SLPADDR_PREFIX not in self.payto_e.address_string_for_slp_check:
@@ -2229,6 +2229,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.show_error(str(e))
                 return
             except OPReturnError as e:
+                self.show_error(str(e))
+                return
+            except (NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp) as e:
                 self.show_error(str(e))
                 return
 

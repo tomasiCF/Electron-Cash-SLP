@@ -9,9 +9,9 @@ class SlpCoinChooser:
         valid_bal, _, _, unfrozen_bal, _ = wallet.get_slp_token_balance(token_id, config)
 
         if amt > valid_bal:
-            raise NotEnoughFundsSlp()
+            raise NotEnoughFundsSlp("Not enough token funds.")
         if valid_bal >= amt > unfrozen_bal:
-            raise NotEnoughUnfrozenFundsSlp()
+            raise NotEnoughUnfrozenFundsSlp("Not enough unfrozen token funds.")
 
         slp_coins = wallet.get_slp_spendable_coins(token_id, domain, config, isInvoice)
         slp_coins = sorted(slp_coins, key=lambda k: -k['token_value'])
