@@ -534,8 +534,10 @@ class Commands(PrintError):
                         change_addr = change_addrs[1]
                     else:
                         change_addr = change_addrs[0]
-                else:
+                elif coins:
                     change_addr = coins[0]['address']
+                else:
+                    change_addr = self.wallet.get_addresses()[0]
             bch_outputs.append((TYPE_ADDRESS, change_addr, DUST))
 
         tx = self.wallet.make_unsigned_transaction(coins, bch_outputs, self.config, fee, mandatory_coins=selected_slp_coins)
