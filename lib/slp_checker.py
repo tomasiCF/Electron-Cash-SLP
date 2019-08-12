@@ -6,42 +6,43 @@ from electroncash.address import Address
 
 class SlpTransactionChecker:
     @staticmethod
-    def check_tx_slp(wallet, tx, *, coins_to_burn=None):
+    def check_tx_slp(wallet, tx, *, coins_to_burn=None, require_tx_in_wallet=True):
 
         # Step 1) Double check all input transactions have been added to wallet._slp_txo
-        for txo in tx.inputs():
-            addr = txo['address']
-            prev_out = txo['prevout_hash']
-            prev_n = txo['prevout_n']
-            with wallet.lock:
-                try:
-                    input_tx = wallet.transactions[prev_out]
-                except KeyError:
-                    raise Exception('Wallet has not downloaded this transaction')
-                else:
+        if require_tx_in_wallet:
+            for txo in tx.inputs():
+                addr = txo['address']
+                prev_out = txo['prevout_hash']
+                prev_n = txo['prevout_n']
+                with wallet.lock:
                     try:
-                        slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
-                    except SlpInvalidOutputMessage:
-                        pass
-                    except SlpUnsupportedSlpTokenType:
-                        raise UnsupportedSlpTokenType('Transaction contains an unsupported SLP' \
-                                                        + ' input type')
+                        input_tx = wallet.transactions[prev_out]
+                    except KeyError:
+                        raise Exception('Wallet has not downloaded this transaction')
                     else:
-                        if slp_msg.transaction_type == 'SEND':
-                            if prev_n >= len(slp_msg.op_return_fields['token_output']):
-                                continue
-                        elif slp_msg.transaction_type in ['GENESIS', 'MINT']:
-                            if slp_msg.op_return_fields['mint_baton_vout'] and \
-                                    prev_n not in [1, slp_msg.op_return_fields['mint_baton_vout']]:
-                                continue
-                            elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
-                                continue
                         try:
-                            with wallet.lock:
-                                assert wallet._slp_txo[addr][prev_out][prev_n]
-                        except (KeyError, AssertionError):
-                            raise SlpMissingInputRecord('Transaction contains an SLP input that is' \
-                                                            + ' unknown to this wallet (missing from slp_txo).')
+                            slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
+                        except SlpInvalidOutputMessage:
+                            pass
+                        except SlpUnsupportedSlpTokenType:
+                            raise UnsupportedSlpTokenType('Transaction contains an unsupported SLP' \
+                                                            + ' input type')
+                        else:
+                            if slp_msg.transaction_type == 'SEND':
+                                if prev_n >= len(slp_msg.op_return_fields['token_output']):
+                                    continue
+                            elif slp_msg.transaction_type in ['GENESIS', 'MINT']:
+                                if slp_msg.op_return_fields['mint_baton_vout'] and \
+                                        prev_n not in [1, slp_msg.op_return_fields['mint_baton_vout']]:
+                                    continue
+                                elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
+                                    continue
+                            try:
+                                with wallet.lock:
+                                    assert wallet._slp_txo[addr][prev_out][prev_n]
+                            except (KeyError, AssertionError):
+                                raise SlpMissingInputRecord('Transaction contains an SLP input that is' \
+                                                                + ' unknown to this wallet (missing from slp_txo).')
 
         # Step 2) Get SLP metadata in current transaction
         try:
