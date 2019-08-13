@@ -165,7 +165,7 @@ class ValidationJob:
                  fetch_hook=None,
                  validitycache=None,
                  download_limit=None, depth_limit=None,
-                 debug=False, was_reset=False, ref=None):
+                 debug=False, ref=None):
         """
         graph should be a TokenGraph instance with the appropriate validator.
 
@@ -205,7 +205,6 @@ class ValidationJob:
         self.callbacks = []
 
         self.debug = debug
-        self.was_reset = was_reset # used only by NFT1
 
         self.exited = threading.Event()
 

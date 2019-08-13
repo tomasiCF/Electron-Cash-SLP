@@ -22,11 +22,11 @@ class GraphContext_NFT1(GraphContext):
     ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
     ValidationJobManager to validate SLP tokens.  '''
 
-    def __init__(self, name="GraphContext_NFT1", is_parallel=False):
-        super().__init__(name=name, is_parallel=is_parallel)
+    def __init__(self, name="GraphContext_NFT1"): #, is_parallel=False): # NFT1 has not been tested with is_parallel=True
+        super().__init__(name=name) #, is_parallel=is_parallel)
 
     def _new_job_mgr(self, suffix='') -> ValidationJobManager:
-        ret = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self, exit_when_done=self.is_parallel)
+        ret = ValidationJobManager(threadname=f'{self.name}/ValidationJobManager{suffix}', graph_context=self, exit_when_done=False) #self.is_parallel)
         weakref.finalize(ret, print_error, f'{ret.threadname} finalized')
         return ret
 
@@ -74,7 +74,7 @@ class GraphContext_NFT1(GraphContext):
         return graph, job_mgr
 
 
-    def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
+    def make_job(self, tx, wallet, network, nft_type, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
         """
         Basic validation job maker for a single transaction.
         Creates job and starts it running in the background thread.
@@ -91,8 +91,8 @@ class GraphContext_NFT1(GraphContext):
             return
 
         # fixme -- wouldn't subsequent wallet instances clobber previous ones?!
-        graph.validator.wallet = wallet
-        graph.validator.network = network
+        # graph.validator.wallet = wallet
+        # graph.validator.network = network
 
         txid = tx.txid_fast()
 
@@ -144,21 +144,43 @@ class GraphContext_NFT1(GraphContext):
                 if val != 0:
                     wallet.slpv1_validity[t] = val
 
+        if nft_type == 'SLP65':
+            job = ValidationJobNFT1Child(graph, [txid], network,
+                                fetch_hook=fetch_hook,
+                                validitycache=None, #wallet.slpv1_validity,
+                                download_limit=limit_dls,
+                                depth_limit=limit_depth,
+                                debug=debug,
+                                was_reset=reset,
+                                ref=wallet,
+                                **kwargs)
+        elif nft_type == 'SLP129':
+            job = ValidationJob(graph, [txid], network,
+                                fetch_hook=fetch_hook,
+                                validitycache=None, #wallet.slpv1_validity,
+                                download_limit=limit_dls,
+                                depth_limit=limit_depth,
+                                debug=debug,
+                                ref=wallet,
+                                **kwargs)
+        else:
+            raise RuntimeError('Invalid NFT type provided.')
 
-        job = ValidationJob(graph, [txid], network,
-                            fetch_hook=fetch_hook,
-                            validitycache=None, #wallet.slpv1_validity,
-                            download_limit=limit_dls,
-                            depth_limit=limit_depth,
-                            debug=debug,
-                            was_reset=reset,
-                            ref=wallet,
-                            **kwargs)
         job.add_callback(done_callback)
-
         job_mgr.add_job(job)
-
         return job
+
+class ValidationJobNFT1Child(ValidationJob):
+    def __init__(self, graph, txids, network,
+                    fetch_hook=None,
+                    validitycache=None,
+                    download_limit=None, depth_limit=None,
+                    debug=False, was_reset=False, ref=None):
+        self.was_reset = was_reset
+        self.genesis_tx = None
+        self.nft_parent_tx = None
+        self.nft_parent_validity = 0
+        super().__init__(graph, txids, network, fetch_hook, validitycache, download_limit, depth_limit, debug, ref)
 
 # App-wide instance. Wallets share the results of the DAG lookups.
 # This instance is shared so that we don't redundantly verify tokens for each
@@ -167,7 +189,7 @@ class GraphContext_NFT1(GraphContext):
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-#shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instead use a per-wallet context.
+shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instead use a per-wallet context.
 
 class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
@@ -183,12 +205,6 @@ class Validator_NFT1(ValidatorGeneric):
     def __init__(self, token_id_hex, jobmgr):
         self.token_id_hex = token_id_hex
         self.validation_jobmgr = jobmgr
-        self.wallet = None
-        self.network = None
-        self.genesis_tx = None
-        self.nft_parent_tx = None
-        self.nft_child_job = None
-        self.nft_parent_validity = 0
 
     def get_info(self,tx):
         """
@@ -282,7 +298,7 @@ class Validator_NFT1(ValidatorGeneric):
         else:
             return (out_n > 0)
 
-    def download_nft_genesis(self, done_callback):
+    def download_nft_genesis(self, nft_child_job, done_callback):
         def dl_cb(resp):
             if resp.get('error'):
                 raise Exception(resp['error'].get('message'))
@@ -290,7 +306,7 @@ class Validator_NFT1(ValidatorGeneric):
             tx = Transaction(raw)
             assert tx.txid_fast() == self.token_id_hex
             txid = self.token_id_hex
-            wallet = self.wallet
+            wallet = nft_child_job.ref()
             with wallet.lock, wallet.transaction_lock:
                 if not wallet.transactions.get(txid, None):
                     wallet.transactions[txid] = tx
@@ -304,20 +320,20 @@ class Validator_NFT1(ValidatorGeneric):
                     }
                     wallet.tx_tokinfo[txid] = tti
                 wallet.save_transactions()
-            self.genesis_tx = tx
+            nft_child_job.genesis_tx = tx
             if done_callback:
                 done_callback()
         requests = [('blockchain.transaction.get', [self.token_id_hex]), ]
-        self.network.send(requests, dl_cb)
+        nft_child_job.network.send(requests, dl_cb)
 
-    def download_nft_parent_tx(self, done_callback):
+    def download_nft_parent_tx(self, nft_child_job, done_callback):
         def dl_cb(resp):
             if resp.get('error'):
                 raise Exception(resp['error'].get('message'))
             raw = resp.get('result')
             tx = Transaction(raw)
             txid = tx.txid_fast()
-            wallet = self.wallet
+            wallet = nft_child_job.ref()
             with wallet.lock, wallet.transaction_lock:
                 if not wallet.transactions.get(txid, None):
                     wallet.transactions[txid] = tx
@@ -333,39 +349,39 @@ class Validator_NFT1(ValidatorGeneric):
                         tti['token_id'] = slpMsg.op_return_fields['token_id_hex']
                     wallet.tx_tokinfo[txid] = tti
                 wallet.save_transactions()
-            self.nft_parent_tx = tx
+            nft_child_job.nft_parent_tx = tx
             if done_callback:
                 done_callback()
-        nft_parent_txid = self.genesis_tx.inputs()[0]['prevout_hash']
+        nft_parent_txid = nft_child_job.genesis_tx.inputs()[0]['prevout_hash']
         requests = [('blockchain.transaction.get', [nft_parent_txid]), ]
-        self.network.send(requests, dl_cb)
+        nft_child_job.network.send(requests, dl_cb)
 
-    def start_NFT_parent_job(self, done_callback):
-        wallet = self.wallet
-        network = self.network
+    def start_NFT_parent_job(self, nft_child_job, done_callback):
+        wallet = nft_child_job.ref()
+        network = nft_child_job.network
         def callback(job):
             (txid,node), = job.nodes.items()
             val = node.validity
-            group_id = wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['token_id']
+            group_id = wallet.tx_tokinfo[nft_child_job.nft_parent_tx.txid_fast()]['token_id']
             if not wallet.token_types.get(group_id, None):
-                name = wallet.token_types[self.genesis_tx.txid_fast()]['name'] + '-parent'
+                name = wallet.token_types[nft_child_job.genesis_tx.txid_fast()]['name'] + '-parent'
                 #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
                 parent_entry = dict({'class':'SLP129','name':name,'decimals':0}) # TODO: handle case where decimals is not 0
                 wallet.add_token_type(group_id, parent_entry)
             with wallet.lock, wallet.transaction_lock:
-                wallet.token_types[self.genesis_tx.txid_fast()]['group_id'] = group_id
-                wallet.tx_tokinfo[self.nft_parent_tx.txid_fast()]['validity'] = val
-                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = val
+                wallet.token_types[nft_child_job.genesis_tx.txid_fast()]['group_id'] = group_id
+                wallet.tx_tokinfo[nft_child_job.nft_parent_tx.txid_fast()]['validity'] = val
+                wallet.tx_tokinfo[nft_child_job.genesis_tx.txid_fast()]['validity'] = val
                 wallet.save_transactions()
             ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
                 ui_cb(txid, val)
-                ui_cb(self.genesis_tx.txid_fast(), val)
+                ui_cb(nft_child_job.genesis_tx.txid_fast(), val)
             if done_callback:
                 done_callback(val)
 
-        tx = self.nft_parent_tx
-        job = self.validation_jobmgr.graph_context and self.validation_jobmgr.graph_context.make_job(tx, wallet, network, debug=self.nft_child_job.debug, reset=self.nft_child_job.was_reset)
+        tx = nft_child_job.nft_parent_tx
+        job = self.validation_jobmgr.graph_context and self.validation_jobmgr.graph_context.make_job(tx, wallet, network, nft_type='SLP129', debug=nft_child_job.debug, reset=nft_child_job.was_reset)
         if job is not None:
             job.add_callback(callback)
         elif self.validation_jobmgr.graph_context is None:
@@ -373,45 +389,44 @@ class Validator_NFT1(ValidatorGeneric):
             warnings.warn("Graph Context is None, JobManager was killed")
         else:
             with wallet.lock, wallet.transaction_lock:
-                wallet.tx_tokinfo[self.genesis_tx.txid_fast()]['validity'] = 4
+                wallet.tx_tokinfo[nft_child_job.genesis_tx.txid_fast()]['validity'] = 4
                 wallet.save_transactions()
             ui_cb = wallet.ui_emit_validity_updated
             if ui_cb:
-                ui_cb(self.genesis_tx.txid_fast(), 4)
+                ui_cb(nft_child_job.genesis_tx.txid_fast(), 4)
             if done_callback:
                 done_callback(4)
 
-    def validate_NFT_parent(self, myinfo):
-        self.nft_child_job = self.validation_jobmgr.job_current
-        self.validation_jobmgr.pause_job(self.nft_child_job)
-
+    def validate_NFT_parent(self, nft_child_job, myinfo):
         def restart_nft_job(val):
-            self.nft_parent_validity = val
-            self.validation_jobmgr.unpause_job(self.nft_child_job)
-            self.nft_child_job = None # release reference
+            nft_child_job.nft_parent_validity = val
+            self.validation_jobmgr.unpause_job(nft_child_job)
+            #self.nft_child_job = None # release reference
 
         def start_nft_parent_validation():
-            self.start_NFT_parent_job(restart_nft_job)
+            self.start_NFT_parent_job(nft_child_job, done_callback=restart_nft_job)
 
         def start_dl_nft_parent():
-            self.download_nft_parent_tx(start_nft_parent_validation)
+            self.download_nft_parent_tx(nft_child_job, done_callback=start_nft_parent_validation)
 
-        self.download_nft_genesis(start_dl_nft_parent)
+        self.validation_jobmgr.pause_job(nft_child_job)
+        self.download_nft_genesis(nft_child_job, start_dl_nft_parent)
 
     def validate(self, myinfo, inputs_info):
+        nft_child_job = self.validation_jobmgr.job_current
 
         # NFT requires parent validation pre-valid phase
-        if self.nft_parent_tx == None:
-            self.validate_NFT_parent(myinfo)
+        if nft_child_job.nft_parent_tx is None:
+            self.validate_NFT_parent(nft_child_job, myinfo)
             return None
 
         if myinfo == 'GENESIS':
             if len(inputs_info) != 0:
                 raise RuntimeError('Unexpected', inputs_info)
-            if self.nft_parent_validity == 1:
+            if nft_child_job.nft_parent_validity == 1:
                 return (True, 1)
-            elif self.nft_parent_validity > 1:
-                return (False, self.nft_parent_validity)
+            elif nft_child_job.nft_parent_validity > 1:
+                return (False, nft_child_job.nft_parent_validity)
             return None
         else:
             # TRAN --- myinfo is an integer sum(outs)

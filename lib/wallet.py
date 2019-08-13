@@ -1350,10 +1350,10 @@ class Abstract_Wallet(PrintError):
 
             if tti['type'] in ['SLP1']:
                 job = self.slp_graph_0x01.make_job(tx, self, self.network,
-                                                   debug=2, reset=False)
+                                                        debug=2, reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
-                job = self.slp_graph_0x01_nft.make_job(tx, self, self.network,
-                                                       debug=2, reset=False)
+                job = self.slp_graph_0x01_nft.make_job(tx, self, self.network, nft_type=tti['type'],
+                                                        debug=2, reset=False)
 
             if job is not None:
                 job.add_callback(callback)
@@ -1931,7 +1931,7 @@ class Abstract_Wallet(PrintError):
                 self.slp_graph_0x01 = slp_validator_0x01.shared_context
                 # For now, NFT validation uses a per-wallet instance until we
                 # iron out some of the bugs.
-                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
+                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.shared_context #GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
                 self.activate_slp()
                 self.network.register_callback(self._slp_callback_on_status, ['status'])
             self.prepare_for_verifier()
