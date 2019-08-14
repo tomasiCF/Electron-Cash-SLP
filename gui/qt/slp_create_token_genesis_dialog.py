@@ -18,7 +18,7 @@ from .util import *
 
 from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, finalization_print_error
 from electroncash.transaction import Transaction
-from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildGenesisOpReturnOutput_V1
+from electroncash.slp import SlpMessage, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildGenesisOpReturnOutput_V1, buildSendOpReturnOutput_V1
 from electroncash.slp_checker import SlpTransactionChecker
 from .amountedit import SLPAmountEdit
 from .transaction_dialog import show_transaction
@@ -28,6 +28,26 @@ from .bfp_upload_file_dialog import BitcoinFilesUploadDialog
 from electroncash import networks
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
+
+def get_nft_parent_coin(nft_parent_id, main_window):
+    # get nft_parent's coins
+    nft_parent_coins = main_window.wallet.get_slp_utxos(
+        nft_parent_id,
+        domain=None,
+        exclude_frozen=True,
+        confirmed_only=main_window.config.get('confirmed_only', False),
+        slp_include_invalid=False,
+        slp_include_baton=False
+        )
+
+    # determine if parent coin has qty 1 to burn
+    selected_coin = None
+    for coin in nft_parent_coins:
+        if coin['token_value'] == 1:
+            selected_coin = coin
+            break
+
+    return selected_coin
 
 class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
@@ -194,12 +214,23 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         hbox.addWidget(self.tok_doc_button)
 
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
+        hbox.addWidget(self.preview_button)
+
         self.create_button = b = QPushButton(_("Create New Token")) #if self.provided_token_name is None else _("Change"))
         b.clicked.connect(self.create_token)
         self.create_button.setAutoDefault(True)
         self.create_button.setDefault(True)
-        hbox.addWidget(self.preview_button)
         hbox.addWidget(self.create_button)
+
+        if nft_parent_id:
+            if not get_nft_parent_coin(nft_parent_id, main_window):
+                self.create_button.setHidden(True)
+                self.create_button.setText("Create NFT")
+                self.prepare_parent_bttn = QPushButton(_("Prepare Parent"))
+                self.prepare_parent_bttn.clicked.connect(self.prepare_nft_parent)
+                self.prepare_parent_bttn.setAutoDefault(True)
+                self.prepare_parent_bttn.setDefault(True)
+                hbox.addWidget(self.prepare_parent_bttn)
 
         dialogs.append(self)
         self.show()
@@ -212,7 +243,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         d.show()
 
     def do_preview(self):
-        self.create_token(preview = True)
+        if self.nft_parent_id and not get_nft_parent_coin(self.nft_parent_id, self.main_window):
+            self.prepare_nft_parent(preview=True)
+            return
+        self.create_token(preview=True)
 
     def hash_file(self):
         options = QFileDialog.Options()
@@ -251,6 +285,102 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         if networks.net.SLPADDR_PREFIX not in address:
             address = networks.net.SLPADDR_PREFIX + ":" + address
         return Address.from_string(address)
+
+    def prepare_nft_parent(self, preview=False):
+
+        self.show_message("Preparation required before NFT can be created.\n\nAfter this 'prep' transaction has been broadcast, please click 'Create NFT' to complete NFT creation.")
+
+        # IMPORTANT: set wallet.sedn_slpTokenId to None to guard tokens during this transaction
+        self.main_window.token_type_combo.setCurrentIndex(0)
+        assert self.main_window.slp_token_id == None
+
+        coins = self.main_window.get_coins()
+        fee = None
+
+        try:
+            selected_coin = None
+            nft_parent_coins = self.main_window.wallet.get_slp_utxos(
+                                        self.nft_parent_id,
+                                        domain=None,
+                                        exclude_frozen=True,
+                                        confirmed_only=self.main_window.config.get('confirmed_only', False),
+                                        slp_include_invalid=False,
+                                        slp_include_baton=False
+                                        )
+            for coin in nft_parent_coins:
+                if coin['token_value'] > 1:
+                    selected_coin = coin
+                    break
+
+            outputs = []
+            try:
+                slp_op_return_msg = buildSendOpReturnOutput_V1(self.nft_parent_id, [1, coin['token_value']-1], token_type=129)
+                outputs.append(slp_op_return_msg)
+            except OPReturnTooLarge:
+                self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))
+                return
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+                self.show_message(str(e))
+                return
+            try:
+                addr = self.parse_address(self.token_pay_to_e.text())
+                outputs.append((TYPE_ADDRESS, addr, 546))
+                outputs.append((TYPE_ADDRESS, addr, 546))
+            except:
+                self.show_message(_("Must have Receiver Address in simpleledger format."))
+                return
+            if selected_coin:
+                tx = self.main_window.wallet.make_unsigned_transaction(coins,
+                        outputs, self.main_window.config, fee, None, mandatory_coins=[selected_coin])
+            else:
+                self.show_message(_("Unable to select a parent coin to prepare."))
+                return 
+        except NotEnoughFunds:
+            self.show_message(_("Insufficient funds"))
+            return
+        except ExcessiveFee:
+            self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
+            return
+        except BaseException as e:
+            traceback.print_exc(file=sys.stdout)
+            self.show_message(str(e))
+            return
+        if preview:
+            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=[selected_coin])
+            return
+
+        msg = []
+
+        if self.main_window.wallet.has_password():
+            msg.append("")
+            msg.append(_("Enter your password to proceed"))
+            password = self.main_window.password_dialog('\n'.join(msg))
+            if not password:
+                return
+        else:
+            password = None
+        tx_desc = None
+        
+        def sign_done(success):
+            if success:
+                if not tx.is_complete():
+                    show_transaction(tx, self.main_window, None, False, self)
+                    self.main_window.do_clear()
+                else:
+                    token_id = tx.txid()
+                    if self.token_name_e.text() == '':
+                        wallet_name = tx.txid()[0:5]
+                    else:
+                        wallet_name = self.token_name_e.text()[0:20]
+                    # Check for duplication error
+                    d = self.wallet.token_types.get(token_id)
+                    for tid, d in self.wallet.token_types.items():
+                        if d['name'] == wallet_name and tid != token_id:
+                            wallet_name = wallet_name + "-" + token_id[:3]
+                            break
+                    self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name, is_nft_prep=True)
+        self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin])
 
     def create_token(self, preview=False):
         token_name = self.token_name_e.text() if self.token_name_e.text() != '' else None
@@ -313,23 +443,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         try:
             selected_coin = None
             if self.nft_parent_id:
-                # get nft_parent's coins
-                nft_parent_coins = self.main_window.wallet.get_slp_utxos(
-                                            self.nft_parent_id,
-                                            domain=None,
-                                            exclude_frozen=True,
-                                            confirmed_only=self.main_window.config.get('confirmed_only', False),
-                                            slp_include_invalid=False,
-                                            slp_include_baton=False
-                                            )
-
-                # determine if parent coin has qty 1 to burn
-                for coin in nft_parent_coins:
-                    if coin['token_value'] == 1:
-                        selected_coin = coin
-                        break
-
-                # if yes, proceed with genesis
+                selected_coin = get_nft_parent_coin(self.nft_parent_id, self.main_window)
                 if selected_coin:
                     tx = self.main_window.wallet.make_unsigned_transaction(coins,
                             outputs, self.main_window.config, fee, None, mandatory_coins=[selected_coin])
@@ -364,6 +478,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         else:
             password = None
         tx_desc = None
+
         def sign_done(success):
             if success:
                 if not tx.is_complete():
@@ -412,7 +527,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             task = partial(self.wallet.sign_transaction, tx, password)
         WaitingDialog(self, _('Signing transaction...'), task, on_signed, on_failed)
 
-    def broadcast_transaction(self, tx, token_name, token_wallet_name):
+    def broadcast_transaction(self, tx, token_name, token_wallet_name, is_nft_prep=False):
         # Capture current TL window; override might be removed on return
         parent = self.top_level_window()
         if self.main_window.gui_object.warn_if_no_network(self):
@@ -436,22 +551,34 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 status, msg = result
                 if status:
                     token_id = msg
-                    self.main_window.add_token_type('SLP%d'%(self.token_type,), token_id, token_wallet_name, int(self.token_ds_e.value()), allow_overwrite=True)
-                    if tx.is_complete():
-                        self.wallet.set_label(token_id, "SLP Token Created: " + token_wallet_name)
-                    if token_name == '':
-                        parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nTokenId: " + token_id)
-                    elif token_name != token_wallet_name:
-                        parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nName on blockchain: " + token_name + "\nTokenId: " + token_id)
+                    if is_nft_prep:
+                        parent.show_message("Transaction Id: " + token_id + "\n\nReady to create NFT, please click 'Create NFT'")
+                        self.create_button.setHidden(False)
+                        self.create_button.setDefault(True)
+                        self.prepare_parent_bttn.setHidden(True)
                     else:
-                        parent.show_message("SLP Token Created.\n\nName: " + token_name + "\nToken ID: " + token_id)
+                        self.main_window.add_token_type('SLP%d'%(self.token_type,), token_id, token_wallet_name, int(self.token_ds_e.value()), allow_overwrite=True)
+                        if tx.is_complete():
+                            self.wallet.set_label(token_id, "SLP Token Created: " + token_wallet_name)
+                        if token_name == '':
+                            parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nTokenId: " + token_id)
+                        elif token_name != token_wallet_name:
+                            parent.show_message("SLP Token Created.\n\nName in wallet: " + token_wallet_name + "\nName on blockchain: " + token_name + "\nTokenId: " + token_id)
+                        else:
+                            parent.show_message("SLP Token Created.\n\nName: " + token_name + "\nToken ID: " + token_id)
                 else:
                     if msg.startswith("error: "):
                         msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
                     self.show_error(msg)
-            self.close()
-
-        WaitingDialog(self, 'Creating SLP Token...', broadcast_thread, broadcast_done, None)
+            if not is_nft_prep:
+                self.close()
+        if self.nft_parent_id and is_nft_prep:
+            msg = 'Preparing for a new NFT...'
+        elif self.nft_parent_id:
+            msg = 'Creating NFT Token...'
+        else:
+            msg = 'Creating SLP Token...' 
+        WaitingDialog(self, msg, broadcast_thread, broadcast_done, None)
 
 
     def closeEvent(self, event):
