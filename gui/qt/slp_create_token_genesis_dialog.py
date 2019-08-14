@@ -223,9 +223,9 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         hbox.addWidget(self.create_button)
 
         if nft_parent_id:
+            self.create_button.setText("Create NFT")
             if not get_nft_parent_coin(nft_parent_id, main_window):
                 self.create_button.setHidden(True)
-                self.create_button.setText("Create NFT")
                 self.prepare_parent_bttn = QPushButton(_("Prepare Parent"))
                 self.prepare_parent_bttn.clicked.connect(self.prepare_nft_parent)
                 self.prepare_parent_bttn.setAutoDefault(True)
@@ -312,9 +312,14 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     selected_coin = coin
                     break
 
+            if selected_coin['token_value'] < 19:
+                slp_qtys = [1] * selected_coin['token_value']
+            elif selected_coin['token_value'] >= 19:
+                slp_qtys = [1] * 18
+                slp_qtys.append(selected_coin['token_value'] - 18)
             outputs = []
             try:
-                slp_op_return_msg = buildSendOpReturnOutput_V1(self.nft_parent_id, [1, coin['token_value']-1], token_type=129)
+                slp_op_return_msg = buildSendOpReturnOutput_V1(self.nft_parent_id, slp_qtys, token_type=129)
                 outputs.append(slp_op_return_msg)
             except OPReturnTooLarge:
                 self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))
@@ -325,8 +330,8 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 return
             try:
                 addr = self.parse_address(self.token_pay_to_e.text())
-                outputs.append((TYPE_ADDRESS, addr, 546))
-                outputs.append((TYPE_ADDRESS, addr, 546))
+                for i in slp_qtys:
+                    outputs.append((TYPE_ADDRESS, addr, 546))
             except:
                 self.show_message(_("Must have Receiver Address in simpleledger format."))
                 return
