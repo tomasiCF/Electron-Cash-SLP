@@ -93,13 +93,13 @@ class SlpMgt(MyTreeWidget):
                 menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
             else:
                 if self.parent.wallet.token_types[keys[0]]['class'] == 'SLP129':
-                    menu.addAction(_("Create Child NFT"), lambda: SlpCreateTokenGenesisDialog(self.parent, nft_parent_id=keys[0]))
+                    menu.addAction(_("Create new NFT"), lambda: SlpCreateTokenGenesisDialog(self.parent, nft_parent_id=keys[0]))
+                    menu.addSeparator()
                 try:
                     self.parent.wallet.get_slp_token_baton(keys[0])
                     menu.addAction(_("Mint Tool"), lambda: SlpCreateTokenMintDialog(self.parent, keys[0]))
                 except SlpNoMintingBatonFound:
                     pass
-                menu.addAction(_("Burn Tool"), lambda: self.onBurnDialog())
                 column = self.currentColumn()
                 column_title = self.headerItem().text(column)
                 column_data = '\n'.join([item.text(column) for item in selected])
@@ -107,6 +107,8 @@ class SlpMgt(MyTreeWidget):
                 menu.addAction(_("Remove this token"), lambda: self.parent.delete_slp_token(keys))
                 if self.currentItem():
                     menu.addAction(_("View Token Details"), lambda: self.onViewTokenDetails())
+                menu.addSeparator()
+                menu.addAction(_("Burn Tool"), lambda: self.onBurnDialog())
             menu.addSeparator()
             
         menu.addAction(_("Add existing token"), lambda: SlpAddTokenDialog(self.parent,))
