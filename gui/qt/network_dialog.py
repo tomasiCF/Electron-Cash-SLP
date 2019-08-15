@@ -365,7 +365,7 @@ class SlpServeListWidget(QTreeWidget):
         slpdbs = networks.net.SLPDB_SERVERS
         n_slpdbs = len(slpdbs)
         for k, items in slpdbs.items():
-            if n_slpdbs > 1:
+            if n_slpdbs > 0:
                 star = ' ◀' if k == self.network.slpdb_host else ''
                 x = QTreeWidgetItem([k+star, 'NA'])
                 x.setData(0, Qt.UserRole, 1)
