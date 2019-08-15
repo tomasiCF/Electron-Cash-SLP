@@ -188,6 +188,20 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         grid.addWidget(self.token_baton_to_e, row, 1)
         row += 1
 
+        if nft_parent_id: 
+            nft_parent_coin = get_nft_parent_coin(nft_parent_id, main_window)
+            if not get_nft_parent_coin(nft_parent_id, main_window):
+                hbox2 = QHBoxLayout()
+                vbox.addLayout(hbox2)
+                warnpm = QIcon(":icons/warning.png").pixmap(20,20)
+                self.warn1 = l = QLabel(); l.setPixmap(warnpm)
+                hbox2.addWidget(l)
+                self.warn_msg = msg = QLabel(_("     NOTE: The parent token needs to be split before a new NFT can be created, click 'Prepare Group Parent'."))
+                hbox2.addWidget(msg)
+                self.warn2 = l = QLabel(); l.setPixmap(warnpm)
+                hbox2.addStretch(1)
+                hbox2.addWidget(l)
+
         hbox = QHBoxLayout()
         vbox.addLayout(hbox)
 
@@ -224,13 +238,21 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         if nft_parent_id:
             self.create_button.setText("Create NFT")
-            if not get_nft_parent_coin(nft_parent_id, main_window):
+            if not nft_parent_coin:
                 self.create_button.setHidden(True)
-                self.prepare_parent_bttn = QPushButton(_("Prepare Parent"))
+                self.prepare_parent_bttn = QPushButton(_("Prepare Group Parent"))
                 self.prepare_parent_bttn.clicked.connect(self.prepare_nft_parent)
                 self.prepare_parent_bttn.setAutoDefault(True)
                 self.prepare_parent_bttn.setDefault(True)
                 hbox.addWidget(self.prepare_parent_bttn)
+                self.token_name_e.setDisabled(True)
+                self.token_ticker_e.setDisabled(True)
+                self.token_url_e.setDisabled(True)
+                self.token_dochash_e.setDisabled(True)
+                self.token_ds_e.setDisabled(True)
+                self.token_qty_e.setDisabled(True)
+                self.token_pay_to_e.setDisabled(True)
+                self.token_baton_to_e.setDisabled(True)
 
         dialogs.append(self)
         self.show()
@@ -385,6 +407,18 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                             wallet_name = wallet_name + "-" + token_id[:3]
                             break
                     self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name, is_nft_prep=True)
+                    self.token_name_e.setDisabled(False)
+                    self.token_ticker_e.setDisabled(False)
+                    self.token_url_e.setDisabled(False)
+                    self.token_dochash_e.setDisabled(False)
+                    self.token_ds_e.setDisabled(False)
+                    self.token_qty_e.setDisabled(False)
+                    self.token_pay_to_e.setDisabled(False)
+                    self.token_baton_to_e.setDisabled(False)
+                    self.warn1.setHidden(True)
+                    self.warn2.setHidden(True)
+                    self.warn_msg.setHidden(True)
+                    
         self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin])
 
     def create_token(self, preview=False):
