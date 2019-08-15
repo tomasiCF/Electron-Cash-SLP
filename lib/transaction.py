@@ -821,11 +821,14 @@ class Transaction:
         return r == s
 
     @staticmethod
-    def verify_signature(pubkey, sig, msghash):
+    def verify_signature(pubkey, sig, msghash, reason=None):
         ''' Given a pubkey (bytes), signature (bytes -- without sighash byte),
         and a sha256d message digest, returns True iff the signature is good
         for the given public key, False otherwise.  Does not raise normally
-        unless given bad or garbage arguments. '''
+        unless given bad or garbage arguments.
+
+        Optional arg 'reason' should be a list which will have a string pushed
+        at the front (failure reason) on False return. '''
         if (any(not arg or not isinstance(arg, bytes) for arg in (pubkey, sig, msghash))
                 or len(msghash) != 32):
             raise ValueError('bad arguments to verify_signature')
@@ -834,18 +837,23 @@ class Transaction:
             return schnorr.verify(pubkey, sig, msghash)
         else:
             from ecdsa import BadSignatureError, BadDigestError
+            from ecdsa.der import UnexpectedDER
             # ECDSA signature
             try:
                 pubkey_point = ser_to_point(pubkey)
                 vk = MyVerifyingKey.from_public_point(pubkey_point, curve=SECP256k1)
                 if vk.verify_digest(sig, msghash, sigdecode = ecdsa.util.sigdecode_der):
                    return True
-            except (AssertionError, BadSignatureError, BadDigestError, ValueError, TypeError):
+            except (AssertionError, ValueError, TypeError,
+                    BadSignatureError, BadDigestError, UnexpectedDER) as e:
                 # ser_to_point will fail if pubkey is off-curve, infinity, or garbage.
                 # verify_digest may also raise BadDigestError and BadSignatureError
-                pass
+                if isinstance(reason, list):
+                    reason.insert(0, repr(e))
             except BaseException as e:
                 print_error("[Transaction.verify_signature] unexpected exception", repr(e))
+                if isinstance(reason, list):
+                    reason.insert(0, repr(e))
             return False
 
 
