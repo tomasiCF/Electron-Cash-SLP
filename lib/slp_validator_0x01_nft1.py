@@ -112,7 +112,7 @@ class GraphContext_NFT1(GraphContext):
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
 
-        def fetch_hook(txids):
+        def fetch_hook(txids, val_job):
             l = []
             for txid in txids:
                 try:
