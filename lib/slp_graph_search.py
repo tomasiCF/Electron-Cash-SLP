@@ -156,6 +156,9 @@ class SlpGraphSearchManager:
                 while True:
                     try:
                         _job = self.new_job_queue.get(block=False)
+                        if not _job.valjob.running and not _job.valjob.has_never_run:
+                            _job.set_failed('validation finished')
+                            continue
                         if not _job.valjob.network.slpdb_host:
                             raise Exception("SLPDB host not set")
                         _job.get_metadata()
@@ -171,9 +174,6 @@ class SlpGraphSearchManager:
                             continue
                         if _job.txn_count_total <= self.cancel_thresh_txcount:
                             _job.set_failed('low txn count')
-                            continue
-                        if not _job.valjob.running and not _job.valjob.has_never_run:
-                            _job.set_failed('validation finished')
                             continue
                         self.search_queue.put(_job)
                         # TODO IF new job queue is finally empty, here we should prioritize order of search jobs queue based on:
