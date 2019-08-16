@@ -37,7 +37,7 @@ class GraphContext(PrintError):
         self.name = name
         self._setup_job_mgr()
 
-    def diagnostic_name():
+    def diagnostic_name(self):
         return self.name
 
     def _setup_job_mgr(self):
