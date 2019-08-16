@@ -167,7 +167,7 @@ class BaseWizard(object):
         self.terminate()
 
     def restore_from_key(self):
-        if self.wallet_type == 'standard':
+        if self.wallet_type == 'slp_standard':
             v = keystore.is_master_key
             title = _("Create keystore from a master key")
             message = ' '.join([
