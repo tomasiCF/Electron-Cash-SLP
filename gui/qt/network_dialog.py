@@ -287,12 +287,14 @@ class SearchJobListWidget(QTreeWidget):
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def restart_job(self, item):
-        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-        shared_context.graph_search_mgr.restart_search(job)
+        with shared_context.graph_search_mgr.lock:
+            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+            shared_context.graph_search_mgr.restart_search(job)
 
     def cancel_job(self, item):
-        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-        job.sched_cancel()
+        with shared_context.graph_search_mgr.lock:
+            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+            job.sched_cancel(reason='user cancelled')
 
     def keyPressEvent(self, event):
         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
@@ -317,7 +319,6 @@ class SearchJobListWidget(QTreeWidget):
             if len(jobs) > 0:
                 tx_count = str(job.txn_count_total) if job.txn_count_total else ''
                 status = 'In Queue'
-                msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
                 if job.search_success:
                     status = 'Completed'
                 elif job.job_complete:
@@ -328,7 +329,8 @@ class SearchJobListWidget(QTreeWidget):
                     status = 'Working...'
                 progress = str(job.depth_completed) + '/' + str(job.total_depth) if job.total_depth else ''
                 success = str(job.search_success) if job.search_success else ''
-                x = QTreeWidgetItem([job.root_txid[:6], tx_count, progress, status + msg])
+                exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
+                x = QTreeWidgetItem([job.root_txid[:6], tx_count, progress, status + exit_msg])
                 x.setData(0, Qt.UserRole, k)
                 x.setData(3, Qt.UserRole, status)
                 self.addTopLevelItem(x)
@@ -344,7 +346,7 @@ class SlpServeListWidget(QTreeWidget):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('SLPDB Server'), _('Server Status')])
+        self.setHeaderLabels([_('SLPDB Server')]) #, _('Server Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
         host = self.parent.config.get('slpdb_host', None)
@@ -358,7 +360,7 @@ class SlpServeListWidget(QTreeWidget):
         if not item:
             return
         menu = QMenu()
-        server = item.data(1, Qt.UserRole)
+        server = item.data(0, Qt.UserRole)
         menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -389,68 +391,14 @@ class SlpServeListWidget(QTreeWidget):
         for k, items in slpdbs.items():
             if n_slpdbs > 0:
                 star = ' ◀' if k == self.network.slpdb_host else ''
-                x = QTreeWidgetItem([k+star, 'NA'])
-                x.setData(0, Qt.UserRole, 1)
-                x.setData(1, Qt.UserRole, k)
+                x = QTreeWidgetItem([k+star]) #, 'NA'])
+                x.setData(0, Qt.UserRole, k)
+                # x.setData(1, Qt.UserRole, k)
                 self.addTopLevelItem(x)
         h = self.header()
         h.setStretchLastSection(False)
         h.setSectionResizeMode(0, QHeaderView.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-
-# class SlpdbListWidget(QTreeWidget):
-#     def __init__(self, parent):
-#         QTreeWidget.__init__(self)
-#         self.parent = parent
-#         self.network = parent.network
-#         self.setHeaderLabels([_('SLPDB Server'), _('Status')])
-#         self.setContextMenuPolicy(Qt.CustomContextMenu)
-#         self.customContextMenuRequested.connect(self.create_menu)
-
-#     def create_menu(self, position):
-#         item = self.currentItem()
-#         if not item:
-#             return
-#         menu = QMenu()
-#         server = item.data(1, Qt.UserRole)
-#         menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
-#         menu.exec_(self.viewport().mapToGlobal(position))
-
-#     def select_slpdb_server(self, server):
-#         self.network.slpdb_host = server
-#         self.update()
-
-#     def keyPressEvent(self, event):
-#         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
-#             item, col = self.currentItem(), self.currentColumn()
-#             if item and col > -1:
-#                 self.on_activated(item, col)
-#         else:
-#             QTreeWidget.keyPressEvent(self, event)
-
-#     def on_activated(self, item, column):
-#         # on 'enter' we show the menu
-#         pt = self.visualItemRect(item).bottomLeft()
-#         pt.setX(50)
-#         self.customContextMenuRequested.emit(pt)
-
-#     def update(self):
-#         self.clear()
-#         self.addChild = self.addTopLevelItem
-#         slpdbs = networks.net.SLPDB_SERVERS
-#         n_slpdbs = len(slpdbs)
-#         for k, items in slpdbs.items():
-#             if n_slpdbs > 1:
-#                 star = ' ◀' if k == self.network.slpdb_host else ''
-#                 x = QTreeWidgetItem([k+star, 'NA'])
-#                 x.setData(0, Qt.UserRole, 0)
-#                 x.setData(1, Qt.UserRole, k)
-#                 self.addTopLevelItem(x)
-
-#         h = self.header()
-#         h.setStretchLastSection(False)
-#         h.setSectionResizeMode(0, QHeaderView.Stretch)
-#         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        #h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
 class NetworkChoiceLayout(QObject, PrintError):
 
@@ -607,13 +555,13 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         # SLP Validation Tab
         grid = QGridLayout(slp_tab)
-        self.slpdb_cb = QCheckBox(_('Use SLP Graph Search'))
+        self.slpdb_cb = QCheckBox(_('Use SLPDB Graph Search to speed up validation'))
         self.slpdb_cb.clicked.connect(self.use_slpdb)
         self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
         grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
         self.slpdb_list_widget = SlpServeListWidget(self)
         grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
-        grid.addWidget(QLabel(_("Recent SLPDB Search Jobs:")), 2, 0)
+        grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 2, 0)
         self.slp_search_job_list_widget = SearchJobListWidget(self)
         grid.addWidget(self.slp_search_job_list_widget, 3, 0, 1, 5)
 

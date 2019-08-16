@@ -19,7 +19,7 @@ from .caches import ExpiringCache
 class GraphSearchJob:
     def __init__(self, txid, valjob_ref):
         self.root_txid = txid
-        self.valjob=valjob_ref
+        self.valjob = valjob_ref
 
         # metadata fetched from back end
         self.depth_map = None
@@ -40,7 +40,8 @@ class GraphSearchJob:
         self.waiting_to_cancel = False
         self.cancel_callback = None
 
-    def sched_cancel(self, callback=None):
+    def sched_cancel(self, callback=None, reason='job canceled'):
+        self.exit_msg = reason
         if self.job_complete:
             return
         if not self.waiting_to_cancel:
@@ -51,9 +52,18 @@ class GraphSearchJob:
     def _cancel(self):
         self.job_complete = True
         self.search_success = False
-        self.exit_msg = 'job canceled'
         if self.cancel_callback:
             self.cancel_callback(self)
+
+    def set_success(self):
+        self.search_success = True
+        self.job_complete = True
+
+    def set_failed(self, reason=None):
+        self.search_started = True
+        self.search_success = False
+        self.job_complete = True
+        self.exit_msg = reason
 
     def get_metadata(self):
         res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
@@ -113,6 +123,9 @@ class SlpGraphSearchManager:
         self.lock = threading.Lock()
         self.threadname = threadname
 
+        # dag size threshold to auto-cancel job
+        self.cancel_thresh_txcount = 50
+
     def new_search(self, valjob_ref):
         """ start a search job on new thread, returns weakref of new GS jobber object"""
         txid = valjob_ref.root_txid
@@ -132,7 +145,7 @@ class SlpGraphSearchManager:
             self.new_search(job.valjob)
             job = None
         if not job.job_complete:
-            job.sched_cancel(callback)
+            job.sched_cancel(callback, reason='job restarted')
         else:
             callback(job)
     
@@ -150,20 +163,23 @@ class SlpGraphSearchManager:
                         break
                     except Exception as e:
                         print("error in graph search query", str(e), file=sys.stderr)
-                        _job.error_msg = str(e)
+                        _job.set_failed(str(e))
                         continue
                     else:
-                        if not _job.txn_count_total:
-                            _job.search_success = False
-                            _job.job_complete = True
+                        if not _job.txn_count_total and _job.txn_count_total != 0:
+                            _job.set_failed('metadata error')
+                            continue
+                        if _job.txn_count_total <= self.cancel_thresh_txcount:
+                            _job.set_failed('low txn count')
+                            continue
+                        if not _job.valjob.running and not _job.valjob.has_never_run:
+                            _job.set_failed('validation finished')
                             continue
                         self.search_queue.put(_job)
-                    
                         # TODO IF new job queue is finally empty, here we should prioritize order of search jobs queue based on:
                         #       (1) remove any items whose validation job has finished
                         #       (2) sort queue by DAG size, largest jobs will benefit from GS the most.
                         #       (3) check to see if the root_txid is already in validity cache from previous job
-
                 try:
                     job = self.search_queue.get(block=False)
                 except queue.Empty:
@@ -171,17 +187,16 @@ class SlpGraphSearchManager:
                         self.thread = None
                         break
                 else:
+                    job.search_started = True
+                    if not job.valjob.running and not job.valjob.has_never_run:
+                        job.set_failed('validation finished')
+                        continue
                     try:
-                        # TODO: before starting job, check to see if the root_txid is already in validity cache from previous job
-
                         # search_query is a recursive call, most time will be spent here
-                        job.search_started = True
                         self.search_query(job)
                     except Exception as e:
                         print("error in graph search query", e, file=sys.stderr)
-                        job.error_msg = str(e)
-                        job.search_success = False
-                        job.job_complete = True
+                        job.set_failed(str(e))
                         return
                     else:
                         pass
@@ -231,8 +246,7 @@ class SlpGraphSearchManager:
             depth_map_index+=1
             self.search_query(job, txids, depth_map_index)
         else:
-            job.search_success = True
-            job.job_complete = True
+            job.set_success()
             print("[SLP Graph Search] job success")
 
     def search_url(self, txids, max_depth, host, validity_cache=[]):
