@@ -53,8 +53,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         else:
             raise Exception("Parent must be of type ElectrumWindow or SlpCreateTokenGenesisDialog")
 
-        if not self.network:
-            self.main_window.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'))
+        if self.main_window.gui_object.warn_if_no_network(self.main_window):
             return
 
         self.file_receiver = file_receiver
