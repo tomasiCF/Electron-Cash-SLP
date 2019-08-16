@@ -35,6 +35,8 @@ from electroncash import networks
 from electroncash.util import print_error, Weak, PrintError
 from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
 
+from electroncash.slp_validator_0x01 import shared_context
+
 from .util import *
 
 protocol_names = ['TCP', 'SSL']
@@ -263,12 +265,12 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(1, QHeaderView.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
-class SlpdbJobListWidget(QTreeWidget):
+class SearchJobListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('Symbol'), _('JobId'), _('TxCount'), _('Status')])
+        self.setHeaderLabels([_('Id'), _("Txn Count"), _('Depth Progress'), _('Search Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
 
@@ -277,14 +279,20 @@ class SlpdbJobListWidget(QTreeWidget):
         if not item:
             return
         menu = QMenu()
-        server = item.data(1, Qt.UserRole)
-        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.addAction(_("Refresh List"), lambda: self.update())
+        if item.data(3, Qt.UserRole) in ['Exited', 'Completed']:
+            menu.addAction(_("Restart Search"), lambda: self.restart_job(item))
+        elif item.data(3, Qt.UserRole) not in ['Exited', 'Completed']:
+            menu.addAction(_("Cancel"), lambda: self.cancel_job(item))
         menu.exec_(self.viewport().mapToGlobal(position))
 
-    def select_slpdb_server(self, server):
-        self.network.slpdb_host = server
-        self.parent.config.set_key('slpdb_host', self.network.slpdb_host)
-        self.update()
+    def restart_job(self, item):
+        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+        shared_context.graph_search_mgr.restart_search(job)
+
+    def cancel_job(self, item):
+        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+        job.sched_cancel()
 
     def keyPressEvent(self, event):
         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
@@ -303,26 +311,40 @@ class SlpdbJobListWidget(QTreeWidget):
     def update(self):
         self.clear()
         self.addChild = self.addTopLevelItem
-        slpdbs = networks.net.SLPDB_SERVERS
-        n_slpdbs = len(slpdbs)
-        for k, items in slpdbs.items():
-            if n_slpdbs > 1:
-                star = ' ◀' if k == "TBD" else ''
-                x = QTreeWidgetItem([k+star, 'NA'])
-                x.setData(0, Qt.UserRole, 1)
-                x.setData(1, Qt.UserRole, k)
+        with shared_context.graph_search_mgr.lock:
+            jobs = shared_context.graph_search_mgr.search_jobs.copy()
+        for k, job in jobs.items():
+            if len(jobs) > 0:
+                tx_count = str(job.txn_count_total) if job.txn_count_total else ''
+                status = 'In Queue'
+                msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
+                if job.search_success:
+                    status = 'Completed'
+                elif job.job_complete:
+                    status = 'Exited'
+                elif job.waiting_to_cancel:
+                    status = 'Stopping...'
+                elif job.search_started:
+                    status = 'Working...'
+                progress = str(job.depth_completed) + '/' + str(job.total_depth) if job.total_depth else ''
+                success = str(job.search_success) if job.search_success else ''
+                x = QTreeWidgetItem([job.root_txid[:6], tx_count, progress, status + msg])
+                x.setData(0, Qt.UserRole, k)
+                x.setData(3, Qt.UserRole, status)
                 self.addTopLevelItem(x)
         h = self.header()
-        h.setStretchLastSection(False)
-        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setStretchLastSection(True)
+        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
 class SlpServeListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('SLP Server'), _('Status')])
+        self.setHeaderLabels([_('SLPDB Server'), _('Server Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
         host = self.parent.config.get('slpdb_host', None)
@@ -376,59 +398,59 @@ class SlpServeListWidget(QTreeWidget):
         h.setSectionResizeMode(0, QHeaderView.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
-class SlpdbListWidget(QTreeWidget):
-    def __init__(self, parent):
-        QTreeWidget.__init__(self)
-        self.parent = parent
-        self.network = parent.network
-        self.setHeaderLabels([_('SLPDB Server'), _('Status')])
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.create_menu)
+# class SlpdbListWidget(QTreeWidget):
+#     def __init__(self, parent):
+#         QTreeWidget.__init__(self)
+#         self.parent = parent
+#         self.network = parent.network
+#         self.setHeaderLabels([_('SLPDB Server'), _('Status')])
+#         self.setContextMenuPolicy(Qt.CustomContextMenu)
+#         self.customContextMenuRequested.connect(self.create_menu)
 
-    def create_menu(self, position):
-        item = self.currentItem()
-        if not item:
-            return
-        menu = QMenu()
-        server = item.data(1, Qt.UserRole)
-        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
-        menu.exec_(self.viewport().mapToGlobal(position))
+#     def create_menu(self, position):
+#         item = self.currentItem()
+#         if not item:
+#             return
+#         menu = QMenu()
+#         server = item.data(1, Qt.UserRole)
+#         menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+#         menu.exec_(self.viewport().mapToGlobal(position))
 
-    def select_slpdb_server(self, server):
-        self.network.slpdb_host = server
-        self.update()
+#     def select_slpdb_server(self, server):
+#         self.network.slpdb_host = server
+#         self.update()
 
-    def keyPressEvent(self, event):
-        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
-            item, col = self.currentItem(), self.currentColumn()
-            if item and col > -1:
-                self.on_activated(item, col)
-        else:
-            QTreeWidget.keyPressEvent(self, event)
+#     def keyPressEvent(self, event):
+#         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+#             item, col = self.currentItem(), self.currentColumn()
+#             if item and col > -1:
+#                 self.on_activated(item, col)
+#         else:
+#             QTreeWidget.keyPressEvent(self, event)
 
-    def on_activated(self, item, column):
-        # on 'enter' we show the menu
-        pt = self.visualItemRect(item).bottomLeft()
-        pt.setX(50)
-        self.customContextMenuRequested.emit(pt)
+#     def on_activated(self, item, column):
+#         # on 'enter' we show the menu
+#         pt = self.visualItemRect(item).bottomLeft()
+#         pt.setX(50)
+#         self.customContextMenuRequested.emit(pt)
 
-    def update(self):
-        self.clear()
-        self.addChild = self.addTopLevelItem
-        slpdbs = networks.net.SLPDB_SERVERS
-        n_slpdbs = len(slpdbs)
-        for k, items in slpdbs.items():
-            if n_slpdbs > 1:
-                star = ' ◀' if k == self.network.slpdb_host else ''
-                x = QTreeWidgetItem([k+star, 'NA'])
-                x.setData(0, Qt.UserRole, 0)
-                x.setData(1, Qt.UserRole, k)
-                self.addTopLevelItem(x)
+#     def update(self):
+#         self.clear()
+#         self.addChild = self.addTopLevelItem
+#         slpdbs = networks.net.SLPDB_SERVERS
+#         n_slpdbs = len(slpdbs)
+#         for k, items in slpdbs.items():
+#             if n_slpdbs > 1:
+#                 star = ' ◀' if k == self.network.slpdb_host else ''
+#                 x = QTreeWidgetItem([k+star, 'NA'])
+#                 x.setData(0, Qt.UserRole, 0)
+#                 x.setData(1, Qt.UserRole, k)
+#                 self.addTopLevelItem(x)
 
-        h = self.header()
-        h.setStretchLastSection(False)
-        h.setSectionResizeMode(0, QHeaderView.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+#         h = self.header()
+#         h.setStretchLastSection(False)
+#         h.setSectionResizeMode(0, QHeaderView.Stretch)
+#         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
 class NetworkChoiceLayout(QObject, PrintError):
 
@@ -591,10 +613,9 @@ class NetworkChoiceLayout(QObject, PrintError):
         grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
         self.slpdb_list_widget = SlpServeListWidget(self)
         grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
-        grid.addWidget(QLabel(_("Graph Search Job History:")), 2, 0)
-        self.slp_job_list_widget = SlpdbJobListWidget(self)
-        self.slp_job_list_widget.setDisabled(True)
-        grid.addWidget(self.slp_job_list_widget, 3, 0, 1, 5)
+        grid.addWidget(QLabel(_("Recent SLPDB Search Jobs:")), 2, 0)
+        self.slp_search_job_list_widget = SearchJobListWidget(self)
+        grid.addWidget(self.slp_search_job_list_widget, 3, 0, 1, 5)
 
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
@@ -727,6 +748,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
         self.slpdb_list_widget.update()
+        self.slp_search_job_list_widget.update()
 
     def fill_in_proxy_settings(self):
         host, port, protocol, proxy_config, auto_connect = self.network.get_parameters()

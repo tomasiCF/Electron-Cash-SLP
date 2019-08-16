@@ -30,11 +30,30 @@ class GraphSearchJob:
         self.search_started = False
         self.search_success = None
         self.job_complete = False
-        self.error_msg = None
+        self.exit_msg = None
         self.depth_completed = 0
         self.depth_current_query = None
         self.txn_count_progress = 0
-        self.last_search_url = None
+        self.last_search_url = '(url empty)'
+
+        # ctl
+        self.waiting_to_cancel = False
+        self.cancel_callback = None
+
+    def sched_cancel(self, callback=None):
+        if self.job_complete:
+            return
+        if not self.waiting_to_cancel:
+            self.waiting_to_cancel = True
+            self.cancel_callback = callback
+            return
+
+    def _cancel(self):
+        self.job_complete = True
+        self.search_success = False
+        self.exit_msg = 'job canceled'
+        if self.cancel_callback:
+            self.cancel_callback(self)
 
     def get_metadata(self):
         res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
@@ -91,7 +110,8 @@ class SlpGraphSearchManager:
         self.new_job_queue = queue.Queue()  # this is a queue for performing metadata 
         self.search_queue = queue.Queue()
         self.thread = None
-        self.threadname=threadname
+        self.lock = threading.Lock()
+        self.threadname = threadname
 
     def new_search(self, valjob_ref):
         """ start a search job on new thread, returns weakref of new GS jobber object"""
@@ -106,6 +126,16 @@ class SlpGraphSearchManager:
             return job
         return None
 
+    def restart_search(self, job):
+        def callback(job):
+            self.search_jobs.pop(job.root_txid, None)
+            self.new_search(job.valjob)
+            job = None
+        if not job.job_complete:
+            job.sched_cancel(callback)
+        else:
+            callback(job)
+    
     def mainloop(self,):
         try:
             while True:
@@ -123,6 +153,10 @@ class SlpGraphSearchManager:
                         _job.error_msg = str(e)
                         continue
                     else:
+                        if not _job.txn_count_total:
+                            _job.search_success = False
+                            _job.job_complete = True
+                            continue
                         self.search_queue.put(_job)
                     
                         # TODO IF new job queue is finally empty, here we should prioritize order of search jobs queue based on:
@@ -155,6 +189,10 @@ class SlpGraphSearchManager:
             print("[SLP Graph Search] SearchGraph thread completed.", file=sys.stderr)
 
     def search_query(self, job, txids=None, depth_map_index=0):
+        if job.waiting_to_cancel:
+            job._cancel()
+            return
+
         if depth_map_index == 0:
             txids = [job.root_txid]
         job.depth_current_query, txn_count = job.depth_map[str((depth_map_index+1)*1000)]  # we query for chunks with up to 1000 txns
