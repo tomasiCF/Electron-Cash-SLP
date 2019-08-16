@@ -1334,7 +1334,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         amount = req['amount']
         op_return = req.get('op_return')
         op_return_raw = req.get('op_return_raw') if not op_return else None
-        URI = web.create_URI(addr, amount, message, op_return=op_return, op_return_raw=op_return_raw)
+        URI = web.create_URI(addr, amount, message, op_return=op_return, op_return_raw=op_return_raw, token_id=req.get('token_id'))
         if req.get('time'):
             URI += "&time=%d"%req.get('time')
         if req.get('exp'):
@@ -1344,7 +1344,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             sig = bitcoin.base_encode(sig, base=58)
             URI += "&name=" + req['name'] + "&sig="+sig
         return str(URI)
-
 
     def sign_payment_request(self, addr):
         alias = self.config.get('alias')
@@ -1526,8 +1525,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.update_receive_address_widget()
 
     def update_receive_qr(self):
-        if self.receive_token_type_combo.currentData() is not None:
-            amount = self.receive_slp_amount_e.text() if self.receive_slp_amount_e.text() is not '' else None
+        if self.receive_token_type_combo.currentData() is not None and self.receive_slp_amount_e.text() is not '':
+            amount = self.receive_slp_amount_e.text() # if self.receive_slp_amount_e.text() is not '' else None
             token_id = self.receive_token_type_combo.currentData()
         else:
             amount = self.receive_amount_e.get_amount()
@@ -1600,6 +1599,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_slp_amount_e.setText("")
         self.receive_amount_e.setText("")
         slp_token_id = self.receive_token_type_combo.currentData()
+        self.update_receive_qr()
         if slp_token_id is None:
             self.receive_slp_amount_e.setDisabled(True)
             self.receive_slp_amount_label.setDisabled(True)
