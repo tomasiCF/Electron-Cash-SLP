@@ -178,7 +178,7 @@ class RequestList(MyTreeWidget):
         menu = QMenu(self)
         menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data.strip()))
         menu.addAction(_("Copy URI"), lambda: self.parent.view_and_paste('URI', '', self.parent.get_request_URI(addr)))
-        menu.addAction(_("Save as BIP70 file"), lambda: self.parent.export_payment_request(addr))
+        menu.addAction(_("Save as BIP70 file"), lambda: self.parent.export_payment_request(addr)).setEnabled(not bool(req.get('token_id')))
         menu.addAction(_("Delete"), lambda: self.parent.delete_payment_request(addr))
         run_hook('receive_list_menu', menu, addr)
         menu.exec_(self.viewport().mapToGlobal(position))
