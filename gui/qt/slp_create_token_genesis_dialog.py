@@ -248,8 +248,6 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                 self.token_ticker_e.setDisabled(True)
                 self.token_url_e.setDisabled(True)
                 self.token_dochash_e.setDisabled(True)
-                self.token_ds_e.setDisabled(True)
-                self.token_qty_e.setDisabled(True)
                 self.token_pay_to_e.setDisabled(True)
                 self.token_baton_to_e.setDisabled(True)
 
@@ -410,8 +408,6 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     self.token_ticker_e.setDisabled(False)
                     self.token_url_e.setDisabled(False)
                     self.token_dochash_e.setDisabled(False)
-                    self.token_ds_e.setDisabled(False)
-                    self.token_qty_e.setDisabled(False)
                     self.token_pay_to_e.setDisabled(False)
                     self.token_baton_to_e.setDisabled(False)
                     self.warn1.setHidden(True)
