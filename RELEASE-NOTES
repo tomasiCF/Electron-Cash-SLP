@@ -117,14 +117,13 @@ Electron Cash - SLP Token Edition
 - Reordered Send Tab amount input fields and moved token selector above amount inputs
 - Ported many goodies from the [EC 4.0.6 release](https://github.com/Electron-Cash/Electron-Cash/releases/tag/4.0.6) including: CoinText support (SLP sending is not supported), automatic high resolution scaling
 
-3.4.15 Updates & Features (WIP)
+3.4.15 Updates & Features
 -----
-- Add SLP invoice support in Receive tab (TODO: Check NFT1)
-- Add NFT1 Parent/Group Token GENESIS support (TODO: Check mint baton is using 0x81)
-- Add NFT1 Child Token GENESIS support via right-click on NFT1 parent item
-- Update Token tab UI to categorize NFT1 Child tokens as children to its NFT1 Parent token
-- Pull SLP coin selection code parts out of `main_window.py` into its own file `slp_checker.py`
-- Add new SLP pre-sign feature that double checks that SLP transaction is valid before being signed
-- Bug fixes and improvements 
+- Added grouped NFT support, see [NFT1 spec](https://github.com/simpleledger/slp-specifications/blob/master/slp-nft-1.md)
+- Added SLPDB Graph Search feature to speed up local validation, not used with NFT1 tokens
+- Parallelized Type 0x01 SLP validator to run a thread for each token ID, also fixed validator stability
+- Added SLP support in Receive tab
+- Refactored SLP coin selection code
+- Added pre-sign check to double check against SLP burns
+- Various other bug fixes and improvements
 - Various improvements ported from EC
-- ...
