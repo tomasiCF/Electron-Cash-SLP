@@ -120,7 +120,6 @@ class SlpGraphSearchManager:
         self.new_job_queue = queue.Queue()  # this is a queue for performing metadata 
         self.search_queue = queue.Queue()
         self.thread = None
-        self.lock = threading.Lock()
         self.threadname = threadname
 
         # dag size threshold to auto-cancel job
