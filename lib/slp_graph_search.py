@@ -206,49 +206,40 @@ class SlpGraphSearchManager:
         if job.waiting_to_cancel:
             job._cancel()
             return
-
+        if not job.valjob.running and not job.valjob.has_never_run:
+            job.set_failed('validation finished')
+            return
         if depth_map_index == 0:
             txids = [job.root_txid]
-        job.depth_current_query, txn_count = job.depth_map[str((depth_map_index+1)*1000)]  # we query for chunks with up to 1000 txns
+        job.depth_current_query, txn_count = job.depth_map[str((depth_map_index+1)*1000)]  # currently, we query for chunks with up to 1000 txns
         if depth_map_index > 0:
-            queryDepth = job.depth_current_query - job.depth_map[str((depth_map_index)*1000)][0]
+            query_depth = job.depth_current_query - job.depth_map[str((depth_map_index)*1000)][0]
             txn_count = txn_count - job.depth_map[str((depth_map_index)*1000)][1]
         else:
-            queryDepth = job.depth_current_query
-        # f = open("gs-"+job.root_txid+".txt","a")
-        # f.write(str(queryDepth)+","+str(job.depth_current_query)+","+str(txn_count)+"\n")
-        # f.write("==== Graph Search Query ===="+"\n")
-        # f.write("txids: "+str(txids)+"\n")
-        # f.write("total depth: "+str(job.total_depth)+"\n")
-        # f.write("this query's depth: "+str(job.depth_current_query)+"\n")
-        # f.write("expected query txn count: "+str(txn_count)+"\n")
-        # f.write("query depth: "+str(queryDepth)+"\n")
-        # f.write("txn search url = " + requrl+"\n")
-        # f.write("============================"+"\n")
-        requrl = self.search_url(txids, queryDepth, job.valjob.network.slpdb_host) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
-        job.last_search_url = requrl
-        reqresult = requests.get(requrl, timeout=60)
-        dependsOn = []
+            query_depth = job.depth_current_query
+        query_json = self.get_query_json(txids, query_depth, job.valjob.network.slpdb_host) #TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+        job.last_search_url = job.valjob.network.slpdb_host + "/q/" + base64.b64encode(json.dumps(query_json).encode('utf-8')).decode('utf-8')
+        reqresult = requests.post(job.valjob.network.slpdb_host + "/q/", json=query_json, timeout=60)
+        depends_on = []
         depths = []
         for resp in json.loads(reqresult.content.decode('utf-8'))['g']:
-            dependsOn.extend(resp['dependsOn'])
+            depends_on.extend(resp['dependsOn'])
             depths.extend(resp['depths'])
-        txns = [ (d, Transaction(base64.b64decode(tx).hex())) for d,tx in zip(depths, dependsOn) ]
-        job.txn_count_progress+=len(txns)
+        txns = [(d, Transaction(base64.b64decode(tx).hex())) for d, tx in zip(depths, depends_on)]
+        job.txn_count_progress += len(txns)
         for tx in txns:
             SlpGraphSearchManager.tx_cache_put(tx[1])
         if txns:
             job.depth_completed = job.depth_map[str((depth_map_index+1)*1000)][0]
         if job.depth_completed < job.total_depth:
-            # TODO: check to see if the validation job is still running, if not then should raise ValidationJobFinished and conitinue in while loop
-            txids = [ tx[1].txid_fast() for tx in txns if tx[0] == queryDepth ]
-            depth_map_index+=1
+            txids = [tx[1].txid_fast() for tx in txns if tx[0] == query_depth]
+            depth_map_index += 1
             self.search_query(job, txids, depth_map_index)
         else:
             job.set_success()
             print("[SLP Graph Search] job success")
 
-    def search_url(self, txids, max_depth, host, validity_cache=[]):
+    def get_query_json(self, txids, max_depth, host, validity_cache=[]):
         print("[SLP Graph Search] " + str(txids))
         txids_q = []
         for txid in txids:
@@ -362,10 +353,8 @@ class SlpGraphSearchManager:
                 "limit": len(txids)  # we will get a maximum of len(txids) results in form of the final $projection
             }
             }
-        s = json.dumps(q)
-        q = base64.b64encode(s.encode('utf-8'))
-        url = host + "/q/" + q.decode('utf-8')
-        return url
+
+        return q
 
     # This cache stores foreign (non-wallet) tx's we fetched from the network
     # for the purposes of the "fetch_input_data" mechanism. Its max size has
