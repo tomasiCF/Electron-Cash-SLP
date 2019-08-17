@@ -307,7 +307,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
     def prepare_nft_parent(self, preview=False):
 
-        self.show_message("Preparation required before NFT can be created.\n\nAfter this 'prep' transaction has been broadcast, please click 'Create NFT' to complete NFT creation.")
+        self.show_message("An initial preparation transaction is required before a new NFT can be created. This ensures only 1 parent token is burned in the NFT Genesis transaction.\n\nAfter this is transaction is broadcast you can proceed to fill out the NFT details and then click 'Create NFT'.")
 
         # IMPORTANT: set wallet.sedn_slpTokenId to None to guard tokens during this transaction
         self.main_window.token_type_combo.setCurrentIndex(0)

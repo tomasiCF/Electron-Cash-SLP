@@ -18,14 +18,13 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-
-proxy = slp_proxying.tokengraph_proxy
+from .slp_graph_search import SlpGraphSearchManager # thread doesn't start until needed
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
     ValidationJobManager to validate SLP tokens if is_parallel=False.
 
-    If is_parallel=True, will create 1 job manager (thread) per token_id it is
+    If is_parallel=True, will create 1 job manager (thread) per tokenid it is
     validating. '''
 
     def __init__(self, name='GraphContext', is_parallel=False):
@@ -35,6 +34,7 @@ class GraphContext(PrintError):
         self.is_parallel = is_parallel
         self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
+        self.graph_search_mgr = SlpGraphSearchManager()
         self._setup_job_mgr()
 
     def diagnostic_name(self):
@@ -138,16 +138,28 @@ class GraphContext(PrintError):
     @staticmethod
     def get_validation_config():
         config = get_config()
-        if config:
+        try:
             limit_dls   = config.get('slp_validator_download_limit', None)
             limit_depth = config.get('slp_validator_depth_limit', None)
             proxy_enable = config.get('slp_validator_proxy_enabled', False)
-        else: # in daemon mode (no GUI) 'config' is not defined
+        except NameError: # in daemon mode (no GUI) 'config' is not defined
             limit_dls = None
             limit_depth = None
             proxy_enable = False
 
         return limit_dls, limit_depth, proxy_enable
+
+    @staticmethod
+    def get_gs_config():
+        config = get_config()
+        try:
+            gs_enable = config.get('slp_validator_graphsearch_enabled', False)
+            gs_host = config.get('slpdb_host', None)
+        except NameError: # in daemon mode (no GUI) 'config' is not defined
+            gs_enable = False
+            gs_host = None
+
+        return gs_enable, gs_host
 
 
     def make_job(self, tx, wallet, network, *, debug=False, reset=False, callback_done=None, **kwargs) -> ValidationJob:
@@ -160,6 +172,8 @@ class GraphContext(PrintError):
         defined before this is called.
         """
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
+        gs_enable, gs_host = self.get_gs_config()
+        network.slpdb_host = gs_host
 
         try:
             graph, job_mgr = self.setup_job(tx, reset=reset)
@@ -180,18 +194,27 @@ class GraphContext(PrintError):
                 else:
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
-
-        def fetch_hook(txids):
+            
+        def fetch_hook(txids, val_job):
             l = []
+            nonlocal gs_enable, gs_host
+            if gs_enable and gs_host:
+                if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys():
+                    search_job = self.graph_search_mgr.new_search(val_job)  #TODO: Add a cancel hook (or utilize val_job ref within GS mgr to trigger)
+                    val_job.graph_search_job = search_job if search_job else None
+            else:
+                gs_enable, gs_host = self.get_gs_config()
+                network.slpdb_host = gs_host
+
             for txid in txids:
-                try:
-                    l.append(wallet.transactions[txid])
-                except KeyError:
-                    pass
-            if proxy_enable:
-                proxy.add_job(txids, proxy_cb)
-                nonlocal num_proxy_requests
-                num_proxy_requests += 1
+                txn = SlpGraphSearchManager.tx_cache_get(txid)
+                if txn:
+                    l.append(txn)
+                else:
+                    try:
+                        l.append(wallet.transactions[txid])
+                    except KeyError:
+                        pass
             return l
 
         def done_callback(job):
@@ -217,7 +240,7 @@ class GraphContext(PrintError):
                     wallet.slpv1_validity[t] = val
 
 
-        job = ValidationJob(graph, [txid], network,
+        job = ValidationJob(graph, txid, network,
                             fetch_hook=fetch_hook,
                             validitycache=wallet.slpv1_validity,
                             download_limit=limit_dls,

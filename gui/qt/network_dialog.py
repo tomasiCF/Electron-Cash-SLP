@@ -35,6 +35,8 @@ from electroncash import networks
 from electroncash.util import print_error, Weak, PrintError
 from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
 
+from electroncash.slp_validator_0x01 import shared_context
+
 from .util import *
 
 protocol_names = ['TCP', 'SSL']
@@ -263,6 +265,141 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(1, QHeaderView.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
+class SearchJobListWidget(QTreeWidget):
+    def __init__(self, parent):
+        QTreeWidget.__init__(self)
+        self.parent = parent
+        self.network = parent.network
+        self.setHeaderLabels([_('Id'), _("Txn Count"), _('Depth Progress'), _('Search Status')])
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.create_menu)
+        self.lock = threading.Lock()
+
+    def create_menu(self, position):
+        item = self.currentItem()
+        if not item:
+            return
+        menu = QMenu()
+        menu.addAction(_("Refresh List"), lambda: self.update())
+        if item.data(3, Qt.UserRole) in ['Exited', 'Completed']:
+            menu.addAction(_("Restart Search"), lambda: self.restart_job(item))
+        elif item.data(3, Qt.UserRole) not in ['Exited', 'Completed']:
+            menu.addAction(_("Cancel"), lambda: self.cancel_job(item))
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def restart_job(self, item):
+        with self.lock:
+            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+            shared_context.graph_search_mgr.restart_search(job)
+
+    def cancel_job(self, item):
+        with self.lock:
+            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+            job.sched_cancel(reason='user cancelled')
+
+    def keyPressEvent(self, event):
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            item, col = self.currentItem(), self.currentColumn()
+            if item and col > -1:
+                self.on_activated(item, col)
+        else:
+            QTreeWidget.keyPressEvent(self, event)
+
+    def on_activated(self, item, column):
+        # on 'enter' we show the menu
+        pt = self.visualItemRect(item).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def update(self):
+        self.clear()
+        self.addChild = self.addTopLevelItem
+        with self.lock:
+            jobs = shared_context.graph_search_mgr.search_jobs.copy()
+        for k, job in jobs.items():
+            if len(jobs) > 0:
+                tx_count = str(job.txn_count_total) if job.txn_count_total else ''
+                status = 'In Queue'
+                if job.search_success:
+                    status = 'Completed'
+                elif job.job_complete:
+                    status = 'Exited'
+                elif job.waiting_to_cancel:
+                    status = 'Stopping...'
+                elif job.search_started:
+                    status = 'Working...'
+                progress = str(job.depth_completed) + '/' + str(job.total_depth) if job.total_depth else ''
+                success = str(job.search_success) if job.search_success else ''
+                exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
+                x = QTreeWidgetItem([job.root_txid[:6], tx_count, progress, status + exit_msg])
+                x.setData(0, Qt.UserRole, k)
+                x.setData(3, Qt.UserRole, status)
+                self.addTopLevelItem(x)
+        h = self.header()
+        h.setStretchLastSection(True)
+        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
+class SlpServeListWidget(QTreeWidget):
+    def __init__(self, parent):
+        QTreeWidget.__init__(self)
+        self.parent = parent
+        self.network = parent.network
+        self.setHeaderLabels([_('SLPDB Server')]) #, _('Server Status')])
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.create_menu)
+        host = self.parent.config.get('slpdb_host', None)
+        if not host:
+            host = next(iter(networks.net.SLPDB_SERVERS))
+            self.parent.config.set_key('slpdb_host', host)
+        self.network.slpdb_host = host
+
+    def create_menu(self, position):
+        item = self.currentItem()
+        if not item:
+            return
+        menu = QMenu()
+        server = item.data(0, Qt.UserRole)
+        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def select_slpdb_server(self, server):
+        self.network.slpdb_host = server
+        self.parent.config.set_key('slpdb_host', self.network.slpdb_host)
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            item, col = self.currentItem(), self.currentColumn()
+            if item and col > -1:
+                self.on_activated(item, col)
+        else:
+            QTreeWidget.keyPressEvent(self, event)
+
+    def on_activated(self, item, column):
+        # on 'enter' we show the menu
+        pt = self.visualItemRect(item).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def update(self):
+        self.clear()
+        self.addChild = self.addTopLevelItem
+        slpdbs = networks.net.SLPDB_SERVERS
+        n_slpdbs = len(slpdbs)
+        for k, items in slpdbs.items():
+            if n_slpdbs > 0:
+                star = ' ◀' if k == self.network.slpdb_host else ''
+                x = QTreeWidgetItem([k+star]) #, 'NA'])
+                x.setData(0, Qt.UserRole, k)
+                # x.setData(1, Qt.UserRole, k)
+                self.addTopLevelItem(x)
+        h = self.header()
+        h.setStretchLastSection(False)
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        #h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
 class NetworkChoiceLayout(QObject, PrintError):
 
@@ -293,9 +430,11 @@ class NetworkChoiceLayout(QObject, PrintError):
                     td.stop() # stops the tor detector when proxy_tab disappears
         proxy_tab = ProxyTab()
         blockchain_tab = QWidget()
+        slp_tab = QWidget()
         tabs.addTab(blockchain_tab, _('Overview'))
         tabs.addTab(server_tab, _('Server'))
         tabs.addTab(proxy_tab, _('Proxy'))
+        tabs.addTab(slp_tab, _('Tokens'))
 
         if wizard:
             tabs.setCurrentIndex(1)
@@ -415,6 +554,18 @@ class NetworkChoiceLayout(QObject, PrintError):
         grid.addWidget(self.proxy_password, 5, 3)
         grid.setRowStretch(7, 1)
 
+        # SLP Validation Tab
+        grid = QGridLayout(slp_tab)
+        self.slpdb_cb = QCheckBox(_('Use SLPDB Graph Search to speed up validation'))
+        self.slpdb_cb.clicked.connect(self.use_slpdb)
+        self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
+        grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
+        self.slpdb_list_widget = SlpServeListWidget(self)
+        grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
+        grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 2, 0)
+        self.slp_search_job_list_widget = SearchJobListWidget(self)
+        grid.addWidget(self.slp_search_job_list_widget, 3, 0, 1, 5)
+
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
         msg =  ' '.join([
@@ -454,6 +605,13 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         self.fill_in_proxy_settings()
         self.update()
+
+    def use_slpdb(self):
+        if self.slpdb_cb.isChecked():
+            self.config.set_key('slp_validator_graphsearch_enabled', True)
+        else:
+            self.config.set_key('slp_validator_graphsearch_enabled', False)
+        self.slpdb_list_widget.update()
 
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
@@ -538,6 +696,8 @@ class NetworkChoiceLayout(QObject, PrintError):
             msg = ''
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
+        self.slpdb_list_widget.update()
+        self.slp_search_job_list_widget.update()
 
     def fill_in_proxy_settings(self):
         host, port, protocol, proxy_config, auto_connect = self.network.get_parameters()

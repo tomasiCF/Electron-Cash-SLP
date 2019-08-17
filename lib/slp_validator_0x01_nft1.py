@@ -16,7 +16,10 @@ from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpInv
 from .slp_dagging import TokenGraph, ValidationJob, ValidationJobManager, ValidatorGeneric
 from .bitcoin import TYPE_SCRIPT
 from .util import print_error
-from .slp_validator_0x01 import Validator_SLP1, GraphContext, proxy
+from .slp_validator_0x01 import Validator_SLP1, GraphContext
+
+from . import slp_proxying # loading this module starts a thread.
+from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
 
 class GraphContext_NFT1(GraphContext):
     ''' Instance of the NFT1 DAG cache.  Uses a single per-instance
@@ -109,7 +112,7 @@ class GraphContext_NFT1(GraphContext):
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
 
-        def fetch_hook(txids):
+        def fetch_hook(txids, val_job):
             l = []
             for txid in txids:
                 try:
@@ -145,7 +148,7 @@ class GraphContext_NFT1(GraphContext):
                     wallet.slpv1_validity[t] = val
 
         if nft_type == 'SLP65':
-            job = ValidationJobNFT1Child(graph, [txid], network,
+            job = ValidationJobNFT1Child(graph, txid, network,
                                 fetch_hook=fetch_hook,
                                 validitycache=None, #wallet.slpv1_validity,
                                 download_limit=limit_dls,
@@ -155,7 +158,7 @@ class GraphContext_NFT1(GraphContext):
                                 ref=wallet,
                                 **kwargs)
         elif nft_type == 'SLP129':
-            job = ValidationJob(graph, [txid], network,
+            job = ValidationJob(graph, txid, network,
                                 fetch_hook=fetch_hook,
                                 validitycache=None, #wallet.slpv1_validity,
                                 download_limit=limit_dls,
