@@ -1,5 +1,3 @@
 {
-    "https://tslpdb.bitcoin.com": {},
-    "https://tslpdbstage.bchdata.cash": {},
-    "http://localhost:3000": {}
+    "https://tslpdb.bitcoin.com": {}
 }

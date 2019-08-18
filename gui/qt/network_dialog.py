@@ -265,7 +265,7 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(1, QHeaderView.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
-class SearchJobListWidget(QTreeWidget):
+class SlpSearchJobListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
@@ -273,7 +273,7 @@ class SearchJobListWidget(QTreeWidget):
         self.setHeaderLabels([_('Id'), _("Txn Count"), _('Depth Progress'), _('Search Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
-        self.lock = threading.Lock()
+        self.gs_jobs_lock = threading.Lock()
 
     def create_menu(self, position):
         item = self.currentItem()
@@ -288,12 +288,12 @@ class SearchJobListWidget(QTreeWidget):
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def restart_job(self, item):
-        with self.lock:
+        with self.gs_jobs_lock:
             job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
             shared_context.graph_search_mgr.restart_search(job)
 
     def cancel_job(self, item):
-        with self.lock:
+        with self.gs_jobs_lock:
             job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
             job.sched_cancel(reason='user cancelled')
 
@@ -314,7 +314,7 @@ class SearchJobListWidget(QTreeWidget):
     def update(self):
         self.clear()
         self.addChild = self.addTopLevelItem
-        with self.lock:
+        with self.gs_jobs_lock:
             jobs = shared_context.graph_search_mgr.search_jobs.copy()
         for k, job in jobs.items():
             if len(jobs) > 0:
@@ -366,8 +366,7 @@ class SlpServeListWidget(QTreeWidget):
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def select_slpdb_server(self, server):
-        self.network.slpdb_host = server
-        self.parent.config.set_key('slpdb_host', self.network.slpdb_host)
+        self.parent.set_slp_server(server)
         self.update()
 
     def keyPressEvent(self, event):
@@ -560,11 +559,21 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.slpdb_cb.clicked.connect(self.use_slpdb)
         self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
         grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel(_('Server') + ':'))
+        self.slp_server_host = QLineEdit()
+        self.slp_server_host.setFixedWidth(250)
+        self.slp_server_host.editingFinished.connect(lambda: weakSelf() and weakSelf().set_slp_server())
+        hbox.addWidget(self.slp_server_host)
+        hbox.addStretch(1)
+        grid.addLayout(hbox, 1, 0)
+        
         self.slpdb_list_widget = SlpServeListWidget(self)
-        grid.addWidget(self.slpdb_list_widget, 1, 0, 1, 5)
-        grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 2, 0)
-        self.slp_search_job_list_widget = SearchJobListWidget(self)
-        grid.addWidget(self.slp_search_job_list_widget, 3, 0, 1, 5)
+        grid.addWidget(self.slpdb_list_widget, 2, 0, 1, 5)
+        grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 3, 0)
+        self.slp_search_job_list_widget = SlpSearchJobListWidget(self)
+        grid.addWidget(self.slp_search_job_list_widget, 4, 0, 1, 5)
 
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
@@ -697,6 +706,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
         self.slpdb_list_widget.update()
+        self.slp_server_host.setText(self.network.slpdb_host)
         self.slp_search_job_list_widget.update()
 
     def fill_in_proxy_settings(self):
@@ -785,6 +795,15 @@ class NetworkChoiceLayout(QObject, PrintError):
                 self.ssl_cb.setChecked(False)
         auto_connect = self.autoconnect_cb.isChecked()
         self.network.set_parameters(host, port, protocol, proxy, auto_connect)
+
+    def set_slp_server(self, server=None):
+        if not server:
+            server = str(self.slp_server_host.text())
+        else:
+            self.slp_server_host.setText(server)
+        self.network.slpdb_host = server
+        self.config.set_key('slpdb_host', self.network.slpdb_host)
+        self.slpdb_list_widget.update()
 
     def set_proxy(self):
         host, port, protocol, proxy, auto_connect = self.network.get_parameters()
