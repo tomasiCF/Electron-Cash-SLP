@@ -70,7 +70,7 @@ class HistoryList(MyTreeWidget):
                 self.update_item_state(item)
 
     def __init__(self, parent=None):
-        MyTreeWidget.__init__(self, parent, self.create_menu, [], 4)
+        MyTreeWidget.__init__(self, parent, self.create_menu, [], 4, deferred_updates=True)
         self.slp_validity_signal = parent.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.editable_columns=[]
@@ -78,6 +78,7 @@ class HistoryList(MyTreeWidget):
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
         self.sortByColumn(0, Qt.AscendingOrder)
+        self.wallet = None
         self._allitems = defaultdict(list)
 
     def refresh_headers(self):
@@ -88,6 +89,13 @@ class HistoryList(MyTreeWidget):
     def get_domain(self):
         '''Replaced in address_dialog.py'''
         return self.wallet.get_addresses()
+
+    @rate_limited(1.0, classlevel=True, ts_after=True) # We rate limit the history list refresh no more than once every second, app-wide
+    def update(self):
+        if self.parent and self.parent.cleaned_up:
+            # short-cut return if window was closed and wallet is stopped
+            return
+        super().update()
 
     @profiler
     def on_update(self):
@@ -199,8 +207,10 @@ class HistoryList(MyTreeWidget):
         wallet = getattr(self,'wallet', None)
         if not wallet:
             return
-        status, status_str = wallet.get_tx_status(tx_hash, height, conf, timestamp)
         items = self._allitems.get(tx_hash, [])
+        if not items:
+            return
+        status, status_str = wallet.get_tx_status(tx_hash, height, conf, timestamp)
         for item in items:
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             item.setText(2, status_str)

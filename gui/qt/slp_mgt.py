@@ -50,7 +50,7 @@ class SlpMgt(MyTreeWidget):
         self.update()
 
     def __init__(self, parent):
-        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Baton'), _('Token Type')], 0, [0])
+        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Baton'), _('Token Type')], 0, [0], deferred_updates=True)
         self.slp_validity_signal = parent.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -110,7 +110,7 @@ class SlpMgt(MyTreeWidget):
                 menu.addSeparator()
                 menu.addAction(_("Burn Tool"), lambda: self.onBurnDialog())
             menu.addSeparator()
-            
+
         menu.addAction(_("Add existing token"), lambda: SlpAddTokenDialog(self.parent,))
         menu.addAction(_("Create a new token"), lambda: SlpCreateTokenGenesisDialog(self.parent,))
 
@@ -133,6 +133,13 @@ class SlpMgt(MyTreeWidget):
         # for now return dummy value.
         bal=self.parent.wallet.get_slp_token_balance(slpTokenId, self.parent.config)[0]
         return bal
+
+    @rate_limited(.333, classlevel=True, ts_after=True) # We rate limit the slp mgt refresh no more than 3 times every second, app-wide
+    def update(self):
+        if self.parent and self.parent.cleaned_up:
+            # short-cut return if window was closed and wallet is stopped
+            return
+        super().update()
 
     def on_update(self):
         self.clear()
