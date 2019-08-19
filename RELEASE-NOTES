@@ -117,7 +117,7 @@ Electron Cash - SLP Token Edition
 - Reordered Send Tab amount input fields and moved token selector above amount inputs
 - Ported many goodies from the [EC 4.0.6 release](https://github.com/Electron-Cash/Electron-Cash/releases/tag/4.0.6) including: CoinText support (SLP sending is not supported), automatic high resolution scaling
 
-3.4.15 Updates & Features
+3.5 Updates & Features
 -----
 - Added grouped NFT support, see [NFT1 spec](https://github.com/simpleledger/slp-specifications/blob/master/slp-nft-1.md)
 - Added SLPDB Graph Search feature to speed up local validation, not used with NFT1 tokens
