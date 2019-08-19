@@ -5,6 +5,7 @@ This is used by slp_validator_0x01.py.
 """
 
 import sys
+import time
 import threading
 import queue
 import traceback
@@ -15,6 +16,9 @@ import base64
 import requests
 from .transaction import Transaction
 from .caches import ExpiringCache
+
+class SlpdbErrorNoSearchData(Exception):
+    pass
 
 class GraphSearchJob:
     def __init__(self, txid, valjob_ref):
@@ -67,9 +71,12 @@ class GraphSearchJob:
 
     def get_metadata(self):
         res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
-        self.total_depth = res['totalDepth']
-        self.txn_count_total = res['txcount']
-        self.depth_map = res['depthMap']
+        try:
+            self.total_depth = res['totalDepth']
+            self.txn_count_total = res['txcount']
+            self.depth_map = res['depthMap']
+        except KeyError:
+            raise SlpdbErrorNoSearchData()
 
     def metadata_query(self, txid, slpdb_host):
         requrl = self.metadata_url([txid], slpdb_host)
@@ -112,29 +119,29 @@ class SlpGraphSearchManager:
     """
     A single thread that processes graph search requests sequentially.
     """
-    def __init__(self, threadname="SlpGraphSearch"):
+    def __init__(self, threadname="GraphSearch"):
         # holds the job history and status
         self.search_jobs = dict()
 
         # Create a single use queue on a new thread
-        self.new_job_queue = queue.Queue()  # this is a queue for performing metadata 
-        self.search_queue = queue.Queue()
-        self.thread = None
+        self.search_queue = queue.Queue()  # TODO: make this a PriorityQueue based on dag size
+        self.search_thread = None
         self.threadname = threadname
 
         # dag size threshold to auto-cancel job
-        self.cancel_thresh_txcount = 50
+        self.cancel_thresh_txcount = 20
 
     def new_search(self, valjob_ref):
         """ start a search job on new thread, returns weakref of new GS jobber object"""
+        if not self.search_thread:
+            self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
+            self.search_thread.start()
         txid = valjob_ref.root_txid
         if txid not in self.search_jobs.keys():
             job = GraphSearchJob(txid, valjob_ref)
             self.search_jobs[txid] = job
-            self.new_job_queue.put(job)
-            if not self.thread:
-                self.thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
-                self.thread.start()
+            thread = threading.Thread(target=self.fetch_metadata, name=self.threadname+'/metadata/'+txid[:3], args=(job,), daemon=True)
+            thread.start()
             return job
         return None
 
@@ -148,59 +155,56 @@ class SlpGraphSearchManager:
         else:
             callback(job)
     
+    def fetch_metadata(self, job):
+        fetch_retries = 0
+        while True:
+            try:
+                if not job.valjob.running and not job.valjob.has_never_run:
+                    job.set_failed('validation finished')
+                    break
+                if not job.valjob.network.slpdb_host:
+                    job.set_failed('SLPDB host not set')
+                    break
+                job.get_metadata()
+            except SlpdbErrorNoSearchData:
+                if fetch_retries > 10:
+                    job.set_failed("No data found, right-click to try")
+                    break
+                fetch_retries += 1
+                time.sleep(10)
+                continue
+            except Exception as e:
+                print("error in graph search query", str(e), file=sys.stderr)
+                job.set_failed(str(e))
+                break
+            else:
+                if not job.txn_count_total and job.txn_count_total != 0:
+                    job.set_failed('metadata error')
+                    break
+                if job.txn_count_total <= self.cancel_thresh_txcount:
+                    job.set_failed('low txn count')
+                    break
+                self.search_queue.put(job)
+                break
+                # TODO We need to add a priority parameter for the search jobs queue based on:
+                #     - sort queue by DAG size, largest jobs will benefit from GS the most.
+
     def mainloop(self,):
         try:
             while True:
-                # NOTE: the purpose of inner while loop is to fetch graph metadata and prioritize search jobs based on metadata results (see TODO below.)
-                while True:
-                    try:
-                        _job = self.new_job_queue.get(block=False)
-                        if not _job.valjob.running and not _job.valjob.has_never_run:
-                            _job.set_failed('validation finished')
-                            continue
-                        if not _job.valjob.network.slpdb_host:
-                            raise Exception("SLPDB host not set")
-                        _job.get_metadata()
-                    except queue.Empty:
-                        break
-                    except Exception as e:
-                        print("error in graph search query", str(e), file=sys.stderr)
-                        _job.set_failed(str(e))
-                        continue
-                    else:
-                        if not _job.txn_count_total and _job.txn_count_total != 0:
-                            _job.set_failed('metadata error')
-                            continue
-                        if _job.txn_count_total <= self.cancel_thresh_txcount:
-                            _job.set_failed('low txn count')
-                            continue
-                        self.search_queue.put(_job)
-                        # TODO IF new job queue is finally empty, here we should prioritize order of search jobs queue based on:
-                        #       (1) remove any items whose validation job has finished
-                        #       (2) sort queue by DAG size, largest jobs will benefit from GS the most.
-                        #       (3) check to see if the root_txid is already in validity cache from previous job
+                job = self.search_queue.get(block=True)
+                job.search_started = True
+                if not job.valjob.running and not job.valjob.has_never_run:
+                    job.set_failed('validation finished')
+                    continue
                 try:
-                    job = self.search_queue.get(block=False)
-                except queue.Empty:
-                    if self.new_job_queue.empty():
-                        self.thread = None
-                        break
-                else:
-                    job.search_started = True
-                    if not job.valjob.running and not job.valjob.has_never_run:
-                        job.set_failed('validation finished')
-                        continue
-                    try:
-                        # search_query is a recursive call, most time will be spent here
-                        self.search_query(job)
-                    except Exception as e:
-                        print("error in graph search query", e, file=sys.stderr)
-                        job.set_failed(str(e))
-                        return
-                    else:
-                        pass
+                    # search_query is a recursive call, most time will be spent here
+                    self.search_query(job)
+                except Exception as e:
+                    print("error in graph search query", e, file=sys.stderr)
+                    job.set_failed(str(e))
         finally:
-            print("[SLP Graph Search] SearchGraph thread completed.", file=sys.stderr)
+            print("[Graph Search] Error: SearchGraph mainloop exited.", file=sys.stderr)
 
     def search_query(self, job, txids=None, depth_map_index=0):
         if job.waiting_to_cancel:

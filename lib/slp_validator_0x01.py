@@ -200,7 +200,7 @@ class GraphContext(PrintError):
             nonlocal gs_enable, gs_host
             if gs_enable and gs_host:
                 if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys():
-                    search_job = self.graph_search_mgr.new_search(val_job)  #TODO: Add a cancel hook (or utilize val_job ref within GS mgr to trigger)
+                    search_job = self.graph_search_mgr.new_search(val_job)
                     val_job.graph_search_job = search_job if search_job else None
             else:
                 gs_enable, gs_host = self.get_gs_config()
