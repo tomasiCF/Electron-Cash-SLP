@@ -310,7 +310,7 @@ class Validator_NFT1(ValidatorGeneric):
             assert tx.txid_fast() == self.token_id_hex
             txid = self.token_id_hex
             wallet = nft_child_job.ref()
-            with wallet.lock, wallet.transaction_lock:
+            with wallet.lock:
                 if not wallet.transactions.get(txid, None):
                     wallet.transactions[txid] = tx
                 if not wallet.tx_tokinfo.get(txid, None):
@@ -337,7 +337,7 @@ class Validator_NFT1(ValidatorGeneric):
             tx = Transaction(raw)
             txid = tx.txid_fast()
             wallet = nft_child_job.ref()
-            with wallet.lock, wallet.transaction_lock:
+            with wallet.lock:
                 if not wallet.transactions.get(txid, None):
                     wallet.transactions[txid] = tx
                 if not wallet.tx_tokinfo.get(txid, None):
@@ -371,7 +371,7 @@ class Validator_NFT1(ValidatorGeneric):
                 #decimals = SlpMessage.parseSlpOutputScript(wallet.transactions[group_id].outputs()[0][1]).op_return_fields['decimals']
                 parent_entry = dict({'class':'SLP129','name':name,'decimals':0}) # TODO: handle case where decimals is not 0
                 wallet.add_token_type(group_id, parent_entry)
-            with wallet.lock, wallet.transaction_lock:
+            with wallet.lock:
                 wallet.token_types[nft_child_job.genesis_tx.txid_fast()]['group_id'] = group_id
                 wallet.tx_tokinfo[nft_child_job.nft_parent_tx.txid_fast()]['validity'] = val
                 wallet.tx_tokinfo[nft_child_job.genesis_tx.txid_fast()]['validity'] = val
@@ -391,7 +391,7 @@ class Validator_NFT1(ValidatorGeneric):
             # FIXME?
             warnings.warn("Graph Context is None, JobManager was killed")
         else:
-            with wallet.lock, wallet.transaction_lock:
+            with wallet.lock:
                 wallet.tx_tokinfo[nft_child_job.genesis_tx.txid_fast()]['validity'] = 4
                 wallet.save_transactions()
             ui_cb = wallet.ui_emit_validity_updated

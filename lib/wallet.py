@@ -41,7 +41,7 @@ from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 
 from .i18n import ngettext
-from .util import NotEnoughFunds, NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
+from .util import NotEnoughFunds, NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error, is_verbose
 
 from .address import Address, Script, ScriptOutput, PublicKey
 from .bitcoin import *
@@ -223,7 +223,6 @@ class Abstract_Wallet(PrintError):
 
         # locks: if you need to take multiple ones, acquire them in the order they are defined here!
         self.lock = threading.RLock()
-        self.transaction_lock = threading.RLock()
 
         # load requests
         requests = self.storage.get('payment_requests', {})
@@ -323,7 +322,7 @@ class Abstract_Wallet(PrintError):
 
     @profiler
     def save_transactions(self, write=False):
-        with self.transaction_lock:
+        with self.lock:
             tx = {}
             for k,v in self.transactions.items():
                 tx[k] = str(v)
@@ -354,7 +353,7 @@ class Abstract_Wallet(PrintError):
         # This gets called in two situations:
         # - Upon wallet startup, it checks config to see if SLP should be enabled.
         # - During wallet operation, on a network reconnect, to "wake up" the validator -- According to JSCramer this is required.  TODO: Investigate why that is
-        with self.lock, self.transaction_lock:
+        with self.lock:
             for tx_hash, tti in self.tx_tokinfo.items():
                 # Fire up validation on unvalidated txes
                 try:
@@ -371,7 +370,7 @@ class Abstract_Wallet(PrintError):
             # by client code.  This is because token_id becomes a dictionary key
             # in various places and it not being identical would create chaos.
             raise ValueError('token_id must be a lowercase hex string of exactly 64 characters!')
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self.token_types[token_id] = dict(entry)
             self.storage.put('token_types', self.token_types)
             for tx_hash, tti in self.tx_tokinfo.items():
@@ -485,7 +484,7 @@ class Abstract_Wallet(PrintError):
                 self.storage.write()
 
     def clear_history(self):
-        with self.transaction_lock:
+        with self.lock:
             self.txi = {}
             self.txo = {}
             self.tx_fees = {}
@@ -867,12 +866,12 @@ class Abstract_Wallet(PrintError):
         return received, sent
 
     def get_slp_token_info(self, tokenid):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             return self.tx_tokinfo[tokenid]
 
     def get_slp_token_baton(self, slpTokenId):
         # look for our minting baton
-        with self.lock, self.transaction_lock:
+        with self.lock:
             for addr, addrdict in self._slp_txo.items():
                 for txid, txdict in addrdict.items():
                     for idx, txo in txdict.items():
@@ -898,8 +897,8 @@ class Abstract_Wallet(PrintError):
         """
         SLP -- removes ALL SLP UTXOs that are either unrelated, or unvalidated
         """
-        if(exclude_slp):
-            with self.lock, self.transaction_lock:
+        if exclude_slp:
+            with self.lock:
                 addrdict = self._slp_txo.get(address,{})
                 for txid, txdict in addrdict.items():
                     for idx, txo in txdict.items():
@@ -923,7 +922,7 @@ class Abstract_Wallet(PrintError):
 
     """ SLP -- keeps ONLY SLP UTXOs that are either unrelated, or unvalidated """
     def get_slp_addr_utxo(self, address, slpTokenId, slp_include_invalid=False, slp_include_baton=False, ):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             coins, spent = self.get_addr_io(address)
             # removes spent coins
             for txi in spent:
@@ -1133,7 +1132,7 @@ class Abstract_Wallet(PrintError):
 
     def get_slp_locked_balance(self):
         bch = 0
-        with self.lock, self.transaction_lock:
+        with self.lock:
             for addr, addrdict in self._slp_txo.items():
                 _, spent = self.get_addr_io(addr)
                 for txid, txdict in addrdict.items():
@@ -1171,7 +1170,7 @@ class Abstract_Wallet(PrintError):
             self.print_error("add_transaction: WARNING a tx came in from the network with 0 inputs! Bad server? Ignoring tx:", tx_hash)
             return
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
-        with self.transaction_lock:
+        with self.lock:
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
@@ -1334,10 +1333,8 @@ class Abstract_Wallet(PrintError):
         if self.is_slp: # Only start up validation if SLP enabled
             self.slp_check_validation(tx_hash, tx)
 
-    """
-    Callers are expected to take lock(s). We take no locks
-    """
     def slp_check_validation(self, tx_hash, tx):
+        """ Callers are expected to take lock(s). We take no locks """
         tti = self.tx_tokinfo[tx_hash]
         try:
             is_new = self.token_types[tti['token_id']]['decimals'] == '?'
@@ -1354,28 +1351,31 @@ class Abstract_Wallet(PrintError):
 
             if tti['type'] in ['SLP1']:
                 job = self.slp_graph_0x01.make_job(tx, self, self.network,
-                                                        debug=2, reset=False)
+                                                        debug=2 if is_verbose else 0,  # set debug=2 here to see the verbose dag when running with -v
+                                                        reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
                 job = self.slp_graph_0x01_nft.make_job(tx, self, self.network, nft_type=tti['type'],
-                                                        debug=2, reset=False)
+                                                        debug=2 if is_verbose else 0,  # set debug=2 here to see the verbose dag when running with -v
+                                                        reset=False)
 
             if job is not None:
                 job.add_callback(callback)
-                finalization_print_error(job, f"[{self.basename()}] Job for {tx_hash} type {tti['type']} finalized")
+                # This was commented out because it spammed the log so badly
+                # it impacted performance. SLP validation can create a *lot* of jobs!
+                #finalization_print_error(job, f"[{self.basename()}] Job for {tx_hash} type {tti['type']} finalized")
 
     def rebuild_slp(self,):
         """Wipe away old SLP transaction data and rerun on the entire tx set.
 
-        (we can't lock transaction_lock here since it may not exist when rebuilding during loadup)
         """
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self._slp_txo = defaultdict(lambda: defaultdict(dict))
             self.tx_tokinfo = {}
             for txid, tx in self.transactions.items():
                 self.handleSlpTransaction(txid, tx)
 
     def remove_transaction(self, tx_hash):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self.print_error("removing tx from history", tx_hash)
             #tx = self.transactions.pop(tx_hash, None)
             for ser, hh in list(self.pruned_txo.items()):
@@ -1415,7 +1415,7 @@ class Abstract_Wallet(PrintError):
         self.add_unverified_tx(tx_hash, tx_height)
 
     def receive_history_callback(self, addr, hist, tx_fees):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             old_hist = self.get_address_history(addr)
             for tx_hash, height in old_hist:
                 if (tx_hash, height) not in hist:
@@ -1474,7 +1474,7 @@ class Abstract_Wallet(PrintError):
         token_tx_deltas = defaultdict(lambda: defaultdict(int)) # defaultdict of defaultdicts of ints :)
         for addr in domain:
             h = self.get_address_history(addr)
-            with self.lock, self.transaction_lock:
+            with self.lock:
                 addrslptxo = self._slp_txo[addr]
 
                 for tx_hash, height in h:
@@ -2149,7 +2149,7 @@ class Abstract_Wallet(PrintError):
 
     def get_unused_addresses(self, *, for_change=False, frozen_ok=True):
         # fixme: use slots from expired requests
-        with self.lock, self.transaction_lock:
+        with self.lock:
             domain = self.get_receiving_addresses() if not for_change else (self.get_change_addresses() or self.get_receiving_addresses())
             return [addr for addr in domain
                     if not self.get_address_history(addr)
@@ -2455,7 +2455,7 @@ class Abstract_Wallet(PrintError):
         network = self.network
         self.stop_threads()
         do_addr_save = False
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self.transactions.clear(); self.unverified_tx.clear(); self.verified_tx.clear()
             self.clear_history()
             if isinstance(self, Standard_Wallet):
