@@ -273,7 +273,6 @@ class SlpSearchJobListWidget(QTreeWidget):
         self.setHeaderLabels([_('Id'), _("Txn Count"), _('Depth Progress'), _('Search Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
-        self.gs_jobs_lock = threading.Lock()
 
     def create_menu(self, position):
         item = self.currentItem()
@@ -288,14 +287,12 @@ class SlpSearchJobListWidget(QTreeWidget):
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def restart_job(self, item):
-        with self.gs_jobs_lock:
-            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-            shared_context.graph_search_mgr.restart_search(job)
+        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+        shared_context.graph_search_mgr.restart_search(job)
 
     def cancel_job(self, item):
-        with self.gs_jobs_lock:
-            job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-            job.sched_cancel(reason='user cancelled')
+        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
+        job.sched_cancel(reason='user cancelled')
 
     def keyPressEvent(self, event):
         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
@@ -314,8 +311,7 @@ class SlpSearchJobListWidget(QTreeWidget):
     def update(self):
         self.clear()
         self.addChild = self.addTopLevelItem
-        with self.gs_jobs_lock:
-            jobs = shared_context.graph_search_mgr.search_jobs.copy()
+        jobs = shared_context.graph_search_mgr.search_jobs.copy()
         for k, job in jobs.items():
             if len(jobs) > 0:
                 tx_count = str(job.txn_count_total) if job.txn_count_total else ''
