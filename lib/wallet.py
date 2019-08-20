@@ -1351,11 +1351,11 @@ class Abstract_Wallet(PrintError):
 
             if tti['type'] in ['SLP1']:
                 job = self.slp_graph_0x01.make_job(tx, self, self.network,
-                                                        debug=2 if is_verbose else 0,  # set debug=2 here to see the verbose dag when running with -v
+                                                        debug=2 if is_verbose else 1,  # set debug=2 here to see the verbose dag when running with -v
                                                         reset=False)
             elif tti['type'] in ['SLP65','SLP129']:
                 job = self.slp_graph_0x01_nft.make_job(tx, self, self.network, nft_type=tti['type'],
-                                                        debug=2 if is_verbose else 0,  # set debug=2 here to see the verbose dag when running with -v
+                                                        debug=2 if is_verbose else 1,  # set debug=2 here to see the verbose dag when running with -v
                                                         reset=False)
 
             if job is not None:
