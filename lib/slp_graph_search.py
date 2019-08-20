@@ -121,7 +121,7 @@ class SlpGraphSearchManager:
     """
     def __init__(self, threadname="GraphSearch"):
         # holds the job history and status
-        self.search_jobs = dict()
+        self.search_jobs = dict()  # FIXME: race conditions. Multiple threads can end up accessing this dict.
 
         # Create a single use queue on a new thread
         self.search_queue = queue.Queue()  # TODO: make this a PriorityQueue based on dag size
@@ -137,7 +137,9 @@ class SlpGraphSearchManager:
             self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
             self.search_thread.start()
         txid = valjob_ref.root_txid
-        if txid not in self.search_jobs.keys():
+        if txid not in self.search_jobs.keys():  # FIXME: race conditions here. Multiple threads can end up accessing this dict.
+            # <---- right here another thread coming through this very same function
+            # could have added the same txid to the dict and we would never realize it.
             job = GraphSearchJob(txid, valjob_ref)
             self.search_jobs[txid] = job
             thread = threading.Thread(target=self.fetch_metadata, name=self.threadname+'/metadata/'+txid[:3], args=(job,), daemon=True)
@@ -147,14 +149,14 @@ class SlpGraphSearchManager:
 
     def restart_search(self, job):
         def callback(job):
-            self.search_jobs.pop(job.root_txid, None)
+            self.search_jobs.pop(job.root_txid, None)  # FIXME: race conditions here. Multiple threads can end up accessing this dict.
             self.new_search(job.valjob)
             job = None
         if not job.job_complete:
             job.sched_cancel(callback, reason='job restarted')
         else:
             callback(job)
-    
+
     def fetch_metadata(self, job):
         fetch_retries = 0
         while True:
@@ -263,7 +265,7 @@ class SlpGraphSearchManager:
                         "maxDepth": max_depth,
                         "depthField": "depth",
                         "restrictSearchWithMatch": { #TODO: add tokenId restriction to this for NFT1 application
-                            "graphTxn.txid": {"$nin": txids }} #validity_cache}}  # TODO: add validity_cache here also 
+                            "graphTxn.txid": {"$nin": txids }} #validity_cache}}  # TODO: add validity_cache here also
                     }},
                     {"$project":{
                         "_id":0,
@@ -349,7 +351,7 @@ class SlpGraphSearchManager:
                             "tokenId": 1,
                             "dependsOn": 1,
                             "depths": 1,
-                            "_id": 0, 
+                            "_id": 0,
                             "txcount": { "$size": "$dependsOn" }
                         }
                     }

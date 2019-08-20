@@ -280,19 +280,22 @@ class SlpSearchJobListWidget(QTreeWidget):
             return
         menu = QMenu()
         menu.addAction(_("Refresh List"), lambda: self.update())
+        txid = item.data(0, Qt.UserRole)
         if item.data(3, Qt.UserRole) in ['Exited', 'Completed']:
-            menu.addAction(_("Restart Search"), lambda: self.restart_job(item))
+            menu.addAction(_("Restart Search"), lambda: self.restart_job(txid))
         elif item.data(3, Qt.UserRole) not in ['Exited', 'Completed']:
-            menu.addAction(_("Cancel"), lambda: self.cancel_job(item))
+            menu.addAction(_("Cancel"), lambda: self.cancel_job(txid))
         menu.exec_(self.viewport().mapToGlobal(position))
 
-    def restart_job(self, item):
-        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-        shared_context.graph_search_mgr.restart_search(job)
+    def restart_job(self, txid):
+        job = shared_context.graph_search_mgr.search_jobs.get(txid)
+        if job:
+            shared_context.graph_search_mgr.restart_search(job)
 
     def cancel_job(self, item):
-        job = shared_context.graph_search_mgr.search_jobs[item.data(0, Qt.UserRole)]
-        job.sched_cancel(reason='user cancelled')
+        job = shared_context.graph_search_mgr.search_jobs.get(txid)
+        if job:
+            job.sched_cancel(reason='user cancelled')
 
     def keyPressEvent(self, event):
         if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
@@ -564,7 +567,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         hbox.addWidget(self.slp_server_host)
         hbox.addStretch(1)
         grid.addLayout(hbox, 1, 0)
-        
+
         self.slpdb_list_widget = SlpServeListWidget(self)
         grid.addWidget(self.slpdb_list_widget, 2, 0, 1, 5)
         grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 3, 0)
