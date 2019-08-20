@@ -90,6 +90,10 @@ class NetworkDialog(QDialog, MessageBoxMixin):
                 return
         super().closeEvent(e)
 
+    def showEvent(self, e):
+        super().showEvent(e)
+        QDialog.update(self)  # hax to work around Ubuntu 16 bugs -- James Cramer observed that if this isn't here dialog sometimes doesn't paint properly on show.
+
 
 
 class NodesListWidget(QTreeWidget):
