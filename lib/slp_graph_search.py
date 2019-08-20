@@ -70,8 +70,8 @@ class GraphSearchJob:
         self.exit_msg = reason
 
     def get_metadata(self):
-        res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
         try:
+            res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
             self.total_depth = res['totalDepth']
             self.txn_count_total = res['txcount']
             self.depth_map = res['depthMap']
