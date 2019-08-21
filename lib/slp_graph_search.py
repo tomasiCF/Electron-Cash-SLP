@@ -121,35 +121,40 @@ class SlpGraphSearchManager:
     """
     def __init__(self, threadname="GraphSearch"):
         # holds the job history and status
-        self.search_jobs = dict()  # FIXME: race conditions. Multiple threads can end up accessing this dict.
+        self.search_jobs = dict()
+        self.lock = threading.Lock()
 
         # Create a single use queue on a new thread
         self.search_queue = queue.Queue()  # TODO: make this a PriorityQueue based on dag size
-        self.search_thread = None
+
         self.threadname = threadname
+        self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
+        self.search_thread.start()
 
         # dag size threshold to auto-cancel job
         self.cancel_thresh_txcount = 20
 
     def new_search(self, valjob_ref):
-        """ start a search job on new thread, returns weakref of new GS jobber object"""
-        if not self.search_thread:
-            self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
-            self.search_thread.start()
+        """ 
+        Starts a new thread to fetch GS metadata for a job. 
+        Depending on the metadata results the job may end up being added to the GS queue. 
+        
+        Returns weakref of the new GS job object if new job is created.
+        """
         txid = valjob_ref.root_txid
-        if txid not in self.search_jobs.keys():  # FIXME: race conditions here. Multiple threads can end up accessing this dict.
-            # <---- right here another thread coming through this very same function
-            # could have added the same txid to the dict and we would never realize it.
-            job = GraphSearchJob(txid, valjob_ref)
-            self.search_jobs[txid] = job
-            thread = threading.Thread(target=self.fetch_metadata, name=self.threadname+'/metadata/'+txid[:3], args=(job,), daemon=True)
-            thread.start()
-            return job
+        with self.lock:
+            if txid not in self.search_jobs.keys():
+                job = GraphSearchJob(txid, valjob_ref)
+                self.search_jobs[txid] = job
+                thread = threading.Thread(target=self.fetch_metadata, name=self.threadname+'/metadata/'+txid[:3], args=(job,), daemon=True)
+                thread.start()
+                return job
         return None
 
     def restart_search(self, job):
         def callback(job):
-            self.search_jobs.pop(job.root_txid, None)  # FIXME: race conditions here. Multiple threads can end up accessing this dict.
+            with self.lock:
+                self.search_jobs.pop(job.root_txid, None)
             self.new_search(job.valjob)
             job = None
         if not job.job_complete:
