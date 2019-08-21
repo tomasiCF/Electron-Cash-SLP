@@ -144,7 +144,8 @@ class SlpMgt(MyTreeWidget):
     def on_update(self):
         self.clear()
 
-        for token_id, i in self.parent.wallet.token_types.items():
+        tokens = self.parent.wallet.token_types.copy()
+        for token_id, i in tokens.items():
             name     = i["name"]
             decimals = i["decimals"]
             calculated_balance= self.get_balance_from_token_id(token_id)
