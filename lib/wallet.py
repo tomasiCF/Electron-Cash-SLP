@@ -1933,9 +1933,7 @@ class Abstract_Wallet(PrintError):
                 # otherwise we may receive a tx from the network thread
                 # before SLP objects are properly constructed.
                 self.slp_graph_0x01 = slp_validator_0x01.shared_context
-                # For now, NFT validation uses a per-wallet instance until we
-                # iron out some of the bugs.
-                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.shared_context_nft1 #GraphContext_NFT1(f"{self.basename()}/GraphContext_NFT1")
+                self.slp_graph_0x01_nft = slp_validator_0x01_nft1.shared_context_nft1
                 self.activate_slp()
                 self.network.register_callback(self._slp_callback_on_status, ['status'])
             self.prepare_for_verifier()

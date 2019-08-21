@@ -34,9 +34,7 @@ class GraphContext(PrintError):
         self.is_parallel = is_parallel
         self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
-        self.graph_search_mgr = None
-        if use_graph_search:
-            self.graph_search_mgr = SlpGraphSearchManager()
+        self.graph_search_mgr = SlpGraphSearchManager() if use_graph_search else None
         self._setup_job_mgr()
 
     def diagnostic_name(self):
