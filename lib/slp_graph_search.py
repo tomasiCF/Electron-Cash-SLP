@@ -43,6 +43,7 @@ class GraphSearchJob:
         # ctl
         self.waiting_to_cancel = False
         self.cancel_callback = None
+        self.fetch_retries = 0
 
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
@@ -69,14 +70,14 @@ class GraphSearchJob:
         self.job_complete = True
         self.exit_msg = reason
 
-    def get_metadata(self):
+    def fetch_metadata(self):
         try:
             res = self.metadata_query(self.root_txid, self.valjob.network.slpdb_host)
             self.total_depth = res['totalDepth']
             self.txn_count_total = res['txcount']
             self.depth_map = res['depthMap']
-        except KeyError:
-            raise SlpdbErrorNoSearchData()
+        except KeyError as e:
+            raise SlpdbErrorNoSearchData(str(e))
 
     def metadata_query(self, txid, slpdb_host):
         requrl = self.metadata_url([txid], slpdb_host)
@@ -125,10 +126,13 @@ class SlpGraphSearchManager:
         self.lock = threading.Lock()
 
         # Create a single use queue on a new thread
+        self.metadata_queue = queue.Queue()
         self.search_queue = queue.Queue()  # TODO: make this a PriorityQueue based on dag size
 
         self.threadname = threadname
-        self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname, daemon=True)
+        self.metadata_thread = threading.Thread(target=self.metadata_loop, name=self.threadname+'/metadata', daemon=True)
+        self.metadata_thread.start()
+        self.search_thread = threading.Thread(target=self.search_loop, name=self.threadname+'/search', daemon=True)
         self.search_thread.start()
 
         # dag size threshold to auto-cancel job
@@ -143,12 +147,9 @@ class SlpGraphSearchManager:
         """
         txid = valjob_ref.root_txid
         with self.lock:
-            if txid not in self.search_jobs.keys():
-                job = GraphSearchJob(txid, valjob_ref)
-                self.search_jobs[txid] = job
-                thread = threading.Thread(target=self.fetch_metadata, name=self.threadname+'/metadata/'+txid[:3], args=(job,), daemon=True)
-                thread.start()
-                return job
+            job = GraphSearchJob(txid, valjob_ref)
+            self.metadata_queue.put(job)
+            return job
         return None
 
     def restart_search(self, job):
@@ -162,41 +163,47 @@ class SlpGraphSearchManager:
         else:
             callback(job)
 
-    def fetch_metadata(self, job):
-        fetch_retries = 0
+    def metadata_loop(self):
         while True:
+            job = self.metadata_queue.get(block=True)
+            if job.root_txid not in self.search_jobs.keys():
+                self.search_jobs[job.root_txid] = job
+            else:
+                continue
             try:
                 if not job.valjob.running and not job.valjob.has_never_run:
                     job.set_failed('validation finished')
-                    break
+                    continue
                 if not job.valjob.network.slpdb_host:
                     job.set_failed('SLPDB host not set')
-                    break
-                job.get_metadata()
-            except SlpdbErrorNoSearchData:
-                if fetch_retries > 10:
+                    continue
+                job.fetch_metadata()
+            except SlpdbErrorNoSearchData as e:
+                if job.fetch_retries > 10:
                     job.set_failed("No data found, right-click to try")
-                    break
-                fetch_retries += 1
-                time.sleep(10)
+                    continue
+                if self.metadata_queue.empty():
+                    time.sleep(10)  # Want to this time delay for when a brand new SLP txn comes in, gives SLPDB time to catch-up
+                job.fetch_retries += 1
+                self.metadata_queue.put(job)
                 continue
             except Exception as e:
                 print("error in graph search query", str(e), file=sys.stderr)
                 job.set_failed(str(e))
-                break
+                continue
             else:
                 if not job.txn_count_total and job.txn_count_total != 0:
                     job.set_failed('metadata error')
-                    break
+                    continue
                 if job.txn_count_total <= self.cancel_thresh_txcount:
                     job.set_failed('low txn count')
-                    break
+                    continue
                 self.search_queue.put(job)
-                break
+                continue
                 # TODO We need to add a priority parameter for the search jobs queue based on:
                 #     - sort queue by DAG size, largest jobs will benefit from GS the most.
 
-    def mainloop(self,):
+    def search_loop(self,):
         try:
             while True:
                 job = self.search_queue.get(block=True)
