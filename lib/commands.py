@@ -684,7 +684,7 @@ class Commands(PrintError):
         from .slp import SlpMessage
         from queue import Queue, Empty
 
-        graph_db, graph_db_nft1 = slp_validator_0x01.GraphContext(), slp_validator_0x01_nft1.GraphContext_NFT1()
+        graph_db, graph_db_nft1 = slp_validator_0x01.GraphContext(use_graph_search=True), slp_validator_0x01_nft1.GraphContext_NFT1()
 
 
         q = Queue()

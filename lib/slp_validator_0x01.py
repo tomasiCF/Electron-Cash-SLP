@@ -18,7 +18,7 @@ from .bitcoin import TYPE_SCRIPT
 from .util import print_error, PrintError
 
 from . import slp_proxying # loading this module starts a thread.
-from .slp_graph_search import SlpGraphSearchManager # thread doesn't start until needed
+from .slp_graph_search import SlpGraphSearchManager # thread is started upon instantiation
 
 class GraphContext(PrintError):
     ''' Instance of the DAG cache. Uses a single per-instance
@@ -27,14 +27,16 @@ class GraphContext(PrintError):
     If is_parallel=True, will create 1 job manager (thread) per tokenid it is
     validating. '''
 
-    def __init__(self, name='GraphContext', is_parallel=False):
+    def __init__(self, name='GraphContext', is_parallel=False, use_graph_search=False):
         # Global db for shared graphs (each token_id_hex has its own graph).
         self.graph_db_lock = threading.Lock()
         self.graph_db = dict()   # token_id_hex -> TokenGraph
         self.is_parallel = is_parallel
         self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
-        self.graph_search_mgr = SlpGraphSearchManager()
+        self.graph_search_mgr = None
+        if use_graph_search:
+            self.graph_search_mgr = SlpGraphSearchManager()
         self._setup_job_mgr()
 
     def diagnostic_name(self):
@@ -198,7 +200,7 @@ class GraphContext(PrintError):
         def fetch_hook(txids, val_job):
             l = []
             nonlocal gs_enable, gs_host
-            if gs_enable and gs_host:
+            if gs_enable and gs_host and self.graph_search_mgr:
                 if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys():
                     search_job = self.graph_search_mgr.new_search(val_job)
                     val_job.graph_search_job = search_job if search_job else None
@@ -285,7 +287,7 @@ class GraphContext(PrintError):
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext(is_parallel=True)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
+shared_context = GraphContext(is_parallel=True, use_graph_search=True)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

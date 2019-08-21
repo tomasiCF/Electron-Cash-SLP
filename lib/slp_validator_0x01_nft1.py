@@ -192,7 +192,7 @@ class ValidationJobNFT1Child(ValidationJob):
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext_NFT1()  # FIXME: Due to bugs in NFT validator, we disable the shared context and instead use a per-wallet context.
+shared_context_nft1 = GraphContext_NFT1()
 
 class Validator_NFT1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.
