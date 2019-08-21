@@ -181,6 +181,8 @@ class SlpMgt(MyTreeWidget):
                 item.setForeground(1, QBrush(QColor("#BC1E1E")))
                 item.setForeground(2, QBrush(QColor("#BC1E1E")))
                 item.setForeground(3, QBrush(QColor("#BC1E1E")))
+                item.setForeground(4, QBrush(QColor("#BC1E1E")))
+                item.setForeground(5, QBrush(QColor("#BC1E1E")))
             if i["class"] == "SLP129":
                 for _token_id, _i in self.parent.wallet.token_types.items():
                     if _i["class"] == "SLP65" and _i.get("group_id", None) == token_id:
