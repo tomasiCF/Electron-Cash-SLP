@@ -174,6 +174,13 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             domain=None, exclude_frozen=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
             slp_include_invalid=self.token_burn_invalid_cb.isChecked(), slp_include_baton=self.token_burn_baton_cb.isChecked())
 
+        addr = self.wallet.get_unused_address(frozen_ok=False)
+        if addr is None:
+            if not self.wallet.is_deterministic():
+                addr = self.wallet.get_receiving_address()
+            else:
+                addr = self.wallet.create_new_address(True)
+
         try:
             selected_slp_coins = []
             if burn_amt < unfrozen_token_qty:
@@ -194,7 +201,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     token_type = self.wallet.token_types[self.token_id_e.text()]['class']
                     slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt], token_type)
                     outputs.append(slp_op_return_msg)
-                    outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), 546))
+                    outputs.append((TYPE_ADDRESS, addr, 546))
             else:
                 for coin in slp_coins:
                     if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
@@ -219,7 +226,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     selected_slp_coins.append(coin)
 
         bch_change = sum(c['value'] for c in selected_slp_coins)
-        outputs.append((TYPE_ADDRESS, self.wallet.get_unused_address(), bch_change))
+        outputs.append((TYPE_ADDRESS, addr, bch_change))
 
         coins = self.main_window.get_coins()
         fixed_fee = None
