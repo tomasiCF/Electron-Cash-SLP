@@ -127,3 +127,9 @@ Electron Cash - SLP Token Edition
 - Added pre-sign check to double check against SLP burns
 - Various other bug fixes and improvements
 - Various improvements ported from EC
+
+3.5.1 Updates & Features
+-----
+- Hardware wallet support for Ledger Nano S/X devices
+- Fix burn tool for imported priv key type wallets
+- ... WIP

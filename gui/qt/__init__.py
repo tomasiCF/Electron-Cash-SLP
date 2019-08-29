@@ -508,9 +508,9 @@ class ElectrumGui(QObject, PrintError):
 
                 try:
                     wallet = self.daemon.load_wallet(path, None)
-                    if wallet and self._slp_warn_if_wallet_not_compat(wallet):
-                        # trigger exception catch which forces the wizard to kick in below
-                        raise RuntimeWarning("User doesn't want to use this wallet")
+                    # if wallet and self._slp_warn_if_wallet_not_compat(wallet):
+                    #     # trigger exception catch which forces the wizard to kick in below
+                    #     raise RuntimeWarning("User doesn't want to use this wallet")
                 except BaseException as e:
                     self.print_error(repr(e))
                     if self.windows:
@@ -540,9 +540,9 @@ class ElectrumGui(QObject, PrintError):
                         return
                     wallet.start_threads(self.daemon.network)
                     self.daemon.add_wallet(wallet)
-                if self._slp_warn_if_wallet_not_compat(wallet):
-                    # basically, we reject hardware wallets
-                    return # give up...
+                # if self._slp_warn_if_wallet_not_compat(wallet):
+                #     # basically, we reject hardware wallets
+                #     return # give up...
             except BaseException as e:
                 traceback.print_exc(file=sys.stdout)
                 if '2fa' in str(e):
@@ -768,20 +768,20 @@ class ElectrumGui(QObject, PrintError):
             else:
                 self._stop_auto_update_timer()
 
-    def _slp_warn_if_wallet_not_compat(self, wallet, *, stop=True):
-        from electroncash.keystore import Hardware_KeyStore
-        if any(isinstance(k, Hardware_KeyStore) for k in wallet.get_keystores()):
-            if stop:
-                try:
-                    self.daemon.stop_wallet(wallet.storage.path)
-                except:
-                    # wasn't started
-                    pass
-            bn = wallet.basename()
-            self.warning(title=_("Hardware Wallet"),
-                         message = _("'{}' is a hardware wallet.").format(bn) + "\n\n" + _("Sorry, hardware wallets are not currently supported with this version of Electron Cash SLP. Please open a different wallet or create a new wallet."))
-            return True
-        return False
+    # def _slp_warn_if_wallet_not_compat(self, wallet, *, stop=True):
+    #     from electroncash.keystore import Hardware_KeyStore
+    #     if any(isinstance(k, Hardware_KeyStore) for k in wallet.get_keystores()):
+    #         if stop:
+    #             try:
+    #                 self.daemon.stop_wallet(wallet.storage.path)
+    #             except:
+    #                 # wasn't started
+    #                 pass
+    #         bn = wallet.basename()
+    #         self.warning(title=_("Hardware Wallet"),
+    #                      message = _("'{}' is a hardware wallet.").format(bn) + "\n\n" + _("Sorry, hardware wallets are not currently supported with this version of Electron Cash SLP. Please open a different wallet or create a new wallet."))
+    #         return True
+    #     return False
 
     @staticmethod
     def _quit_after_last_window():

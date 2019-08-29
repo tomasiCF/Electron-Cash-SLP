@@ -108,8 +108,7 @@ def validate_op_return_output_and_get_data(output: tuple,        # tuple(typ, 'a
     ops = Script.get_ops(address.script)
 
     num_pushes = len(ops) - 1
-
-    if len(ops) < 1 or ops[0][0] != OpCodes.OP_RETURN:
+    if len(ops) < 1 or ops[0] != OpCodes.OP_RETURN:  # NOTE: Electron Cash mainline would require "ops[0][0]" here!
         raise RuntimeError(_("Only OP_RETURN scripts are supported."))
 
     if num_pushes < 1 or num_pushes > max_pushes or any(ops[i+1][1] is None for i in range(num_pushes)):
