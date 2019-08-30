@@ -727,9 +727,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         tools_menu.addAction(_("&Network") + "...", lambda: gui_object.show_network_dialog(weakSelf()), QKeySequence("Ctrl+K"))
         tools_menu.addAction(_("Optional &Features") + "...", self.internal_plugins_dialog, QKeySequence("Shift+Ctrl+P"))
         tools_menu.addAction(_("Installed &Plugins") + "...", self.external_plugins_dialog, QKeySequence("Ctrl+P"))
-        if sys.platform.startswith('linux'):
-            tools_menu.addSeparator()
-            tools_menu.addAction(_("&Hardware wallet support..."), self.hardware_wallet_support)
         tools_menu.addSeparator()
         tools_menu.addAction(_("&Sign/verify message") + "...", self.sign_verify_message)
         tools_menu.addAction(_("&Encrypt/decrypt message") + "...", self.encrypt_message)
