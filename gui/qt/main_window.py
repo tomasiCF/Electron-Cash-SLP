@@ -2752,7 +2752,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             index+=1
                         if index == self.token_type_combo.count():
                             self.token_type_combo.setCurrentIndex(0)
-                            self.show_error(_("Token is not in your wallet, check that you have added this token in the 'Tokens' tab"))
+                            from .slp_add_token_dialog import SlpAddTokenDialog
+                            def add_token_callback(self,):
+                                self.slp_amount_e.setAmount(amounts[tokenid]['amount'] * pow(10, self.slp_amount_e.token_decimals))
+                                self.slp_amount_e.textEdited.emit("")
+                            SlpAddTokenDialog(self, token_id_hex = tokenid, token_name=None, allow_overwrite=None, add_callback=add_token_callback)
                             return
                         self.slp_amount_e.setAmount(amounts[tokenid]['amount'] * pow(10, self.slp_amount_e.token_decimals))
                         self.slp_amount_e.textEdited.emit("")

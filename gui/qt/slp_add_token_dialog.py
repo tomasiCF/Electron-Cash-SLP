@@ -42,7 +42,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         tx = Transaction(raw)
         self.handle_genesis_tx(tx)
 
-    def __init__(self, main_window, token_id_hex=None, token_name=None, allow_overwrite=False):
+    def __init__(self, main_window, token_id_hex=None, token_name=None, allow_overwrite=False, add_callback=None):
         # We want to be a top-level window
         QDialog.__init__(self, parent=None)
         from .main_window import ElectrumWindow
@@ -53,6 +53,7 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
 
         self.provided_token_name = token_name
         self.allow_overwrite = allow_overwrite
+        self.add_callback = add_callback
         self.main_window = main_window
         self.wallet = main_window.wallet
         self.network = main_window.network
@@ -329,6 +330,8 @@ class SlpAddTokenDialog(QDialog, MessageBoxMixin):
         if ret:
             self.add_button.setDisabled(True)
             self.close()
+            if self.add_callback:
+                self.add_callback()
         else:
             # couldn't add for some reason...
             pass
