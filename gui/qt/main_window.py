@@ -2753,7 +2753,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         if index == self.token_type_combo.count():
                             self.token_type_combo.setCurrentIndex(0)
                             from .slp_add_token_dialog import SlpAddTokenDialog
-                            def add_token_callback(self,):
+                            def add_token_callback():
+                                index = 1
+                                while index < self.token_type_combo.count():
+                                    self.token_type_combo.setCurrentIndex(index)
+                                    if self.token_type_combo.currentData() == tokenid:
+                                        break
+                                    index+=1
                                 self.slp_amount_e.setAmount(amounts[tokenid]['amount'] * pow(10, self.slp_amount_e.token_decimals))
                                 self.slp_amount_e.textEdited.emit("")
                             SlpAddTokenDialog(self, token_id_hex = tokenid, token_name=None, allow_overwrite=None, add_callback=add_token_callback)
