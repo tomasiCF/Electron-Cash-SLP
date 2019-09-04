@@ -2276,31 +2276,25 @@ class Abstract_Wallet(PrintError):
         return status, conf
 
     def make_payment_request(self, addr, amount, message, expiration=None, *,
-                             op_return=None, op_return_raw=None, token_id=None):
+                             op_return=None, op_return_raw=None, payment_url=None,
+                             token_id=None):
         assert isinstance(addr, Address)
         if op_return and op_return_raw:
             raise ValueError("both op_return and op_return_raw cannot be specified as arguments to make_payment_request")
         timestamp = int(time.time())
         _id = bh2u(Hash(addr.to_storage_string() + "%d" % timestamp))[0:10]
+        d = {
+            'time': timestamp,
+            'amount': amount,
+            'exp': expiration,
+            'address': addr,
+            'memo': message,
+            'id': _id
+        }
         if token_id:
-            d = {
-                'time': timestamp,
-                'token_id': token_id,
-                'amount': amount,
-                'exp': expiration,
-                'address': addr,
-                'memo': message,
-                'id': _id
-            }
-        else:
-            d = {
-                'time': timestamp,
-                'amount': amount,
-                'exp': expiration,
-                'address': addr,
-                'memo': message,
-                'id': _id
-            }
+            d['token_id'] = token_id
+        if payment_url:
+            d['payment_url'] = payment_url
         if op_return:
             d['op_return'] = op_return
         if op_return_raw:
