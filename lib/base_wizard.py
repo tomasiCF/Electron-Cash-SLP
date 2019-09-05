@@ -30,7 +30,7 @@ import traceback
 from . import bitcoin
 from . import keystore
 from . import util
-from .keystore import bip44_derivation, bip44_derivation_145
+from .keystore import bip44_derivation, bip44_derivation_245
 from .wallet import (ImportedAddressWallet, Slp_ImportedAddressWallet,
                      ImportedPrivkeyWallet, Slp_ImportedPrivkeyWallet,
                      Standard_Wallet, Slp_Standard_Wallet, Multisig_Wallet,
