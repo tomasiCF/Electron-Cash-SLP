@@ -436,8 +436,10 @@ def text_dialog(parent, title, label, ok_label, default=None, allow_multi=False)
         return txt.toPlainText()
 
 class ChoicesLayout(object):
-    def __init__(self, msg, choices, on_clicked=None, checked_index=0):
+    def __init__(self, msg, choices, on_clicked=None, checked_index=0, *,
+                 disabled_indices = set(), disabled_tooltip = ''):
         vbox = QVBoxLayout()
+        disabled_indices = disabled_indices or set()
         if len(msg) > 50:
             vbox.addWidget(WWLabel(msg))
             msg = ""
@@ -456,6 +458,11 @@ class ChoicesLayout(object):
             group.setId(button, i)
             if i==checked_index:
                 button.setChecked(True)
+            if i in disabled_indices:
+                button.setDisabled(True)
+                button.setChecked(False)
+                if disabled_tooltip:
+                    button.setToolTip(disabled_tooltip)
 
         if on_clicked:
             group.buttonClicked.connect(partial(on_clicked, self))

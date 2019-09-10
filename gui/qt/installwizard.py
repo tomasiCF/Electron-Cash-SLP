@@ -465,10 +465,19 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
         t.join()
 
     @wizard_dialog
-    def choice_dialog(self, title, message, choices, run_next):
+    def choice_dialog(self, title, message, choices, run_next, *, disabled_indices=set(), disabled_tooltip=''):
         c_values = [x[0] for x in choices]
         c_titles = [x[1] for x in choices]
-        clayout = ChoicesLayout(message, c_titles)
+        non_disabled = [i for i,v in enumerate(c_titles) if i not in disabled_indices]
+        if non_disabled:
+            # if there are any non-disabled items, make the first one pre-selected
+            checked_index = non_disabled[0]
+        else:
+            # otherwise ensure nothing is pre-selected
+            checked_index = -1
+        clayout = ChoicesLayout(message, c_titles, checked_index = checked_index,
+                                disabled_indices = disabled_indices,
+                                disabled_tooltip = disabled_tooltip)
         vbox = QVBoxLayout()
         vbox.addLayout(clayout.layout())
         self.exec_layout(vbox, title)

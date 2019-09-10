@@ -35,7 +35,7 @@ from .wallet import (ImportedAddressWallet, Slp_ImportedAddressWallet,
                      ImportedPrivkeyWallet, Slp_ImportedPrivkeyWallet,
                      Standard_Wallet, Slp_Standard_Wallet, Multisig_Wallet,
                      wallet_types)
-from .i18n import _
+from .i18n import _, ngettext
 
 
 class BaseWizard(util.PrintError):
@@ -220,13 +220,34 @@ class BaseWizard(util.PrintError):
         # select device
         self.devices = devices
         choices = []
-        for name, info in devices:
+        disabled_indices = set()
+        for i, val in enumerate(devices):
+            name, info = val
             state = _("initialized") if info.initialized else _("wiped")
             label = info.label or _("An unnamed {}").format(name)
             descr = "%s [%s, %s]" % (label, name, state)
             choices.append(((name, info), descr))
+            if name != 'ledger':
+                disabled_indices.add(i)
         msg = _('Select a device') + ':'
-        self.choice_dialog(title=title, message=msg, choices=choices, run_next=self.on_device)
+        run_next = self.on_device  # normal flow, there are enabled devices
+        # Check if there are no enabled options -- and if so, do something
+        # different for run_next and change the message.
+        if all(i in disabled_indices for i,v in enumerate(choices)):
+            number = number=len(choices)
+            msg = ngettext(
+                    '{number} hardware device was detected. '
+                    'However, it is not compatible with Electron Cash SLP.',
+                    '{number} hardware devices were detected. '
+                    'However, none of them are compatible with Electron Cash SLP.',
+                    number).format(number=number)
+            msg += '\n\n' + _('To trigger a rescan, press \'Next\'.') + '\n'
+            run_next = lambda *a,**k: self.choose_hw_device()
+
+        self.choice_dialog(title=title, message=msg, choices=choices, run_next=run_next,
+                           disabled_indices = disabled_indices,
+                           disabled_tooltip = _('This hardware wallet device'
+                                                ' cannot be used with SLP Tokens'))
 
     def on_device(self, name, device_info):
         self.plugin = self.plugins.find_plugin(name, force_load=True)
