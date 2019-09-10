@@ -130,6 +130,8 @@ Electron Cash - SLP Token Edition
 
 3.5.1 Updates & Features
 -----
-- Hardware wallet support for Ledger Nano S/X devices
+- Add Hardware wallet support for Ledger devices (Nano S & X work with SLP)
 - Fix burn tool for imported priv key type wallets
-- ... WIP
+- URI payments for SLP now prompt the user to add tokens
+- Fix for recent BitPay breaking changes
+- Other fixes and improvements ported from Electron Cash mainline
