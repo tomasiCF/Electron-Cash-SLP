@@ -37,6 +37,10 @@ class SlpTransactionChecker:
                                     continue
                                 elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
                                     continue
+                                elif slp_msg.transaction_type == 'MINT' and \
+                                        prev_n == 1 and \
+                                        slp_msg.op_return_fields['additional_token_quantity'] == 0:
+                                    continue
                             try:
                                 with wallet.lock:
                                     assert wallet._slp_txo[addr][prev_out][prev_n]
