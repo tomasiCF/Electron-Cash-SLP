@@ -3917,7 +3917,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 except InvalidPassword:
                     # See #921 -- possibly a corrupted wallet or other strangeness
                     privkey = 'INVALID_PASSWORD'
-                private_keys[addr.to_ui_string()] = privkey
+                if self.is_slp_wallet: #TODO: also create special prefix for SLP wallet private keys
+                    private_keys[addr.to_full_string(Address.FMT_SLPADDR)] = privkey
+                else:
+                    private_keys[addr.to_full_string(Address.FMT_CASHADDR)] = privkey
                 strong_d = weak_d()
                 try:
                     if strong_d and not stop:
