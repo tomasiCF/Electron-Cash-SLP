@@ -136,7 +136,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.config = config = gui_object.config
         self.non_slp_wallet_warning_shown = False
         self.force_use_single_change_addr = _('Change addresses behavior is not customizable for SLP wallets') if self.is_slp_wallet else False
-
+        if self.force_use_single_change_addr and not self.wallet.use_change:
+            self.wallet.use_change = True
+            self.wallet.storage.put('use_change', self.wallet.use_change)
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
