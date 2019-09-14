@@ -2294,7 +2294,7 @@ class Abstract_Wallet(PrintError):
         if token_id:
             d['token_id'] = token_id
         if payment_url:
-            d['payment_url'] = payment_url
+            d['payment_url'] = payment_url + "/" + _id
         if op_return:
             d['op_return'] = op_return
         if op_return_raw:
