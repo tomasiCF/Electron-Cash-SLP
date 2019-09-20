@@ -42,7 +42,7 @@ from electroncash.address import Address, ScriptOutput
 from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
 from electroncash import networks
 from electroncash.plugins import run_hook
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext, pgettext
 from electroncash.util import (format_time, format_satoshis, PrintError,
                                format_satoshis_plain, format_satoshis_plain_nofloat,
                                NotEnoughFunds, NotEnoughFundsSlp, NotEnoughUnfrozenFundsSlp, ExcessiveFee,
@@ -4747,7 +4747,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if not self.fx: return
             currencies = sorted(self.fx.get_currencies(self.fx.get_history_config()))
             ccy_combo.clear()
-            ccy_combo.addItems([_('None')] + currencies)
+            ccy_combo.addItems([pgettext('Referencing Fiat currency', 'None')] + currencies)
             if self.fx.is_enabled():
                 ccy_combo.setCurrentIndex(ccy_combo.findText(self.fx.get_currency()))
 
