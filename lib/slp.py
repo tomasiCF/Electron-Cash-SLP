@@ -326,7 +326,7 @@ def buildGenesisOpReturnOutput_V1(ticker: str, token_name: str, token_document_u
     return chunksToOpreturnOutput(chunks)
 
 # Type 1 Token GENESIS Message
-def buildGenesisOpReturnOutput_V2(ticker: str, token_name: str, token_document_url: str, token_document_hash_hex: str, decimals: int, baton_vout: int, initial_token_mint_quantity: int) -> tuple:
+def buildGenesisOpReturnOutput_V1_UnitTests_V_X(ticker: str, token_name: str, token_document_url: str, token_document_hash_hex: str, decimals: int, baton_vout: int, initial_token_mint_quantity: int, version: bytes) -> tuple:
     chunks = []
     script = bytearray((0x6a,))  # OP_RETURN
 
@@ -334,7 +334,7 @@ def buildGenesisOpReturnOutput_V2(ticker: str, token_name: str, token_document_u
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x02')
+    chunks.append(version) # b'\x02')
 
     # transaction type
     chunks.append(b'GENESIS')
@@ -426,14 +426,14 @@ def buildMintOpReturnOutput_V1(token_id_hex: str, baton_vout: int, token_mint_qu
     return chunksToOpreturnOutput(chunks)
 
 # Type 2 Token MINT Message
-def buildMintOpReturnOutput_V2(token_id_hex: str, baton_vout: int, token_mint_quantity: int) -> tuple:
+def buildMintOpReturnOutput_V1_UnitTests_V_X(token_id_hex: str, baton_vout: int, token_mint_quantity: int, version: bytes) -> tuple:
     chunks = []
 
     # lokad id
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x02')
+    chunks.append(version) # b'\x02')
 
     # transaction type
     chunks.append(b'MINT')
@@ -496,14 +496,14 @@ def buildSendOpReturnOutput_V1(token_id_hex: str, output_qty_array: [int], token
     return chunksToOpreturnOutput(chunks)
 
 # Type 2 Token SEND Message
-def buildSendOpReturnOutput_V2(token_id_hex: str, output_qty_array: [int]) -> tuple:
+def buildSendOpReturnOutput_V1_UnitTests_V_X(token_id_hex: str, output_qty_array: [int], version: bytes) -> tuple:
     chunks = []
 
     # lokad id
     chunks.append(lokad_id)
 
     # token version/type
-    chunks.append(b'\x02')
+    chunks.append(version) #b'\x02')
 
     # transaction type
     chunks.append(b'SEND')
