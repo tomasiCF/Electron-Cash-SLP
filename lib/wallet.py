@@ -2492,7 +2492,8 @@ class Abstract_Wallet(PrintError):
                     baseurl = baseurl.replace(*rewrite)
                 out['request_url'] = os.path.join(baseurl, 'req', key[0], key[1], key, key)
                 out['URI'] += '&r=' + out['request_url']
-                out['index_url'] = os.path.join(baseurl, 'index.html') + '?id=' + key
+                if not 'index_url' in out:
+                    out['index_url'] = os.path.join(baseurl, 'index.html') + '?id=' + key
                 websocket_server_announce = config.get('websocket_server_announce')
                 if websocket_server_announce:
                     out['websocket_server'] = websocket_server_announce
@@ -2531,8 +2532,7 @@ class Abstract_Wallet(PrintError):
         return status, conf
 
     def make_payment_request(self, addr, amount, message, expiration=None, *,
-                             op_return=None, op_return_raw=None, payment_url=None,
-                             token_id=None):
+                             op_return=None, op_return_raw=None, payment_url=None, token_id=None, index_url=None):
         assert isinstance(addr, Address)
         if op_return and op_return_raw:
             raise ValueError("both op_return and op_return_raw cannot be specified as arguments to make_payment_request")
@@ -2550,6 +2550,8 @@ class Abstract_Wallet(PrintError):
             d['token_id'] = token_id
         if payment_url:
             d['payment_url'] = payment_url + "/" + _id
+        if index_url:
+            d['index_url'] = index_url + "/" + _id
         if op_return:
             d['op_return'] = op_return
         if op_return_raw:
