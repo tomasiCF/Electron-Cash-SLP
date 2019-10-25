@@ -431,39 +431,6 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
                 pass
         return self.script.hex()
 
-    def to_asm(self):
-        '''Convert to user-readable OP-codes (plus text), eg OP_RETURN (12) Hello there!
-           Or, to a hexadecimal string if that fails.
-           Note that this function is the inverse of from_string() only if called with hex_only = True!'''
-        if self.script:
-            try:
-                ret = ''
-                ops = Script.get_ops(self.script)
-                def lookup(x):
-                    if not (x > OpCodes.OP_0 and x < OpCodes.OP_1NEGATE): # only display non-PUSHDATA opcodes 'NOT 0 < x < 79'
-                        try: return OpCodes(x).name
-                        except ValueError: return ''
-                    return None
-                for op in ops:
-                    if ret: ret += " "
-                    if isinstance(op, tuple):
-                        if lookup(op[0]) is not None:
-                            ret += lookup(op[0]) + " " + op[1].hex()
-                        elif op[1] is None:
-                            ret += "<EMPTY>"
-                        else:
-                            ret += op[1].hex()
-                    elif isinstance(op, int):
-                        ret += str(lookup(op))  # FIXME: Handle possible None return from lookup here! -Calin
-                    else:
-                        ret += '[' + (op.hex() if isinstance(op, bytes) else str(op)) + ']'
-                return ret
-            except ScriptError:
-                raise Exception("Truncated script.")
-                # Truncated script -- so just default to normal 'hex' encoding below.
-                pass
-        raise Exception("There is no script object to convert to ASM format.")
-
     def to_script(self):
         return self.script
 
@@ -558,7 +525,7 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
             try:
                 try:
                     return cls.from_slpaddr_string(string, net=net)
-                except: 
+                except:
                     return cls.from_cashaddr_string(string, net=net)
             except ValueError as e:
                 raise AddressError(str(e))
@@ -592,7 +559,7 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
             try:
                 cls.from_slpaddr_string(string, net=net)
                 return net.SLPADDR_PREFIX
-            except: 
+            except:
                 pass
             try:
                 cls.from_cashaddr_string(string, net=net)
