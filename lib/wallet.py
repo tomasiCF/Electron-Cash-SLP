@@ -65,7 +65,7 @@ from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .paymentrequest import InvoiceStore
 from .contacts import Contacts
 
-from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpNoMintingBatonFound
+from .slp import SlpMessage, SlpParsingError, SlpUnsupportedSlpTokenType, SlpNoMintingBatonFound, OpreturnError
 from . import slp_validator_0x01, slp_validator_0x01_nft1
 
 def _(message): return message
@@ -1465,14 +1465,14 @@ class Abstract_Wallet(PrintError):
         except SlpUnsupportedSlpTokenType as e:
             token_type = 'SLP%d'%(e.args[0],)
             for i, (_type, addr, _) in enumerate(txouts):
-                if _type is TYPE_ADDRESS and self.is_mine(addr):
+                if _type == TYPE_ADDRESS and self.is_mine(addr):
                     self._slp_txo[addr][tx_hash][i] = {
                             'type': token_type,
                             'qty': None,
                             'token_id': None,
                             }
             return
-        except (SlpParsingError, IndexError):
+        except (SlpParsingError, IndexError, OpreturnError):
             return
 
         if slpMsg.transaction_type == 'SEND':
@@ -1481,7 +1481,7 @@ class Abstract_Wallet(PrintError):
             amounts = slpMsg.op_return_fields['token_output'][:len(txouts)]
             for i, qty in enumerate(amounts):
                 _type, addr, _ = txouts[i]
-                if _type is TYPE_ADDRESS and qty > 0 and self.is_mine(addr):
+                if _type == TYPE_ADDRESS and qty > 0 and self.is_mine(addr):
                     self._slp_txo[addr][tx_hash][i] = {
                             'type': 'SLP%d'%(slpMsg.token_type,),
                             'token_id': token_id_hex,
@@ -1491,7 +1491,7 @@ class Abstract_Wallet(PrintError):
             token_id_hex = tx_hash
             try:
                 _type, addr, _ = txouts[1]
-                if _type is TYPE_ADDRESS:
+                if _type == TYPE_ADDRESS:
                     if slpMsg.op_return_fields['initial_token_mint_quantity'] > 0 and self.is_mine(addr):
                         self._slp_txo[addr][tx_hash][1] = {
                                 'type': 'SLP%d'%(slpMsg.token_type,),
@@ -1501,7 +1501,7 @@ class Abstract_Wallet(PrintError):
                     if slpMsg.op_return_fields['mint_baton_vout'] is not None:
                         i = slpMsg.op_return_fields['mint_baton_vout']
                         _type, addr, _ = txouts[i]
-                        if _type is TYPE_ADDRESS:
+                        if _type == TYPE_ADDRESS:
                             self._slp_txo[addr][tx_hash][i] = {
                                     'type': 'SLP%d'%(slpMsg.token_type,),
                                     'token_id': token_id_hex,
@@ -1513,7 +1513,7 @@ class Abstract_Wallet(PrintError):
             token_id_hex = slpMsg.op_return_fields['token_id_hex']
             try:
                 _type, addr, _ = txouts[1]
-                if _type is TYPE_ADDRESS:
+                if _type == TYPE_ADDRESS:
                     if slpMsg.op_return_fields['additional_token_quantity'] > 0 and self.is_mine(addr):
                         self._slp_txo[addr][tx_hash][1] = {
                                 'type': 'SLP%d'%(slpMsg.token_type,),
@@ -1523,7 +1523,7 @@ class Abstract_Wallet(PrintError):
                     if slpMsg.op_return_fields['mint_baton_vout'] is not None:
                         i = slpMsg.op_return_fields['mint_baton_vout']
                         _type, addr, _ = txouts[i]
-                        if _type is TYPE_ADDRESS:
+                        if _type == TYPE_ADDRESS:
                             self._slp_txo[addr][tx_hash][i] = {
                                     'type': 'SLP%d'%(slpMsg.token_type,),
                                     'token_id': token_id_hex,

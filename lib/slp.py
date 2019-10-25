@@ -27,7 +27,7 @@ def parseOpreturnToChunks(script: bytes, *,  allow_op_0: bool, allow_op_number: 
     except ScriptError as e:
         raise OpreturnError('Script error') from e
 
-    if ops[0] != OpCodes.OP_RETURN:
+    if not ops or ops[0] != OpCodes.OP_RETURN:
         raise OpreturnError('No OP_RETURN')
 
     chunks = []
