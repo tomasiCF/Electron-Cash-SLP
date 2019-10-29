@@ -380,7 +380,7 @@ class Abstract_Wallet(PrintError):
                     continue
 
     _add_token_hex_re = re.compile('^[a-f0-9]{64}$')
-    def add_token_type(self, token_id, entry):
+    def add_token_type(self, token_id, entry, check_validation=True):
         if not isinstance(token_id, str) or not self._add_token_hex_re.match(token_id):
             # Paranoia: we enforce canonical hex string as lowercase to avoid
             # problems with the same token-id being added as upper or lowercase
@@ -393,7 +393,7 @@ class Abstract_Wallet(PrintError):
             for tx_hash, tti in self.tx_tokinfo.items():
                 # Fire up validation on unvalidated txes of matching token_id
                 try:
-                    if tti['token_id'] == token_id:
+                    if tti['token_id'] == token_id and check_validation:
                         tx = self.transactions[tx_hash]
                         self.slp_check_validation(tx_hash, tx)
                 except KeyError: # This catches the case where tx_tokinfo was set to {}

@@ -824,8 +824,9 @@ class TokenGraph:
         yet). Optional parameter specifying maximum depth. """
         # with self._lock:
         # First, update the _waiting_nodes list.
-        waiting_actual = [node for node in self._waiting_nodes
-                          if node.waiting]
+        waiting_actual = [node for node in self._waiting_nodes if node.waiting]
+        waiting_actual.extend([conn.parent for conn in self.root.conn_parents if conn.parent.waiting])
+
         self._waiting_nodes = waiting_actual
 
         if maxdepth == INF_DEPTH:

@@ -11,6 +11,9 @@ import json
 
 from lib import slp
 from lib import slp_validator_0x01
+from lib import slp_validator_0x01_nft1
+from lib.storage import WalletStorage
+from lib.wallet import Slp_ImportedAddressWallet
 
 import requests
 import os
@@ -61,6 +64,16 @@ errorcodes = {
 
     #SlpUnsupportedSlpTokenType : 255 below
     }
+
+class MockNetwork:
+    def __init__(self, txes):
+        self.txes = txes
+    def send(self, req, dl_cb):
+        try:
+            result = {'result':self.txes[req[0][1][0]].raw}
+        except KeyError:
+            result = {'error':{'message':'unknown txid ' + req[0][1][0] + ' ' + str(self.txes)}}
+        dl_cb(result)
 
 class SLPConsensusTests(unittest.TestCase):
     def test_opreturns(self):
@@ -144,18 +157,28 @@ class SLPConsensusTests(unittest.TestCase):
                     #should_validity[txid] = 2
                 #else:
                     #raise ValueError(d['valid'])
-            graph_context = slp_validator_0x01.GraphContext()
+
+            graph_context, graph_context_nft1 = slp_validator_0x01.GraphContext(), slp_validator_0x01_nft1.GraphContext_NFT1()
 
             for i, d in enumerate(test['should']):
                 txid = d['txid']
                 with self.subTest(description=description, i=i):
                     try:
-                        graph, job_mgr = graph_context.setup_job(txes[txid], reset=True)
+                        slp_msg = slp.SlpMessage.parseSlpOutputScript(txes[txid].outputs()[0][1])
+                        if slp_msg.token_type == 1:
+                            graph, job_mgr = graph_context.setup_job(txes[txid], reset=True)
+                        elif slp_msg.token_type == 65 or slp_msg.token_type == 129:
+                            graph, job_mgr = graph_context_nft1.setup_job(txes[txid], reset=True)
+                        else:
+                            raise slp.SlpUnsupportedSlpTokenType(slp_msg.token_type)
                     except slp.SlpInvalidOutputMessage: # If output 0 is not OP_RETURN
                         self.assertEqual(d['valid'], False)
                         continue
+                    except slp.SlpUnsupportedSlpTokenType:
+                        self.assertEqual(d['valid'], False)
+                        continue
 
-                    def fetch_hook(txids):
+                    def fetch_hook(txids, job):
                         l = []
                         for txid in txids:
                             try:
@@ -165,8 +188,19 @@ class SLPConsensusTests(unittest.TestCase):
                         ### Call proxy here!
                         return l
 
-                    job = slp_validator_0x01.ValidationJob(graph, txid, None,
-                                        fetch_hook = fetch_hook, validitycache=given_validity)
+                    if slp_msg.token_type == 1:
+                        job = slp_validator_0x01.ValidationJob(graph, txid, None,
+                                            fetch_hook = fetch_hook, validitycache=given_validity)
+                    elif slp_msg.token_type == 65:
+                        network = MockNetwork(txes)
+                        storage = WalletStorage(os.path.curdir, manual_upgrades=True, in_memory_only=True)
+                        wallet = Slp_ImportedAddressWallet(storage)
+                        wallet.slp_graph_0x01_nft = graph_context_nft1
+                        job = slp_validator_0x01_nft1.ValidationJobNFT1Child(graph, txid, network,
+                                            fetch_hook=fetch_hook, validitycache=given_validity, ref=wallet)
+                    elif slp_msg.token_type == 129:
+                        job = slp_validator_0x01_nft1.ValidationJob(graph, txid, None,
+                                            fetch_hook=fetch_hook, validitycache=given_validity)
                     #if txid == '8a08b78ae434de0b1a26e56ae7e78bb11b20f8240eb3d97371fd46a609df7fc3':
                         #graph.debugging = True
                         #job.debugging_graph_state = True
@@ -182,6 +216,6 @@ class SLPConsensusTests(unittest.TestCase):
                     if d['valid'] is True:
                         self.assertEqual(n.validity, 1)
                     elif d['valid'] is False:
-                        self.assertIn(n.validity, (2,3))
+                        self.assertIn(n.validity, (2,3,4))
                     else:
                         raise ValueError(d['valid'])

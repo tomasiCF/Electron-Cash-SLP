@@ -418,6 +418,8 @@ class Validator_SLP1(ValidatorGeneric):
                 # multiple 'valid' baton inputs are possible with double spending.
                 # technically 'valid' though miners will never confirm.
                 return (True, 1)
+            if all(inp[1] in [2,3,4] for inp in inputs_info):
+                return (False, 3)
             return None
         else:
             # TRAN --- myinfo is an integer sum(outs)
