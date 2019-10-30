@@ -295,7 +295,7 @@ class ValidationJob:
             #else:
                 #return "stopped"
 
-    def add_callback(self, cb, way='direct'):
+    def add_callback(self, cb, way='direct', allow_run_cb_now=True):
         """
         Callback will be called with cb(job) upon stopping. May be called
         more than once if job is restarted.
@@ -326,7 +326,7 @@ class ValidationJob:
             else:
                 # We have run and we are now stopped.
                 run_cb_now = True
-        if run_cb_now:
+        if run_cb_now and allow_run_cb_now:
             cb(self)
 
     ## Validation logic (breadth-first traversal)
@@ -825,7 +825,6 @@ class TokenGraph:
         # with self._lock:
         # First, update the _waiting_nodes list.
         waiting_actual = [node for node in self._waiting_nodes if node.waiting]
-        waiting_actual.extend([conn.parent for conn in self.root.conn_parents if conn.parent.waiting])
 
         self._waiting_nodes = waiting_actual
 

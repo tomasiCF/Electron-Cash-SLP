@@ -2,6 +2,8 @@ import unittest
 from pprint import pprint
 from queue import Queue, Empty
 
+from time import sleep
+from lib.slp_validator_0x01_nft1 import ValidationJobNFT1Child
 
 from lib.address import ScriptOutput
 
@@ -65,6 +67,7 @@ errorcodes = {
     #SlpUnsupportedSlpTokenType : 255 below
     }
 
+# We need a mock network because of the NFT1 validator
 class MockNetwork:
     def __init__(self, txes):
         self.txes = txes
@@ -73,6 +76,7 @@ class MockNetwork:
             result = {'result':self.txes[req[0][1][0]].raw}
         except KeyError:
             result = {'error':{'message':'unknown txid ' + req[0][1][0] + ' ' + str(self.txes)}}
+        sleep(0.001)
         dl_cb(result)
 
 class SLPConsensusTests(unittest.TestCase):
@@ -197,7 +201,7 @@ class SLPConsensusTests(unittest.TestCase):
                         wallet = Slp_ImportedAddressWallet(storage)
                         wallet.slp_graph_0x01_nft = graph_context_nft1
                         job = slp_validator_0x01_nft1.ValidationJobNFT1Child(graph, txid, network,
-                                            fetch_hook=fetch_hook, validitycache=given_validity, ref=wallet)
+                                            fetch_hook=fetch_hook, validitycache=None, ref=wallet)
                     elif slp_msg.token_type == 129:
                         job = slp_validator_0x01_nft1.ValidationJob(graph, txid, None,
                                             fetch_hook=fetch_hook, validitycache=given_validity)
@@ -207,15 +211,22 @@ class SLPConsensusTests(unittest.TestCase):
                     q = Queue()
                     job.add_callback(q.put)
                     job_mgr.add_job(job)
-                    try:
-                        q.get(timeout=3) # unlimited timeout
-                    except Empty:
-                        raise RuntimeError("Timeout during validation unit test")
-
-                    n = next(iter(job.nodes.values()))
-                    if d['valid'] is True:
-                        self.assertEqual(n.validity, 1)
-                    elif d['valid'] is False:
-                        self.assertIn(n.validity, (2,3,4))
-                    else:
-                        raise ValueError(d['valid'])
+                    while True:
+                        try:
+                            q.get(timeout=3) # unlimited timeout
+                        except Empty:
+                            raise RuntimeError("Timeout during validation unit test")
+                        # if isinstance(job, ValidationJobNFT1Child) and not job.paused:# and job.stop_reason != 'inconclusive':
+                        #     raise Exception(job.stop_reason)
+                        if not job.paused and not job.running: # and job.stop_reason != 'inconclusive':
+                            n = next(iter(job.nodes.values()))
+                            if d['valid'] is True:
+                                self.assertEqual(n.validity, 1)
+                            elif d['valid'] is False:
+                                self.assertIn(n.validity, (2,3,4))
+                            else:
+                                raise ValueError(d['valid'])
+                            break
+                        else:
+                            job.callbacks.clear()
+                            job.add_callback(q.put, allow_run_cb_now=False)
