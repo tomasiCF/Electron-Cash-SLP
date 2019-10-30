@@ -223,7 +223,10 @@ class SLPConsensusTests(unittest.TestCase):
                             if d['valid'] is True:
                                 self.assertEqual(n.validity, 1)
                             elif d['valid'] is False:
-                                self.assertIn(n.validity, (2,3,4))
+                                if test.get('allow_inconclusive', False): # "allow_inconclusive" allows for ending with an "unvalidated" state for harder corner-cases
+                                    self.assertIn(n.validity, (0,2,3,4))
+                                else:
+                                    self.assertIn(n.validity, (2,3,4))
                             else:
                                 raise ValueError(d['valid'])
                             break
