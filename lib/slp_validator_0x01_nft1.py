@@ -429,18 +429,13 @@ class Validator_NFT1(ValidatorGeneric):
             if success:
                 self.start_NFT_parent_job(nft_child_job, done_callback=restart_nft_job)
             else:
-                nft_child_job.forced_failure_val = 4
-                nft_child_job.nft_parent_validity = 4
-                self.validation_jobmgr.unpause_job(nft_child_job)
-                #self.validation_jobmgr.kill()
+                restart_nft_job(4)
 
         def start_dl_nft_parent(success):
             if success:
                 self.download_nft_parent_tx(nft_child_job, done_callback=start_nft_parent_validation)
             else:
-                nft_child_job.forced_failure_val = 2
-                self.validation_jobmgr.unpause_job(nft_child_job)
-                #self.validation_jobmgr.kill()
+                restart_nft_job(2)
 
         paused = self.validation_jobmgr.pause_job(nft_child_job)
         if not paused:

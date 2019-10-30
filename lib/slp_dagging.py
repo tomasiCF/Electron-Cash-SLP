@@ -826,6 +826,12 @@ class TokenGraph:
         # First, update the _waiting_nodes list.
         waiting_actual = [node for node in self._waiting_nodes if node.waiting]
 
+        # This is needed to handle an edge case in NFT1 validation
+        # this occurs when the child genesis is paused and is also the root_txid of the job
+        from .slp_validator_0x01_nft1 import Validator_NFT1
+        if isinstance(self.validator, Validator_NFT1) and len(waiting_actual) == 0:
+            waiting_actual.extend([conn.parent for conn in self.root.conn_parents if conn.parent.waiting])
+
         self._waiting_nodes = waiting_actual
 
         if maxdepth == INF_DEPTH:
