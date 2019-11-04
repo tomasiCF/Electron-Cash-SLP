@@ -331,7 +331,7 @@ class Validator_SLP1(ValidatorGeneric):
             return ('prune', 0)
 
         # Check that the correct token_type is enforced (type 0x01 or 0x81)
-        if self.token_type != slpMsg.token_type:
+        if self.token_type is not None and self.token_type != slpMsg.token_type:
             return ('prune', 4)
 
         if slpMsg.transaction_type == 'SEND':
@@ -378,7 +378,7 @@ class Validator_SLP1(ValidatorGeneric):
         elif slpMsg.transaction_type == 'COMMIT':
             return ('prune', 0)
 
-        if token_id_hex != self.token_id_hex:
+        if self.token_id_hex is not None and token_id_hex != self.token_id_hex:
             return ('prune', 0)  # mismatched token_id_hex
 
         # truncate / expand outputs list to match tx outputs length
