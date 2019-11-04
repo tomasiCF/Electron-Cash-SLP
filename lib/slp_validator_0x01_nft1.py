@@ -282,7 +282,7 @@ class Validator_NFT1(ValidatorGeneric):
         elif slpMsg.transaction_type == 'COMMIT':
             return ('prune', 0)
 
-        if token_id_hex != self.token_id_hex:
+        if self.token_id_hex is not None and token_id_hex != self.token_id_hex:
             return ('prune', 0)  # mismatched token_id_hex
 
         # truncate / expand outputs list to match tx outputs length
