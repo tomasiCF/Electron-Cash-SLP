@@ -59,6 +59,11 @@ class HistoryList(MyTreeWidget):
         self.invoiceIcon = QIcon(":icons/seal")
         self._item_cache = Weak.ValueDictionary()
 
+        self.has_unknown_balances = False
+
+    def clean_up(self):
+        self.cleaned_up = True
+
     def refresh_headers(self):
         headers = ['', '', _('Date'), _('Description') , _('Amount'), _('Balance')]
         fx = self.parent.fx
@@ -108,11 +113,19 @@ class HistoryList(MyTreeWidget):
         current_tx = sels[0].data(0, Qt.UserRole) if sels else None
         del sels #  make sure not to hold stale ref to C++ list of items which will be deleted in clear() call below
         self.clear()
+        self.has_unknown_balances = False
         fx = self.parent.fx
         if fx: fx.history_used_spot = False
         for h_item in h:
             tx_hash, height, conf, timestamp, value, balance = h_item
             label = self.wallet.get_label(tx_hash)
+            if value is None or balance is None:
+                # Workaround to the fact that sometimes the wallet doesn't
+                # know the actual balance for history items while it's
+                # downloading history, and we want to flag that situation
+                # and redraw the GUI sometime later when it finishes updating.
+                # This flag is checked in main_window.py, TxUpadteMgr class.
+                self.has_unknown_balances = True
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             has_invoice = self.wallet.invoices.paid.get(tx_hash)
             icon = self._get_icon_for_status(status)
