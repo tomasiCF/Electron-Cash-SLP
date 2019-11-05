@@ -211,12 +211,14 @@ class Validator_NFT1(ValidatorGeneric):
         self.token_id_hex = token_id_hex
         self.validation_jobmgr = jobmgr
 
-    def get_info(self,tx):
+    def get_info(self, tx, *, diff_testing_mode=False):
         """
         Enforce internal consensus rules (check all rules that don't involve
         information from inputs).
 
         Prune if mismatched token_id_hex from this validator or SLP version other than 65.
+
+        diff_testing_mode, allows None for token_id_hex for fuzzer testing
         """
         txouts = tx.outputs()
         if len(txouts) < 1:
@@ -282,8 +284,10 @@ class Validator_NFT1(ValidatorGeneric):
         elif slpMsg.transaction_type == 'COMMIT':
             return ('prune', 0)
 
-        if self.token_id_hex is not None and token_id_hex != self.token_id_hex:
+        if diff_testing_mode and self.token_id_hex is not None and token_id_hex != self.token_id_hex:
             return ('prune', 0)  # mismatched token_id_hex
+        elif not diff_testing_mode and token_id_hex != self.token_id_hex:
+            return ('prune', 0)
 
         # truncate / expand outputs list to match tx outputs length
         outputs = tuple(outputs[:len(txouts)])

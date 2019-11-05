@@ -302,12 +302,14 @@ class Validator_SLP1(ValidatorGeneric):
         self.token_id_hex = token_id_hex
         self.token_type = enforced_token_type
 
-    def get_info(self,tx):
+    def get_info(self, tx, *, diff_testing_mode=False):
         """
         Enforce internal consensus rules (check all rules that don't involve
         information from inputs).
 
         Prune if mismatched token_id_hex from this validator or SLP version other than 1.
+
+        diff_testing_mode, allows None for token_type and token_id_hex for fuzzer testing
         """
         txouts = tx.outputs()
         if len(txouts) < 1:
@@ -331,7 +333,9 @@ class Validator_SLP1(ValidatorGeneric):
             return ('prune', 0)
 
         # Check that the correct token_type is enforced (type 0x01 or 0x81)
-        if self.token_type is not None and self.token_type != slpMsg.token_type:
+        if diff_testing_mode and self.token_type is not None and self.token_type != slpMsg.token_type:
+            return ('prune', 4)
+        elif not diff_testing_mode and self.token_type != slpMsg.token_type:
             return ('prune', 4)
 
         if slpMsg.transaction_type == 'SEND':
@@ -378,8 +382,10 @@ class Validator_SLP1(ValidatorGeneric):
         elif slpMsg.transaction_type == 'COMMIT':
             return ('prune', 0)
 
-        if self.token_id_hex is not None and token_id_hex != self.token_id_hex:
+        if diff_testing_mode and self.token_id_hex is not None and token_id_hex != self.token_id_hex:
             return ('prune', 0)  # mismatched token_id_hex
+        elif not diff_testing_mode and token_id_hex != self.token_id_hex:
+            return ('prune', 0)
 
         # truncate / expand outputs list to match tx outputs length
         outputs = tuple(outputs[:len(txouts)])
