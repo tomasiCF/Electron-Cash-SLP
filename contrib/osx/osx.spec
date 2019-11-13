@@ -24,6 +24,8 @@ hiddenimports = []
 hiddenimports += collect_submodules('trezorlib')
 hiddenimports += collect_submodules('btchip')
 hiddenimports += collect_submodules('keepkeylib')
+hiddenimports += collect_submodules('satochip')    # Satochip
+hiddenimports += collect_submodules('smartcard')   # Satochip
 
 datas = [
     (home+'lib/currencies.json', PYPKG),
@@ -69,6 +71,7 @@ a = Analysis([home+MAIN_SCRIPT,
               home+'plugins/trezor/qt.py',
               home+'plugins/keepkey/qt.py',
               home+'plugins/ledger/qt.py',
+              home+'plugins/satochip/qt.py',  # Satochip
               ],
              binaries=binaries,
              datas=datas,
