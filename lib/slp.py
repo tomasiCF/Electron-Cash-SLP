@@ -159,11 +159,16 @@ class SlpMessage:
             v = slpMsg.op_return_fields['mint_baton_vout'] = SlpMessage.parseChunkToInt(chunks[8], 1, 1)
             if v is not None and v < 2:
                 raise SlpInvalidOutputMessage('Mint baton cannot be on vout=0 or 1')
-            elif v is not None and nft_flag == 'NFT_CHILD':
-                raise SlpInvalidOutputMessage('Cannot have a minting baton in a NFT_CHILD token.')
 
             # handle initial token quantity issuance
             slpMsg.op_return_fields['initial_token_mint_quantity'] = SlpMessage.parseChunkToInt(chunks[9], 8, 8, True)
+            if nft_flag == 'NFT_CHILD':
+                if slpMsg.op_return_fields['decimals'] != 0:
+                    raise SlpInvalidOutputMessage('NFT1 child token must have divisibility set to 0 decimal places')
+                if v is not None:
+                    raise SlpInvalidOutputMessage('Cannot have a minting baton in a NFT_CHILD token.')
+                if slpMsg.op_return_fields['initial_token_mint_quantity'] != 1:
+                    raise SlpInvalidOutputMessage('NFT1 child token must have GENESIS quantity of 1.')
         elif slpMsg.transaction_type == 'SEND':
             if len(chunks) < 4:
                 raise SlpInvalidOutputMessage('SEND with too few parameters')
