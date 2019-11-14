@@ -138,3 +138,10 @@ Electron Cash - SLP Token Edition
 - Fixed recent BitPay breaking changes
 - Ported "Add hardware wallet support" udev feature for linux devices
 - Other fixes and improvements ported from Electron Cash upstream
+
+3.5.2 Updates & Features (DRAFT)
+-----
+- Improved stability of NFT1 validator with unit tests
+- Patched NFT1 parser for spec conformance
+- Updated SLP Graph Search to use new c++ server backend
+- Added Satochip hardware wallet support
