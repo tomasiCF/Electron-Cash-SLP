@@ -64,8 +64,13 @@ errorcodes = {
     # specific
     ('More than 19 output amounts',): 21,
 
+    # specific - NFT1 GENESIS 
+    ('Cannot have a minting baton in a NFT_CHILD token.', ): 22,
+    ('NFT1 child token must have divisibility set to 0 decimal places.', ): 22,
+    ('NFT1 child token must have GENESIS quantity of 1.', ): 22,
+
     #SlpUnsupportedSlpTokenType : 255 below
-    }
+}
 
 # We need a mock network because of the NFT1 validator
 class MockNetwork:
@@ -188,6 +193,7 @@ class SLPConsensusTests(unittest.TestCase):
                             try:
                                 l.append(txes[txid])
                             except KeyError:
+                                #raise Exception('KEY ERROR ' + txid)
                                 pass
                         ### Call proxy here!
                         return l
@@ -200,6 +206,7 @@ class SLPConsensusTests(unittest.TestCase):
                         storage = WalletStorage(os.path.curdir, manual_upgrades=True, in_memory_only=True)
                         wallet = Slp_ImportedAddressWallet(storage)
                         wallet.slp_graph_0x01_nft = graph_context_nft1
+                        #raise Exception(txid)
                         job = slp_validator_0x01_nft1.ValidationJobNFT1Child(graph, txid, network,
                                             fetch_hook=fetch_hook, validitycache=None, ref=wallet)
                     elif slp_msg.token_type == 129:
@@ -231,5 +238,7 @@ class SLPConsensusTests(unittest.TestCase):
                                 raise ValueError(d['valid'])
                             break
                         else:
+                            if len(job.callbacks) > 1:
+                                raise Exception("shouldn't have more than 1 callback")
                             job.callbacks.clear()
                             job.add_callback(q.put, allow_run_cb_now=False)

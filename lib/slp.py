@@ -164,7 +164,7 @@ class SlpMessage:
             slpMsg.op_return_fields['initial_token_mint_quantity'] = SlpMessage.parseChunkToInt(chunks[9], 8, 8, True)
             if nft_flag == 'NFT_CHILD':
                 if slpMsg.op_return_fields['decimals'] != 0:
-                    raise SlpInvalidOutputMessage('NFT1 child token must have divisibility set to 0 decimal places')
+                    raise SlpInvalidOutputMessage('NFT1 child token must have divisibility set to 0 decimal places.')
                 if v is not None:
                     raise SlpInvalidOutputMessage('Cannot have a minting baton in a NFT_CHILD token.')
                 if slpMsg.op_return_fields['initial_token_mint_quantity'] != 1:
