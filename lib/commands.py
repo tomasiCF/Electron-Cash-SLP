@@ -521,15 +521,16 @@ class Commands(PrintError):
         tx = self._mktx(outputs, tx_fee, change_addr, domain, nocheck, unsigned, password, locktime)
         return tx.as_dict()
 
-    def _mktx_slp(self, token_id, destination, amount, fee, change_addr, domain, unsigned, password, locktime):
+    def _mktx_slp(self, token_id, outputs, fee, change_addr, domain, unsigned, password, locktime):
         ''' This code is basically lifted from main_window.py 'do_update_fee'
         and 'read_send_tab' and modified to fit here. '''
-        selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, token_id, amount, self.config, domain=domain)
+        selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, token_id, [o[1] for o in outputs], self.config, domain=domain)
         DUST = self.wallet.dust_threshold()  # 546 satoshis
         if not slp_op_return_msg:
             raise RuntimeError('Unable to find suitable SLP coin')
         bch_outputs = [ slp_op_return_msg ]
-        bch_outputs.append((TYPE_ADDRESS, destination, DUST))
+        for address, amount in outputs:
+                bch_outputs.append((TYPE_ADDRESS, address, DUST))
         token_outputs = slp.SlpMessage.parseSlpOutputScript(bch_outputs[0][1]).op_return_fields['token_output']
         coins = self.wallet.get_spendable_coins(domain, self.config)
         if len(token_outputs) > 1 and len(bch_outputs) < len(token_outputs):
@@ -575,7 +576,7 @@ class Commands(PrintError):
         token_id = token_id.lower()
         if len(token_id) != 64 or bytes.fromhex(token_id).hex() != token_id:
             raise RuntimeError('Invalid token_id; must be a 32-byte hex-encoded string (64 characters)')
-        tok = self.wallet.token_types.get(token_id)
+        tok = self.wallet.token_types.get(token_id, None)
         if not tok:
             raise RuntimeError('Unknown token id')
         decimals = tok['decimals']
@@ -589,7 +590,34 @@ class Commands(PrintError):
         if change_addr and not isinstance(change_addr, Address):
             change_addr = Address.from_string(change_addr)
         tx_fee = satoshis(fee)
-        tx = self._mktx_slp(token_id, destination_slp, amount_slp, tx_fee, change_addr, domain, unsigned, password, locktime)
+        tx = self._mktx_slp(token_id, [(destination_slp, amount_slp)], tx_fee, change_addr, domain, unsigned, password, locktime)
+        return tx.as_dict()
+
+    @command('wp')
+    def paytomany_slp(self, token_id, outputs, fee=None, from_addr=None, change_addr=None, unsigned=False, password=None, locktime=None):
+        """Create a multi-output SLP token transaction. """
+        if not self.wallet.is_slp:
+            raise RuntimeError('Not an SLP wallet')
+        token_id = token_id.lower()
+        if len(token_id) != 64 or bytes.fromhex(token_id).hex() != token_id:
+            raise RuntimeError('Invalid token_id; must be a 32-byte hex-encoded string (64 characters)')
+        tok = self.wallet.token_types.get(token_id, None)
+        print(token_id)
+        if not tok:
+            raise RuntimeError('Unknown token id')
+        decimals = tok['decimals']
+        if not isinstance(decimals, int):
+            # token is unverified or other funny business -- has decimals field as '?'
+            raise RuntimeError("Unverified token-id; please verify this token before proceeding")
+        amount_slp = get_satoshis_nofloat(str(sum([o[1] for o in outputs])), decimals)
+        assert amount_slp > 0
+        domain = [Address.from_string(a.strip()) for a in from_addr.split(',')] if from_addr else None  # may raise -- note that domain may be any address not just SLP address in wallet.
+        for o in outputs:
+            o[0] = Address.from_slpaddr_string(o[0]) if not isinstance(o[0], Address) else o[0]
+        if change_addr and not isinstance(change_addr, Address):
+            change_addr = Address.from_string(change_addr)
+        tx_fee = satoshis(fee)
+        tx = self._mktx_slp(token_id, outputs, tx_fee, change_addr, domain, unsigned, password, locktime)
         return tx.as_dict()
 
     @command('wp')

@@ -143,5 +143,6 @@ Electron Cash - SLP Token Edition
 -----
 - Improved stability of NFT1 validator with unit tests
 - Patched NFT1 parser for spec conformance
+- Add "paytomany_slp" command to cli for multi-output SLP sends
 - Updated SLP Graph Search to use new c++ server backend
 - Added Satochip hardware wallet support

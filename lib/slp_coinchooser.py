@@ -5,7 +5,14 @@ class SlpCoinChooser:
 
     @staticmethod
     def select_coins(wallet, token_id, amount, config, isInvoice=False, *, domain=None):
-        amt = amount or 0
+        token_outputs_amts = []
+        if isinstance(amount, list):
+            amt = sum(amount) or 0
+            token_outputs_amts.extend(amount)
+        else:
+            amt = amount or 0
+            token_outputs_amts.append(amt)
+
         valid_bal, _, _, unfrozen_bal, _ = wallet.get_slp_token_balance(token_id, config)
 
         if amt > valid_bal:
@@ -25,10 +32,8 @@ class SlpCoinChooser:
             else:
                 break
 
-        token_outputs_amts = []
         slp_op_return_msg = None
         if total_amt_added > 0:
-            token_outputs_amts.append(amt)
             token_change = total_amt_added - amt
             if token_change > 0:
                 token_outputs_amts.append(token_change)
@@ -39,4 +44,3 @@ class SlpCoinChooser:
             assert slp_op_return_msg
 
         return (selected_slp_coins, slp_op_return_msg)
-
