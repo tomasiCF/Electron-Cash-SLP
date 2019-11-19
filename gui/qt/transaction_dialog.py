@@ -88,6 +88,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.cashaddr_signal_slots = []
         self._dl_pct = None
         self._closed = False
+        self.tx_hash = self.tx.txid_fast() if self.tx.raw and self.tx.is_complete() else None
         self.tx_height = None
         self.slp_coins_to_burn = slp_coins_to_burn
         Weak.finalization_print_error(self)  # track object lifecycle
