@@ -116,8 +116,12 @@ class SlpGraphSearchManager:
         """
         txid = valjob_ref.root_txid
         with self.lock:
-            job = GraphSearchJob(txid, valjob_ref)
-            self.search_queue.put(job)
+            if txid not in self.search_jobs.keys():
+                job = GraphSearchJob(txid, valjob_ref)
+                self.search_jobs[txid] = job
+                self.search_queue.put(job)
+            else:
+                job = self.search_jobs[txid]
             return job
         return None
 
@@ -136,10 +140,6 @@ class SlpGraphSearchManager:
         try:
             while True:
                 job = self.search_queue.get(block=True)
-                if job.root_txid not in self.search_jobs.keys():
-                    self.search_jobs[job.root_txid] = job
-                else:
-                    continue
                 job.search_started = True
                 if not job.valjob.running and not job.valjob.has_never_run:
                     job.set_failed('validation finished')

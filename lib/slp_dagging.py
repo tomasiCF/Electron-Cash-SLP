@@ -31,7 +31,6 @@ from .util import PrintError
 
 INF_DEPTH=2147483646  # 'infinity' value for node depths. 2**31 - 2
 
-from . import slp_graph_search # thread doesn't start until instantiation, one thread per search job, w/ shared txn cache
 
 class hardref:
     # a proper reference that mimics weakref interface

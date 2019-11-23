@@ -1,4 +1,8 @@
 {
-    "https://slpdb.fountainhead.cash": {},
-    "https://oh1.slpdb.io": {}
+    "gs.fountainhead.cash": {
+        "port": 443
+    },
+    "gs.slpdb.io": {
+        "port": 443
+    }
 }
