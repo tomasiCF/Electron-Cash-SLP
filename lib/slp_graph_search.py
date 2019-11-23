@@ -24,7 +24,7 @@ from .transaction import Transaction
 from .caches import ExpiringCache
 
 try:
-    import lib.slp_graphsearchrpc_pb2_grpc as gs_rpc
+    from . import slp_graphsearchrpc_pb2_grpc as gs_rpc
 except ImportError as e:
     sys.exit("Error: could not find slp_graphsearchrpc_pb2_grpc.py. Create it with 'python3 -m grpc_tools.protoc --proto_path=lib/ --python_out=lib/ --grpc_python_out=lib/ lib/slp_graphsearchrpc.proto'")
 
@@ -61,7 +61,7 @@ class GraphSearchJob:
         host = host.replace('http://', '')
         channel = gs_rpc.grpc.insecure_channel(host + ':50051',
                                                 options=[
-                                                    ('grpc.max_send_message_length', -1), 
+                                                    ('grpc.max_send_message_length', -1),
                                                     ('grpc.max_receive_message_length', -1)
                                                 ])
         self.stub = gs_rpc.GraphSearchServiceStub(channel)
@@ -108,10 +108,10 @@ class SlpGraphSearchManager:
         self.search_thread.start()
 
     def new_search(self, valjob_ref):
-        """ 
-        Starts a new thread to fetch GS metadata for a job. 
-        Depending on the metadata results the job may end up being added to the GS queue. 
-        
+        """
+        Starts a new thread to fetch GS metadata for a job.
+        Depending on the metadata results the job may end up being added to the GS queue.
+
         Returns weakref of the new GS job object if new job is created.
         """
         txid = valjob_ref.root_txid
