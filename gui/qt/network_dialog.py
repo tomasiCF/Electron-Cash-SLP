@@ -321,7 +321,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         jobs = shared_context.graph_search_mgr.search_jobs.copy()
         for k, job in jobs.items():
             if len(jobs) > 0:
-                tx_count = str(job.txn_count_total) if job.txn_count_total else ''
+                tx_count = str(job.txn_count_progress)
                 status = 'In Queue'
                 if job.search_success:
                     status = 'Completed'

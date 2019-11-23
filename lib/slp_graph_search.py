@@ -56,6 +56,16 @@ class GraphSearchJob:
         self.cancel_callback = None
         self.fetch_retries = 0
 
+        # create a grpc client
+        host = self.valjob.network.slpdb_host.replace('https://', '')
+        host = host.replace('http://', '')
+        channel = gs_rpc.grpc.insecure_channel(host + ':50051',
+                                                options=[
+                                                    ('grpc.max_send_message_length', -1), 
+                                                    ('grpc.max_receive_message_length', -1)
+                                                ])
+        self.stub = gs_rpc.GraphSearchServiceStub(channel)
+
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
         if self.job_complete:
@@ -96,12 +106,6 @@ class SlpGraphSearchManager:
         self.threadname = threadname
         self.search_thread = threading.Thread(target=self.search_loop, name=self.threadname+'/search', daemon=True)
         self.search_thread.start()
-
-        # create a grpc client
-        channel = gs_rpc.grpc.insecure_channel('oh1.slpdb.io:50051',
-                                                    options=[('grpc.max_send_message_length', -1), (
-                                                            'grpc.max_receive_message_length', -1)])
-        self.stub = gs_rpc.GraphSearchServiceStub(channel)
 
     def new_search(self, valjob_ref):
         """ 
@@ -156,19 +160,18 @@ class SlpGraphSearchManager:
         if not job.valjob.running and not job.valjob.has_never_run:
             job.set_failed('validation finished')
             return
+        print('Requesting txid from gs++: ' + job.root_txid)
         txid = codecs.encode(codecs.decode(job.root_txid,'hex')[::-1], 'hex').decode()
         req = gs_rpc.slp__graphsearchrpc__pb2.GraphSearchRequest(txid=txid)
         try:
-            res = self.stub.GraphSearch(req)
+            res = job.stub.GraphSearch(req)
         except Exception as e:
-            if e._state.details == 'txid not found':
-                job.set_failed('txid not found')
-                return
-            else:
-                raise e
+            job.set_failed(str(e))
+            return
         else:
             txns = res.txdata
             for tx in txns:
+                job.txn_count_progress += 1
                 SlpGraphSearchManager.tx_cache_put(tx)
         job.set_success()
         print("[SLP Graph Search] job success")
