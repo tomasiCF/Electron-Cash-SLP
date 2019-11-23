@@ -19,6 +19,7 @@ import collections
 import json
 import base64
 import requests
+import codecs
 from .transaction import Transaction
 from .caches import ExpiringCache
 
@@ -97,7 +98,7 @@ class SlpGraphSearchManager:
         self.search_thread.start()
 
         # create a grpc client
-        channel = gs_rpc.grpc.insecure_channel('ec2-3-16-85-248.us-east-2.compute.amazonaws.com:50051', 
+        channel = gs_rpc.grpc.insecure_channel('oh1.slpdb.io:50051',
                                                     options=[('grpc.max_send_message_length', -1), (
                                                             'grpc.max_receive_message_length', -1)])
         self.stub = gs_rpc.GraphSearchServiceStub(channel)
@@ -155,7 +156,8 @@ class SlpGraphSearchManager:
         if not job.valjob.running and not job.valjob.has_never_run:
             job.set_failed('validation finished')
             return
-        req = gs_rpc.slp__graphsearchrpc__pb2.GraphSearchRequest(txid=job.root_txid)
+        txid = codecs.encode(codecs.decode(job.root_txid,'hex')[::-1], 'hex').decode()
+        req = gs_rpc.slp__graphsearchrpc__pb2.GraphSearchRequest(txid=txid)
         try:
             res = self.stub.GraphSearch(req)
         except Exception as e:
