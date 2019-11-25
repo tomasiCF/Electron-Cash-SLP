@@ -23,11 +23,6 @@ import codecs
 from .transaction import Transaction
 from .caches import ExpiringCache
 
-try:
-    from . import slp_graphsearchrpc_pb2_grpc as gs_rpc
-except ImportError as e:
-    sys.exit("Error: could not find slp_graphsearchrpc_pb2_grpc.py. Create it with 'python3 -m grpc_tools.protoc --proto_path=lib/ --python_out=lib/ --grpc_python_out=lib/ lib/slp_graphsearchrpc.proto'")
-
 class SlpdbErrorNoSearchData(Exception):
     pass
 
@@ -56,15 +51,8 @@ class GraphSearchJob:
         self.cancel_callback = None
         self.fetch_retries = 0
 
-        # create a grpc client
-        host = self.valjob.network.slpdb_host.replace('https://', '')
-        host = host.replace('http://', '')
-        channel = gs_rpc.grpc.insecure_channel(host + ':50051',
-                                                options=[
-                                                    ('grpc.max_send_message_length', -1),
-                                                    ('grpc.max_receive_message_length', -1)
-                                                ])
-        self.stub = gs_rpc.GraphSearchServiceStub(channel)
+        # host for graph search
+        self.host = self.valjob.network.slpdb_host
 
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
@@ -162,16 +150,17 @@ class SlpGraphSearchManager:
             return
         print('Requesting txid from gs++: ' + job.root_txid)
         txid = codecs.encode(codecs.decode(job.root_txid,'hex')[::-1], 'hex').decode()
-        req = gs_rpc.slp__graphsearchrpc__pb2.GraphSearchRequest(txid=txid)
+        print('Reversed format txid: ' + txid)
         try:
-            res = job.stub.GraphSearch(req)
+            query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+            reqresult = requests.post(job.valjob.network.slpdb_host + "/v1/graphsearch/graphsearch", json=query_json, timeout=60)
         except Exception as e:
             job.set_failed(str(e))
             return
         else:
-            txns = res.txdata
-            for tx in txns:
+            for txn in json.loads(reqresult.content.decode('utf-8'))['txdata']:
                 job.txn_count_progress += 1
+                tx = Transaction(base64.b64decode(txn).hex())
                 SlpGraphSearchManager.tx_cache_put(tx)
         job.set_success()
         print("[SLP Graph Search] job success")
@@ -208,5 +197,5 @@ class SlpGraphSearchManager:
     @classmethod
     def tx_cache_put(cls, tx: bytes, txid: str = None):
         ''' Puts a non-deserialized copy of tx into the tx_cache. '''
-        txid = txid or Transaction._txid(tx.hex())  # optionally, caller can pass-in txid to save CPU time for hashing
-        cls._fetched_tx_cache.put(txid, Transaction(tx.hex()))
+        txid = txid or Transaction._txid(tx.raw)  # optionally, caller can pass-in txid to save CPU time for hashing
+        cls._fetched_tx_cache.put(txid, tx)

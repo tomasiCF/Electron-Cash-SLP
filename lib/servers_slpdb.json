@@ -1,8 +1,8 @@
 {
-    "gs.fountainhead.cash": {
+    "https://gs.fountainhead.cash": {
         "port": 443
     },
-    "gs.slpdb.io": {
+    "https://gs.slpdb.io": {
         "port": 443
     }
 }
