@@ -1567,7 +1567,7 @@ class Abstract_Wallet(PrintError):
             if new_token and tokenid not in self.token_types:
                 tty = { 'class': 'SLP%d'%(slpMsg.token_type,),
                         'decimals': "?",
-                        'name': 'unknown-' + tokenid[:3]
+                        'name': 'unknown-' + tokenid[:6]
                         }
                 if slpMsg.token_type == 65:
                     tty['group_id'] = "?"
