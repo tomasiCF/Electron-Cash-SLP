@@ -350,7 +350,7 @@ class SlpServeListWidget(QTreeWidget):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('SLPDB Server')]) #, _('Server Status')])
+        self.setHeaderLabels([_('GS Server')]) #, _('Server Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
         host = self.parent.config.get('slp_gs_host', None)

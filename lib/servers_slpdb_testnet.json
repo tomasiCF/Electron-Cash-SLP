@@ -1,8 +1,4 @@
 {
-    "https://gs.fountainhead.cash": {
-        "port": 443
-    },
-    "https://gs.slpdb.io": {
-        "port": 443
-    }
+    "https://gs.simpleledger.io": {},
+    "https://gs.fountainhead.cash": {}
 }
