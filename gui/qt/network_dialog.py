@@ -353,11 +353,11 @@ class SlpServeListWidget(QTreeWidget):
         self.setHeaderLabels([_('SLPDB Server')]) #, _('Server Status')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
-        host = self.parent.config.get('slpdb_host', None)
+        host = self.parent.config.get('slp_gs_host', None)
         if not host:
             host = next(iter(networks.net.SLPDB_SERVERS))
-            self.parent.config.set_key('slpdb_host', host)
-        self.network.slpdb_host = host
+            self.parent.config.set_key('slp_gs_host', host)
+        self.network.slp_gs_host = host
 
     def create_menu(self, position):
         item = self.currentItem()
@@ -365,10 +365,10 @@ class SlpServeListWidget(QTreeWidget):
             return
         menu = QMenu()
         server = item.data(0, Qt.UserRole)
-        menu.addAction(_("Use as server"), lambda: self.select_slpdb_server(server))
+        menu.addAction(_("Use as server"), lambda: self.select_slp_gs_server(server))
         menu.exec_(self.viewport().mapToGlobal(position))
 
-    def select_slpdb_server(self, server):
+    def select_slp_gs_server(self, server):
         self.parent.set_slp_server(server)
         self.update()
 
@@ -393,7 +393,7 @@ class SlpServeListWidget(QTreeWidget):
         n_slpdbs = len(slpdbs)
         for k, items in slpdbs.items():
             if n_slpdbs > 0:
-                star = ' ◀' if k == self.network.slpdb_host else ''
+                star = ' ◀' if k == self.network.slp_gs_host else ''
                 x = QTreeWidgetItem([k+star]) #, 'NA'])
                 x.setData(0, Qt.UserRole, k)
                 # x.setData(1, Qt.UserRole, k)
@@ -558,7 +558,7 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         # SLP Validation Tab
         grid = QGridLayout(slp_tab)
-        self.slpdb_cb = QCheckBox(_('Use SLPDB Graph Search to speed up validation'))
+        self.slpdb_cb = QCheckBox(_('Use Graph Search server (gs++) to speed up validation'))
         self.slpdb_cb.clicked.connect(self.use_slpdb)
         self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
         grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
@@ -709,7 +709,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
         self.slpdb_list_widget.update()
-        self.slp_server_host.setText(self.network.slpdb_host)
+        self.slp_server_host.setText(self.network.slp_gs_host)
         self.slp_search_job_list_widget.update()
 
     def fill_in_proxy_settings(self):
@@ -804,8 +804,8 @@ class NetworkChoiceLayout(QObject, PrintError):
             server = str(self.slp_server_host.text())
         else:
             self.slp_server_host.setText(server)
-        self.network.slpdb_host = server
-        self.config.set_key('slpdb_host', self.network.slpdb_host)
+        self.network.slp_gs_host = server
+        self.config.set_key('slp_gs_host', self.network.slp_gs_host)
         self.slpdb_list_widget.update()
 
     def set_proxy(self):

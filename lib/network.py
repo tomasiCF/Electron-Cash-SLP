@@ -278,7 +278,7 @@ class Network(util.DaemonThread):
             self.print_error("A new instance has started and is replacing the old one.")
         Network.INSTANCE = self # This implicitly should force stale instances to eventually del
         self.start_network(deserialize_server(self.default_server)[2], deserialize_proxy(self.config.get('proxy')))
-        self.slpdb_host = None
+        self.slp_gs_host = None
 
     def __del__(self):
         ''' NB: due to Network.INSTANCE keeping the singleton instance alive,

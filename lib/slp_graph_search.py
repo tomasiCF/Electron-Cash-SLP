@@ -52,7 +52,7 @@ class GraphSearchJob:
         self.fetch_retries = 0
 
         # host for graph search
-        self.host = self.valjob.network.slpdb_host
+        self.host = self.valjob.network.slp_gs_host
 
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
@@ -92,7 +92,7 @@ class SlpGraphSearchManager:
         self.search_queue = queue.Queue()  # TODO: make this a PriorityQueue based on dag size
 
         self.threadname = threadname
-        self.search_thread = threading.Thread(target=self.search_loop, name=self.threadname+'/search', daemon=True)
+        self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname+'/search', daemon=True)
         self.search_thread.start()
 
     def new_search(self, valjob_ref):
@@ -124,7 +124,7 @@ class SlpGraphSearchManager:
         else:
             callback(job)
 
-    def search_loop(self,):
+    def mainloop(self,):
         try:
             while True:
                 job = self.search_queue.get(block=True)
@@ -139,7 +139,7 @@ class SlpGraphSearchManager:
                     print("error in graph search query", e, file=sys.stderr)
                     job.set_failed(str(e))
         finally:
-            print("[Graph Search] Error: SearchGraph mainloop exited.", file=sys.stderr)
+            print("[SLP Graph Search] Error: mainloop exited.", file=sys.stderr)
 
     def search_query(self, job):
         if job.waiting_to_cancel:
@@ -150,20 +150,17 @@ class SlpGraphSearchManager:
             return
         print('Requesting txid from gs++: ' + job.root_txid)
         txid = codecs.encode(codecs.decode(job.root_txid,'hex')[::-1], 'hex').decode()
-        print('Reversed format txid: ' + txid)
-        try:
-            query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
-            reqresult = requests.post(job.valjob.network.slpdb_host + "/v1/graphsearch/graphsearch", json=query_json, timeout=60)
-        except Exception as e:
-            job.set_failed(str(e))
-            return
-        else:
-            for txn in json.loads(reqresult.content.decode('utf-8'))['txdata']:
-                job.txn_count_progress += 1
-                tx = Transaction(base64.b64decode(txn).hex())
-                SlpGraphSearchManager.tx_cache_put(tx)
+        print('Requesting txid from gs++ (reversed): ' + txid)
+
+        query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+        reqresult = requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, timeout=60)
+
+        for txn in json.loads(reqresult.content.decode('utf-8'))['txdata']:
+            job.txn_count_progress += 1
+            tx = Transaction(base64.b64decode(txn).hex())
+            SlpGraphSearchManager.tx_cache_put(tx)
         job.set_success()
-        print("[SLP Graph Search] job success")
+        print("[SLP Graph Search] job success.")
 
     # This cache stores foreign (non-wallet) tx's we fetched from the network
     # for the purposes of the "fetch_input_data" mechanism. Its max size has

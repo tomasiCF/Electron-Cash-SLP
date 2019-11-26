@@ -154,7 +154,7 @@ class GraphContext(PrintError):
         config = get_config()
         try:
             gs_enable = config.get('slp_validator_graphsearch_enabled', False)
-            gs_host = config.get('slpdb_host', None)
+            gs_host = config.get('slp_gs_host', None)
         except NameError: # in daemon mode (no GUI) 'config' is not defined
             gs_enable = False
             gs_host = None
@@ -173,7 +173,7 @@ class GraphContext(PrintError):
         """
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
         gs_enable, gs_host = self.get_gs_config()
-        network.slpdb_host = gs_host
+        network.slp_gs_host = gs_host
 
         try:
             graph, job_mgr = self.setup_job(tx, reset=reset)
@@ -204,7 +204,7 @@ class GraphContext(PrintError):
                     val_job.graph_search_job = search_job if search_job else None
             else:
                 gs_enable, gs_host = self.get_gs_config()
-                network.slpdb_host = gs_host
+                network.slp_gs_host = gs_host
 
             for txid in txids:
                 txn = SlpGraphSearchManager.tx_cache_get(txid)
