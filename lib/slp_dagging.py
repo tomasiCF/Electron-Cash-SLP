@@ -159,6 +159,7 @@ class ValidationJob:
 
     stopping = False
     running = False
+    paused = None
     stop_reason = None
     has_never_run = True
 
@@ -244,6 +245,20 @@ class ValidationJob:
             self.has_never_run = False
         try:
             retval = self.mainloop()
+            try:
+                validity = self.graph._nodes.get(self.root_txid, None).validity
+            except:
+                validity = 0
+            if self.graph_search_job is not None and (not isinstance(retval, bool) or validity != 1):
+                with self._statelock:
+                    self.validitycache[self.root_txid] = 0
+                    self.graph_search_job.set_failed('invalid based on graph search data')
+                    self.graph_search_job = None
+                    self.downloads = 0
+                    self.currentdepth = 0
+                    self.paused = None
+                    self.has_never_run = True
+                    retval = 'invalid after graph search'
             return retval
         except:
             retval = 'crashed'
@@ -255,10 +270,11 @@ class ValidationJob:
                 self.running = False
                 self.stopping = False
                 cbl = tuple(self.callbacks) # make copy while locked -- prevents double-callbacks
-            for cbr in cbl:
-                cb = cbr() # callbacks is a list of indirect references (may be weakrefs)
-                if cb is not None:
-                    cb(self)
+            if self.stop_reason != 'invalid after graph search':
+                for cbr in cbl:
+                    cb = cbr() # callbacks is a list of indirect references (may be weakrefs)
+                    if cb is not None:
+                        cb(self)
 
     def stop(self,):
         """ Call from another thread, to request stopping (this function
@@ -349,7 +365,8 @@ class ValidationJob:
         self.graph.run_sched()
 
         def skip_callback(txid):
-            print("########################################## SKIPPING " + txid + " ###########################################")
+            if self.debug > 0:
+                print("DEBUG-DAG: SKIPPING: " + txid)
             node = self.graph.get_node(txid)
             node.set_validity(False,2)
             
@@ -688,6 +705,13 @@ class ValidationJobManager(PrintError):
                     with self.jobs_lock:
                         if retval is True:
                             self.jobs_finished.add(self.job_current)
+                        elif retval == 'invalid after graph search':
+                            try:
+                                self.job_current.validitycache.pop(self.job_current.root_txid)
+                                self.job_current.graph.reset()
+                            except KeyError:
+                                pass
+                            self.jobs_pending.append(self.job_current)
                         elif retval == 'paused':
                             self.jobs_paused.append(self.job_current)
                         else:
