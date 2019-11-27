@@ -274,7 +274,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_('Id'), _("Txn Count"), _('Depth Progress'), _('Search Status')])
+        self.setHeaderLabels([_("Job Id"), _("Txn Count"), _("Search Job Status")])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
 
@@ -285,9 +285,9 @@ class SlpSearchJobListWidget(QTreeWidget):
         menu = QMenu()
         menu.addAction(_("Refresh List"), lambda: self.update())
         txid = item.data(0, Qt.UserRole)
-        if item.data(3, Qt.UserRole) in ['Exited', 'Completed']:
+        if item.data(2, Qt.UserRole) in ['Exited']:
             menu.addAction(_("Restart Search"), lambda: self.restart_job(txid))
-        elif item.data(3, Qt.UserRole) not in ['Exited', 'Completed']:
+        elif item.data(2, Qt.UserRole) not in ['Exited', 'Completed']:
             menu.addAction(_("Cancel"), lambda: self.cancel_job(txid))
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -334,16 +334,15 @@ class SlpSearchJobListWidget(QTreeWidget):
                 progress = str(job.depth_completed) + '/' + str(job.total_depth) if job.total_depth else ''
                 success = str(job.search_success) if job.search_success else ''
                 exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
-                x = QTreeWidgetItem([job.root_txid[:6], tx_count, progress, status + exit_msg])
+                x = QTreeWidgetItem([job.root_txid[:6], tx_count, status + exit_msg])
                 x.setData(0, Qt.UserRole, k)
-                x.setData(3, Qt.UserRole, status)
+                x.setData(2, Qt.UserRole, status)
                 self.addTopLevelItem(x)
         h = self.header()
         h.setStretchLastSection(True)
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
 class SlpServeListWidget(QTreeWidget):
     def __init__(self, parent):
