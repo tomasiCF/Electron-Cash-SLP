@@ -173,7 +173,7 @@ class SeedLayout(QVBoxLayout):
         self.addWidget(self.seed_warning)
 
     def get_seed(self):
-        text = self.seed_e.text()
+        text = self.seed_e.text().lower()
         return ' '.join(text.split())
 
     @staticmethod

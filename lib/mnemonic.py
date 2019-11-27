@@ -154,7 +154,7 @@ class Mnemonic(object):
             if first in mnemo.wordlist:
                 return lang
 
-        raise ConfigurationError("Language not detected")
+        raise Exception("Language not detected")
 
     @classmethod
     def mnemonic_to_seed(self, mnemonic, passphrase):
