@@ -371,7 +371,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             self.show_message(str(e))
             return
         if preview:
-            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=[selected_coin])
+            show_transaction(tx, self.main_window, None, False, self)
             return
 
         msg = []
@@ -414,7 +414,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     self.warn2.setHidden(True)
                     self.warn_msg.setHidden(True)
                     
-        self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin])
+        self.sign_tx_with_password(tx, sign_done, password)
 
     def create_token(self, preview=False):
         token_name = self.token_name_e.text() if self.token_name_e.text() != '' else None
@@ -498,7 +498,10 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             return
 
         if preview:
-            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=[selected_coin])
+            if self.nft_parent_id:
+                show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=[selected_coin], slp_amt_to_burn=1)
+            else:
+                show_transaction(tx, self.main_window, None, False, self)
             return
 
         msg = []
@@ -531,16 +534,19 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                             wallet_name = wallet_name + "-" + token_id[:3]
                             break
                     self.broadcast_transaction(tx, self.token_name_e.text(), wallet_name)
-        self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin])
+        if self.nft_parent_id:
+            self.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=[selected_coin], slp_amt_to_burn=1)
+        else:
+            self.sign_tx_with_password(tx, sign_done, password)
 
-    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None):
+    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None, slp_amt_to_burn=None):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
 
         # check transaction SLP validity before signing
         try:
-            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn, amt_to_burn=slp_amt_to_burn)
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
             return

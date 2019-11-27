@@ -18,12 +18,12 @@ from .util import *
 
 from electroncash.util import bfh, format_satoshis_nofloat, format_satoshis_plain_nofloat, NotEnoughFunds, ExcessiveFee, finalization_print_error
 from electroncash.transaction import Transaction
-from electroncash.slp import SlpMessage, SlpNoMintingBatonFound, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildSendOpReturnOutput_V1
+from electroncash.slp import SlpMessage, SlpParsingError, SlpMessage, SlpNoMintingBatonFound, SlpUnsupportedSlpTokenType, SlpInvalidOutputMessage, buildSendOpReturnOutput_V1
 
 from .amountedit import SLPAmountEdit
 from .transaction_dialog import show_transaction
 
-from electroncash import networks
+from electroncash import networks, util
 
 dialogs = []
 
@@ -134,10 +134,14 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         hbox.addStretch(1)
 
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
+        self.import_burn_tx_file_button = EnterButton(_("Import file..."), self.do_process_from_file)
+        self.import_burn_tx_text_button = EnterButton(_("Import hex..."), self.do_process_from_text)
         self.burn_button = b = QPushButton(_("Burn Tokens"))
         b.clicked.connect(self.burn_token)
         self.burn_button.setAutoDefault(False)
         self.burn_button.setDefault(False)
+        hbox.addWidget(self.import_burn_tx_file_button)
+        hbox.addWidget(self.import_burn_tx_text_button)
         hbox.addWidget(self.preview_button)
         hbox.addWidget(self.burn_button)
 
@@ -150,9 +154,91 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
         self.token_qty_e.setAmount(self.wallet.get_slp_token_balance(self.token_id_e.text(), self.main_window.config)[3])
 
     def do_preview(self):
-        self.burn_token(preview = True)
+        self.burn_token(preview=True)
 
-    def burn_token(self, preview=False):
+    def read_tx_from_file(self, *, fileName = None):
+        fileName = fileName or self.getOpenFileName(_("Select your transaction file"), "*.txn")
+        if not fileName:
+            return
+        try:
+            with open(fileName, "r", encoding='utf-8') as f:
+                file_content = f.read()
+            file_content = file_content.strip()
+            tx_file_dict = json.loads(str(file_content))
+        except (ValueError, IOError, OSError, json.decoder.JSONDecodeError) as reason:
+            self.show_critical(_("Electron Cash was unable to open your transaction file") + "\n" + str(reason), title=_("Unable to read file or no transaction found"))
+            return
+        tx = self.tx_from_text(file_content)
+        return tx
+
+    def do_process_from_file(self, *, fileName = None):
+        from electroncash.transaction import SerializationError
+        try:
+            tx = self.read_tx_from_file(fileName=fileName)
+            if tx:
+                self.burn_token(preview=True, multisig_tx_to_sign=tx)
+        except SerializationError as e:
+            self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
+
+    def tx_from_text(self, txt):
+        from electroncash.transaction import tx_from_str
+        try:
+            txt_tx = tx_from_str(txt)
+            tx = Transaction(txt_tx, sign_schnorr=self.wallet.is_schnorr_enabled())
+            tx.deserialize()
+            if self.wallet:
+                my_coins = self.wallet.get_spendable_coins(None, self.main_window.config)
+                my_outpoints = [vin['prevout_hash'] + ':' + str(vin['prevout_n']) for vin in my_coins]
+                for i, txin in enumerate(tx.inputs()):
+                    outpoint = txin['prevout_hash'] + ':' + str(txin['prevout_n'])
+                    if outpoint in my_outpoints:
+                        my_index = my_outpoints.index(outpoint)
+                        tx._inputs[i]['value'] = my_coins[my_index]['value']
+            return tx
+        except:
+            traceback.print_exc(file=sys.stderr)
+            self.show_critical(_("Electron Cash was unable to parse your transaction"))
+            return    
+    
+    def do_process_from_text(self):
+        from electroncash.transaction import SerializationError
+        text = text_dialog(self, _('Input raw transaction'), _("Transaction:"), _("Load transaction"))
+        if not text:
+            return
+        try:
+            tx = self.tx_from_text(text)
+            if tx:
+                self.burn_token(preview=True, multisig_tx_to_sign=tx)
+        except SerializationError as e:
+            self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
+
+    # custom wrappers for getOpenFileName and getSaveFileName, that remember the path selected by the user
+    def getOpenFileName(self, title, filter = ""):
+        return __class__.static_getOpenFileName(title=title, filter=filter, config=self.main_window.config, parent=self)
+
+    def getSaveFileName(self, title, filename, filter = ""):
+        return __class__.static_getSaveFileName(title=title, filename=filename, filter=filter, config=self.main_window.config, parent=self)
+
+    @staticmethod
+    def static_getOpenFileName(*, title, parent=None, config=None, filter=""):
+        userdir = os.path.expanduser('~')
+        directory = config.get('io_dir', userdir) if config else userdir
+        fileName, __ = QFileDialog.getOpenFileName(parent, title, directory, filter)
+        if fileName and directory != os.path.dirname(fileName) and config:
+            config.set_key('io_dir', os.path.dirname(fileName), True)
+        return fileName
+
+    @staticmethod
+    def static_getSaveFileName(*, title, filename, parent=None, config=None, filter=""):
+        userdir = os.path.expanduser('~')
+        directory = config.get('io_dir', userdir) if config else userdir
+        path = os.path.join( directory, filename )
+        fileName, __ = QFileDialog.getSaveFileName(parent, title, path, filter)
+        if fileName and directory != os.path.dirname(fileName) and config:
+            config.set_key('io_dir', os.path.dirname(fileName), True)
+        return fileName
+
+    def burn_token(self, preview=False, multisig_tx_to_sign=None):
         unfrozen_token_qty = self.wallet.get_slp_token_balance(self.token_id_e.text(), self.main_window.config)[3]
         burn_amt = self.token_qty_e.get_amount()
         if burn_amt == None or burn_amt == 0:
@@ -169,10 +255,6 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             return
 
         outputs = []
-        slp_coins = self.wallet.get_slp_utxos(
-            self.token_id_e.text(),
-            domain=None, exclude_frozen=True, confirmed_only=self.main_window.config.get('confirmed_only', False),
-            slp_include_invalid=self.token_burn_invalid_cb.isChecked(), slp_include_baton=self.token_burn_baton_cb.isChecked())
 
         addr = self.wallet.get_unused_address(frozen_ok=False)
         if addr is None:
@@ -182,30 +264,67 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                 addr = self.wallet.create_new_address(True)
 
         try:
-            selected_slp_coins = []
-            if burn_amt < unfrozen_token_qty:
-                total_amt_added = 0
-                for coin in slp_coins:
-                    if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
-                        if coin['token_value'] >= burn_amt:
-                            selected_slp_coins.append(coin)
-                            total_amt_added+=coin['token_value']
-                            break
-                if total_amt_added < burn_amt:
+            slp_coins = self.wallet.get_slp_utxos(
+                        self.token_id_e.text(),
+                        domain=None,
+                        exclude_frozen=True,
+                        confirmed_only=self.main_window.config.get('confirmed_only', False),
+                        slp_include_invalid=self.token_burn_invalid_cb.isChecked(),
+                        slp_include_baton=self.token_burn_baton_cb.isChecked()
+                        )
+            if multisig_tx_to_sign is None:
+                selected_slp_coins = []
+                if burn_amt < unfrozen_token_qty:
+                    total_amt_added = 0
                     for coin in slp_coins:
                         if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
-                            if total_amt_added < burn_amt:
+                            if coin['token_value'] >= burn_amt:
                                 selected_slp_coins.append(coin)
-                                total_amt_added+=coin['token_value']
-                if total_amt_added > burn_amt:
-                    token_type = self.wallet.token_types[self.token_id_e.text()]['class']
-                    slp_op_return_msg = buildSendOpReturnOutput_V1(self.token_id_e.text(), [total_amt_added - burn_amt], token_type)
-                    outputs.append(slp_op_return_msg)
-                    outputs.append((TYPE_ADDRESS, addr, 546))
+                                total_amt_added += coin['token_value']
+                                break
+                    if total_amt_added < burn_amt:
+                        for coin in slp_coins:
+                            if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
+                                if total_amt_added < burn_amt:
+                                    selected_slp_coins.append(coin)
+                                    total_amt_added += coin['token_value']
+                    if total_amt_added > burn_amt:
+                        token_type = self.wallet.token_types[self.token_id_e.text()]['class']
+                        slp_op_return_msg = buildSendOpReturnOutput_V1(
+                                                self.token_id_e.text(), 
+                                                [total_amt_added - burn_amt], 
+                                                token_type
+                                                )
+                        outputs.append(slp_op_return_msg)
+                        outputs.append((TYPE_ADDRESS, addr, 546))
+                else:
+                    for coin in slp_coins:
+                        if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
+                            selected_slp_coins.append(coin)
             else:
-                for coin in slp_coins:
-                    if coin['token_value'] != "MINT_BATON" and coin['token_validation_state'] == 1:
-                        selected_slp_coins.append(coin)
+                selected_slp_coins = []
+                total_burn_amt = 0
+                try:
+                    slp_msg = SlpMessage.parseSlpOutputScript(multisig_tx_to_sign.outputs()[0][1])
+                except SlpParsingError:
+                    slp_msg = None
+                for txo in multisig_tx_to_sign.inputs():
+                    addr = txo['address']
+                    prev_out = txo['prevout_hash']
+                    prev_n = txo['prevout_n']
+                    slp_txo = None
+                    try:
+                        for coin in slp_coins:
+                            if coin['prevout_hash'] == prev_out and coin['prevout_n'] == prev_n:
+                                selected_slp_coins.append(coin)
+                                total_burn_amt += coin['token_value']
+                    except KeyError:
+                        pass
+                if slp_msg:
+                    total_burn_amt -= sum(slp_msg.op_return_fields['token_output'])
+                if total_burn_amt != burn_amt:
+                    self.show_message(_("Amount burned in transaction does not match the amount specified."))
+                    return
 
         except OPReturnTooLarge:
             self.show_message(_("Optional string text causiing OP_RETURN greater than 223 bytes."))
@@ -225,14 +344,22 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                 if coin['token_validation_state'] != 1:
                     selected_slp_coins.append(coin)
 
-        bch_change = sum(c['value'] for c in selected_slp_coins)
-        outputs.append((TYPE_ADDRESS, addr, bch_change))
-
-        coins = self.main_window.get_coins()
-        fixed_fee = None
-
         try:
-            tx = self.main_window.wallet.make_unsigned_transaction(coins, outputs, self.main_window.config, fixed_fee, None, mandatory_coins=selected_slp_coins)
+            if multisig_tx_to_sign is None:
+                bch_change = sum(c['value'] for c in selected_slp_coins)
+                outputs.append((TYPE_ADDRESS, addr, bch_change))
+                coins = self.main_window.get_coins()
+                fixed_fee = None
+                tx = self.main_window.wallet.make_unsigned_transaction(
+                                                coins,
+                                                outputs,
+                                                self.main_window.config,
+                                                fixed_fee,
+                                                None,
+                                                mandatory_coins=selected_slp_coins
+                                                )
+            else:
+                tx = multisig_tx_to_sign
         except NotEnoughFunds:
             self.show_message(_("Insufficient funds"))
             return
@@ -245,7 +372,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
             return
 
         if preview:
-            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=selected_slp_coins)
+            show_transaction(tx, self.main_window, None, False, self, slp_coins_to_burn=selected_slp_coins, slp_amt_to_burn=burn_amt)
             return
 
         msg = []
@@ -269,7 +396,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                 else:
                     self.main_window.broadcast_transaction(tx, tx_desc)
 
-        self.main_window.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=selected_slp_coins)
+        self.main_window.sign_tx_with_password(tx, sign_done, password, slp_coins_to_burn=selected_slp_coins, slp_amt_to_burn=burn_amt)
 
         self.burn_button.setDisabled(True)
         self.close()

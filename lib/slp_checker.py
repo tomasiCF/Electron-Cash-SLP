@@ -6,7 +6,12 @@ from electroncash.address import Address
 
 class SlpTransactionChecker:
     @staticmethod
-    def check_tx_slp(wallet, tx, *, coins_to_burn=None, require_tx_in_wallet=True):
+    def check_tx_slp(wallet, tx, *, coins_to_burn=None, amt_to_burn=None, require_tx_in_wallet=True):
+
+        if coins_to_burn and not isinstance(amt_to_burn, int):
+            raise InvalidBurnAmount("Burn requested, but missing 'amt_to_burn' parameter")
+        elif amt_to_burn and not coins_to_burn:
+            raise InvalidBurnAmount("Burn requested, but missing 'coins_to_burn' parameter")
 
         # Step 1) Double check all input transactions have been added to wallet._slp_txo
         if require_tx_in_wallet:
@@ -86,13 +91,18 @@ class SlpTransactionChecker:
 
             # Check that all coins within 'coins_to_burn' are included in burn transaction
             if coins_to_burn:
+                total_burn = 0
                 for coin in coins_to_burn:
                     try:
                         if coin['is_in_txn']:
+                            total_burn += coin['token_value']
                             continue
                     except KeyError:
                         raise MissingCoinToBeBurned('Transaction is missing SLP required inputs that were' \
                                                         + ' for this burn transaction.')
+                    if total_burn != amt_to_burn:
+                        print_error("Burn failed since specified burn amount does not match transaction")
+                        raise InvalidBurnAmount('Burn failed since specified burn amount does not match transaction')
 
         # Step 3b) If SLP, check quantities and token id of inputs match output requirements
         elif slp_msg:
@@ -124,10 +134,13 @@ class SlpTransactionChecker:
                                                         + ' with incorrect token id.')
 
                 if input_slp_qty < sum(slp_outputs):
-                    print_error("SLP check failed for SEND due to insufficient SLP inputs")
+                    print_error("SEND failed due to insufficient SLP inputs")
                     raise SlpInputsTooLow('Transaction SLP outputs exceed SLP inputs')
+                elif coins_to_burn and input_slp_qty - amt_to_burn != sum(slp_outputs):
+                    print_error("Burn failed since specified burn amount does not match transaction")
+                    raise InvalidBurnAmount('Burn failed since specified burn amount does not match transaction')
                 elif not coins_to_burn and input_slp_qty > sum(slp_outputs):
-                    print_error("SLP check failed for SEND due to SLP inputs too high")
+                    print_error("SEND failed due to SLP inputs too high")
                     raise SlpInputsTooHigh('Transaction SLP inputs exceed SLP outputs.')
 
                 for i, out in enumerate(slp_msg.op_return_fields['token_output']):
@@ -281,6 +294,10 @@ class SlpInputsTooHigh(SlpTransactionValidityError):
     pass
 
 class MissingCoinToBeBurned(SlpTransactionValidityError):
+    # SLP input quantity too high in SEND transaction
+    pass
+
+class InvalidBurnAmount(SlpTransactionValidityError):
     # SLP input quantity too high in SEND transaction
     pass
 

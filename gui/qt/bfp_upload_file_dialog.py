@@ -396,7 +396,7 @@ class BitcoinFilesUploadDialog(QDialog, MessageBoxMixin):
         
         # check transaction SLP validity before signing
         try:
-            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=None, require_tx_in_wallet=False)
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, require_tx_in_wallet=False)
         except (Exception, AssertionError) as e:
             self.show_error(str(e))
             return

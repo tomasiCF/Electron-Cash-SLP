@@ -2501,17 +2501,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.sign_tx_with_password(tx, sign_done, password)
 
     @protected
-    def sign_tx(self, tx, callback, password, *, slp_coins_to_burn=None):
-        self.sign_tx_with_password(tx, callback, password, slp_coins_to_burn=slp_coins_to_burn)
+    def sign_tx(self, tx, callback, password, *, slp_coins_to_burn=None, slp_amt_to_burn=None):
+        self.sign_tx_with_password(tx, callback, password, slp_coins_to_burn=slp_coins_to_burn, slp_amt_to_burn=slp_amt_to_burn)
 
-    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None):
+    def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None, slp_amt_to_burn=None):
         '''Sign the transaction in a separate thread.  When done, calls
         the callback with a success code of True or False.
         '''
 
         # check transaction SLP validity before signing
         try:
-            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn)
+            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn, amt_to_burn=slp_amt_to_burn)
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
             return
