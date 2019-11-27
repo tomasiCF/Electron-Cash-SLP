@@ -308,6 +308,11 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     slp_msg = SlpMessage.parseSlpOutputScript(multisig_tx_to_sign.outputs()[0][1])
                 except SlpParsingError:
                     slp_msg = None
+                if slp_msg and slp_msg.op_return_fields['token_id_hex'] != self.token_id_e.text():
+                    self.show_message(_("Token id in the imported transaction is not correct.")+\
+                                            _("\n\nImported Token ID: ") + slp_msg.op_return_fields['token_id_hex'] + \
+                                            _("\n\nDesired Token ID: ") + self.token_id_e.text())
+                    return
                 for txo in multisig_tx_to_sign.inputs():
                     addr = txo['address']
                     prev_out = txo['prevout_hash']
@@ -323,7 +328,11 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                 if slp_msg:
                     total_burn_amt -= sum(slp_msg.op_return_fields['token_output'])
                 if total_burn_amt != burn_amt:
-                    self.show_message(_("Amount burned in transaction does not match the amount specified."))
+                    if slp_msg:
+                        self.show_message(_("Amount burned in transaction does not match the amount specified."))
+                    else:
+                        self.show_message(_("Amount burned in transaction does not match the amount specified.") + \
+                                        _("\n\nMake sure the Token ID displayed in the Burn Tool dialog matches the token that you are trying to burn."))
                     return
 
         except OPReturnTooLarge:
