@@ -142,8 +142,9 @@ class SlpMgt(MyTreeWidget):
         super().update()
 
     def on_update(self):
+        selected_item = self.currentItem()
+        current_token_id = selected_item.data(0, Qt.UserRole) if selected_item else None
         self.clear()
-
         tokens = self.parent.wallet.token_types.copy()
         for token_id, i in tokens.items():
             name     = i["name"]
@@ -213,4 +214,6 @@ class SlpMgt(MyTreeWidget):
                 self.addTopLevelItem(item)
             elif i["class"] == "SLP1":
                 self.addTopLevelItem(item)
+            if current_token_id == token_id:
+                self.setCurrentItem(item)
         self.expandAll()
