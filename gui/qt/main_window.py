@@ -1299,22 +1299,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if slf:
                         slf.check_and_reset_receive_address_if_needed()
                 if self.main_window.is_slp_wallet:
-                    c, u, x = self.main_window.wallet.get_balance()
-                    bal = c + u - self.main_window.wallet.get_slp_locked_balance()
-                    if bal < 1000:
-#                       if not self.low_balance_warning_shown:
-#                           self.main_window.show_warning("Low BCH balance.\n\nCreating and sending SLP tokens requires Bitcoin Cash to cover transaction fees.  We recommend a minimum of 0.0001 BCH to get started.\n\nSend BCH to the address displayed in the 'Receive' tab.")
-                        self.main_window.toggle_cashaddr(1, True)
-                        self.low_balance_warning_shown = False
-                    else:
-                        self.main_window.toggle_cashaddr(2, True)
                     if Address.FMT_UI == Address.FMT_SLPADDR:
                         self.main_window.show_slp_addr_btn.setText("Show BCH Address")
                     else:
                         self.main_window.show_slp_addr_btn.setText("Show Token Address")
                 else:
                     self.main_window.toggle_cashaddr(1, True)
-
 
         w = ReceiveTab()
         w.low_balance_warning_shown = False
@@ -2941,10 +2931,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         class ListTab(QWidget):
             def showEvent(self, e):
                 super().showEvent(e)
-                if self.main_window.is_slp_wallet:
-                    self.main_window.toggle_cashaddr(2, True)
-                else:
-                    self.main_window.toggle_cashaddr(1, True)
 
         w = ListTab()
         w.main_window = self
