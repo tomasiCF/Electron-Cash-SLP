@@ -139,10 +139,13 @@ Electron Cash - SLP Token Edition
 - Ported "Add hardware wallet support" udev feature for linux devices
 - Other fixes and improvements ported from Electron Cash upstream
 
-3.5.2 Updates & Features (DRAFT)
+3.5.2 Updates & Features
 -----
+- Added SLP Graph Search to use new c++ server backend
+- Updated Burn Tool dialog to allow importing partially signed burn transaction data from a hex or file
 - Improved stability of NFT1 validator with unit tests
-- Patched NFT1 parser for spec conformance
-- Add "paytomany_slp" command to cli for multi-output SLP sends
-- Updated SLP Graph Search to use new c++ server backend
-- Added Satochip hardware wallet support
+- Patched NFT1 message parser for spec conformance
+- Added "paytomany_slp" command to cli for multi-output SLP sends
+- Remove auto switching address format to SLP format when clicking between tabs
+- Ignore case in seed phrase validation when restoring wallet from seed
+- Various other bug fixes and improvements ported from main Electron Cash
