@@ -23,6 +23,11 @@ folder.
     $ sudo contrib/build-linux/appimage/build.sh REVISION_TAG_OR_BRANCH_OR_COMMIT_TAG
     ```
 
+    To use local git repo, first include:
+    ```
+    GIT_REPO=`pwd` ...
+    ```
+
     _Note:_ If you are using a MacOS host, run the above **without** `sudo`.
 
 3. The generated .AppImage binary is in `./dist`.
