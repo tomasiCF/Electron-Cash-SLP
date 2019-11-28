@@ -296,7 +296,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         if job:
             shared_context.graph_search_mgr.restart_search(job)
 
-    def cancel_job(self, item):
+    def cancel_job(self, txid):
         job = shared_context.graph_search_mgr.search_jobs.get(txid)
         if job:
             job.sched_cancel(reason='user cancelled')

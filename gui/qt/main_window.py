@@ -468,10 +468,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 _("Speed up SLP validation using a Graph Search server?"),
                 title=_("SLP Graph Search"),
                 detail_text=_(
-                    "SLP validtion can use a Graph Search server, making it"
+                    "SLP validition can use a Graph Search server, making it"
                     " blazingly fast. This does, however, mean that your client"
                     " contacts an additional server on the internet, sharing"
-                    " with it a set of txid's you are interested in knowing"
+                    " with it a set of txids you are interested in knowing"
                     " more about.\n\n"
                     "Some extremely privacy-minded users may opt out of this"
                     " speedy facility in light of that fact, and choose to use"
