@@ -108,7 +108,7 @@ class SlpMgt(MyTreeWidget):
                 if self.currentItem():
                     menu.addAction(_("View Token Details"), lambda: self.onViewTokenDetails())
                 menu.addSeparator()
-                menu.addAction(_("Burn Tool"), lambda: self.onBurnDialog())
+                menu.addAction(QIcon(":icons/warning.png"), "Burn Tool", lambda: self.onBurnDialog())
             menu.addSeparator()
 
         menu.addAction(_("Add existing token"), lambda: SlpAddTokenDialog(self.parent,))
