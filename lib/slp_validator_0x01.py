@@ -27,14 +27,14 @@ class GraphContext(PrintError):
     If is_parallel=True, will create 1 job manager (thread) per tokenid it is
     validating. '''
 
-    def __init__(self, name='GraphContext', is_parallel=False, use_graph_search=False):
+    def __init__(self, name='GraphContext', is_parallel=False):
         # Global db for shared graphs (each token_id_hex has its own graph).
         self.graph_db_lock = threading.Lock()
         self.graph_db = dict()   # token_id_hex -> TokenGraph
         self.is_parallel = is_parallel
         self.job_mgrs = weakref.WeakValueDictionary()   # token_id_hex -> ValidationJobManager (only used if is_parallel, otherwise self.job_mgr is used)
         self.name = name
-        self.graph_search_mgr = SlpGraphSearchManager() if use_graph_search else None
+        self.graph_search_mgr = SlpGraphSearchManager()
         self._setup_job_mgr()
 
     def diagnostic_name(self):
@@ -206,6 +206,9 @@ class GraphContext(PrintError):
                 gs_enable, gs_host = self.get_gs_config()
                 network.slp_gs_host = gs_host
 
+            if not gs_enable and wallet.ui_emit_validation_fetch:
+                wallet.ui_emit_validation_fetch(txids)
+
             for txid in txids:
                 txn = SlpGraphSearchManager.tx_cache_get(txid)
                 if txn:
@@ -285,7 +288,7 @@ class GraphContext(PrintError):
 # stopped -- ultimately stopping the entire DAG lookup for that token if all
 # wallets verifying a token are closed.  The next time a wallet containing that
 # token is opened, however, the validation continues where it left off.
-shared_context = GraphContext(is_parallel=True, use_graph_search=True)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
+shared_context = GraphContext(is_parallel=True)  # <-- Set is_parallel=True if you want 1 thread per token (tokens validate in parallel). Otherwise there is 1 validator thread app-wide and tokens validate in series.
 
 class Validator_SLP1(ValidatorGeneric):
     prevalidation = True # indicate we want to check validation when some inputs still active.

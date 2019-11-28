@@ -185,6 +185,7 @@ class Abstract_Wallet(PrintError):
         # verifier (SPV) and synchronizer are started in start_threads
         self.synchronizer = None
         self.verifier = None
+        self.ui_emit_validation_fetch = None
         self.ui_emit_validity_updated = None  # Qt GUI attaches a signal to this attribute -- see slp_check_validation
         self.slp_graph_0x01, self.slp_graph_0x01_nft = None, None
 
