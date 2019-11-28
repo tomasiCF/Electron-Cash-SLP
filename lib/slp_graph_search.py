@@ -154,8 +154,14 @@ class SlpGraphSearchManager:
 
         query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
         reqresult = requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, timeout=60)
-
-        for txn in json.loads(reqresult.content.decode('utf-8'))['txdata']:
+        try:
+            txns = json.loads(reqresult.content.decode('utf-8'))['txdata']
+        except:
+            m = json.loads(reqresult.content)
+            if m["error"]:
+                raise Exception(m["error"])
+            raise Exception(m)
+        for txn in txns:
             job.txn_count_progress += 1
             tx = Transaction(base64.b64decode(txn).hex())
             SlpGraphSearchManager.tx_cache_put(tx)
