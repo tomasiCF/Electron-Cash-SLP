@@ -448,16 +448,45 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         run_hook('close_wallet', self.wallet)
 
-    def slp_validation_fetch_slot(self):
-        if not ElectrumWindow._gs_option_shown and not self.config.get('slp_validator_graphsearch_enabled', None):
-            ElectrumWindow._gs_option_shown = True
-            res = self.question("Speed up SLP validation using a Graph Search server?", title="SLP Graph Search")
-            if res:
-                self.config.set_key('slp_validator_graphsearch_enabled', True)
-            else:
-                self.config.set_key('slp_validator_graphsearch_enabled', False)
-
     _gs_option_shown = False
+    def slp_validation_fetch_slot(self):
+        key = 'slp_validator_graphsearch_enabled'
+        key2 = 'slp_validator_gs_did_nag_once_even_if_was_false'
+        val, val2 = self.config.get(key), self.config.get(key2)
+        # This if conditional asks once app-wide. But it only asks if:
+        # - "gs enabled" key has never been configured (is None)
+        # *or*
+        # - "gs enabled" key is False (indicating user configured it to False)
+        #   but it never asked before (we nag the user at least once even if off,
+        #   basically).
+        if (not ElectrumWindow._gs_option_shown
+                and (val is None or (val is False and not val2))):
+            del val, val2
+            ElectrumWindow._gs_option_shown = True
+            self.config.set_key(key2, True)  # turn off forced "ask at least once" mechanism
+            res, neverask_chk = self.question(
+                _("Speed up SLP validation using a Graph Search server?"),
+                title=_("SLP Graph Search"),
+                detail_text=_(
+                    "SLP validtion can use a Graph Search server, making it"
+                    " blazingly fast. This does, however, mean that your client"
+                    " contacts an additional server on the internet, sharing"
+                    " with it a set of txid's you are interested in knowing"
+                    " more about.\n\n"
+                    "Some extremely privacy-minded users may opt out of this"
+                    " speedy facility in light of that fact, and choose to use"
+                    " the older, slower method of simply relying on the"
+                    " ElecronX servers to do SLP token validation.\n\n"
+                    "If unsure what to answer now, you may always toggle this"
+                    " facility on/off from the Network Dialog later."),
+                checkbox_text=_("Don't ask again"))
+            if res:
+                self.config.set_key(key, True)
+            elif neverask_chk:
+                # set to actual False rather than None to indicate we never
+                # want to be asked.
+                self.config.set_key(key, False)
+
     def load_wallet(self):
         self.wallet.thread = TaskThread(self, self.on_error, name = self.wallet.diagnostic_name() + '/Wallet')
         self.wallet.ui_emit_validity_updated = self.slp_validity_signal.emit
