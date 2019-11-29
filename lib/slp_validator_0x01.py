@@ -233,7 +233,8 @@ class GraphContext(PrintError):
             if proxy_enable:
                 graph.finalize_from_proxy(results)
 
-            wallet.ui_emit_validation_fetch(job.root_txid)
+            if wallet.ui_emit_validation_fetch:
+                wallet.ui_emit_validation_fetch(job.root_txid)
             # Do consistency check here
             # XXXXXXX
 
