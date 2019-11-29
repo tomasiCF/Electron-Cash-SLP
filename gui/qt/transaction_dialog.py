@@ -98,31 +98,34 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         
         # Parse SLP output data
         self.slp_outputs = []
-        self.slp_msg = None
         self.slp_mint_baton_vout = None
         try:
-            self.slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+            slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
         except:
             pass
         else:
-            if self.slp_msg.transaction_type in ["MINT", "SEND"]:
-                slp_info = self.wallet.token_types[self.slp_msg.op_return_fields['token_id_hex']]
+            if slp_msg.transaction_type in ["MINT", "SEND"]:
+                slp_info = self.wallet.token_types[slp_msg.op_return_fields['token_id_hex']]
                 dec = slp_info['decimals']
-
-            if self.slp_msg.transaction_type == "GENESIS":
-                dec = self.slp_msg.op_return_fields['decimals']
-                self.slp_outputs.append(0)
-                mint = self.slp_msg.op_return_fields['initial_token_mint_quantity']
-                self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
-                self.slp_mint_baton_vout = self.slp_msg.op_return_fields['mint_baton_vout']
-            elif self.slp_msg.transaction_type == "MINT":
-                self.slp_outputs.append(0)
-                mint = self.slp_msg.op_return_fields['additional_token_quantity']
-                self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
-                self.slp_mint_baton_vout = self.slp_msg.op_return_fields['mint_baton_vout']
-            elif self.slp_msg.transaction_type == "SEND":
-                for i, o in enumerate(self.slp_msg.op_return_fields['token_output']):
-                    self.slp_outputs.append(format_satoshis_nofloat(o, decimal_point=dec, num_zeros=dec))
+            elif slp_msg.transaction_type == "GENESIS":
+                dec = slp_msg.op_return_fields['decimals']
+            else:
+                dec = None
+                
+            if dec and isinstance(dec, int):
+                if slp_msg.transaction_type == "GENESIS":
+                    self.slp_outputs.append(0)
+                    mint = slp_msg.op_return_fields['initial_token_mint_quantity']
+                    self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
+                    self.slp_mint_baton_vout = slp_msg.op_return_fields['mint_baton_vout']
+                elif slp_msg.transaction_type == "MINT":
+                    self.slp_outputs.append(0)
+                    mint = slp_msg.op_return_fields['additional_token_quantity']
+                    self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
+                    self.slp_mint_baton_vout = slp_msg.op_return_fields['mint_baton_vout']
+                elif slp_msg.transaction_type == "SEND":
+                    for i, o in enumerate(slp_msg.op_return_fields['token_output']):
+                        self.slp_outputs.append(format_satoshis_nofloat(o, decimal_point=dec, num_zeros=dec))
 
         Weak.finalization_print_error(self)  # track object lifecycle
 
