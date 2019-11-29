@@ -331,6 +331,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         pt.setX(50)
         self.customContextMenuRequested.emit(pt)
 
+    @rate_limited(1.0, classlevel=True, ts_after=True) # We rate limit the refresh no more than 1 times every second
     def update(self):
         selected_item_id = self.currentItem().data(0, Qt.UserRole) if self.currentItem() else None
         if not self.slp_validity_signal and self.parent.network.slp_validity_signal:
