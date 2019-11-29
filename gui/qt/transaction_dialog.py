@@ -42,8 +42,11 @@ from electroncash.plugins import run_hook
 from electroncash.transaction import Transaction, InputValueMissing
 
 from electroncash.slp_checker import SlpTransactionChecker
+from electroncash.slp import SlpMessage
 from electroncash.util import bfh, Weak, PrintError
 from .util import *
+
+from electroncash.util import format_satoshis_nofloat
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
@@ -92,6 +95,35 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.tx_height = None
         self.slp_coins_to_burn = slp_coins_to_burn
         self.slp_amt_to_burn = slp_amt_to_burn
+        
+        # Parse SLP output data
+        self.slp_outputs = []
+        self.slp_msg = None
+        self.slp_mint_baton_vout = None
+        try:
+            self.slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
+        except:
+            pass
+        else:
+            if self.slp_msg.transaction_type in ["MINT", "SEND"]:
+                slp_info = self.wallet.token_types[self.slp_msg.op_return_fields['token_id_hex']]
+                dec = slp_info['decimals']
+
+            if self.slp_msg.transaction_type == "GENESIS":
+                dec = self.slp_msg.op_return_fields['decimals']
+                self.slp_outputs.append(0)
+                mint = self.slp_msg.op_return_fields['initial_token_mint_quantity']
+                self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
+                self.slp_mint_baton_vout = self.slp_msg.op_return_fields['mint_baton_vout']
+            elif self.slp_msg.transaction_type == "MINT":
+                self.slp_outputs.append(0)
+                mint = self.slp_msg.op_return_fields['additional_token_quantity']
+                self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
+                self.slp_mint_baton_vout = self.slp_msg.op_return_fields['mint_baton_vout']
+            elif self.slp_msg.transaction_type == "SEND":
+                for i, o in enumerate(self.slp_msg.op_return_fields['token_output']):
+                    self.slp_outputs.append(format_satoshis_nofloat(o, decimal_point=dec, num_zeros=dec))
+
         Weak.finalization_print_error(self)  # track object lifecycle
 
         self.setMinimumWidth(750)
@@ -627,6 +659,12 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # insert enough spaces until column 43, to line up amounts
                 cursor.insertText(' '*(43 - len(addrstr)), ext)
                 cursor.insertText(format_amount(v), ext)
+                if self.slp_outputs and i > 0 and len(self.slp_outputs) > i:
+                    cursor.insertText(' '*(5), ext)
+                    cursor.insertText("SLP: " + self.slp_outputs[i], ext)
+                if self.slp_mint_baton_vout == i:
+                    cursor.insertText(' '*(5), ext)
+                    cursor.insertText("SLP: MINT BATON", ext)
             cursor.insertBlock()
 
         # make the change & receive legends appear only if we used that color
