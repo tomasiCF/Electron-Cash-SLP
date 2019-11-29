@@ -249,7 +249,7 @@ class ValidationJob:
                 validity = self.graph._nodes.get(self.root_txid, None).validity
             except:
                 validity = 0
-            if self.graph_search_job is not None and (not isinstance(retval, bool) or validity != 1):
+            if self.graph_search_job is not None and (not isinstance(retval, bool) or validity > 1):
                 with self._statelock:
                     self.validitycache[self.root_txid] = 0
                     self.graph_search_job.set_failed('invalid based on graph search data')
