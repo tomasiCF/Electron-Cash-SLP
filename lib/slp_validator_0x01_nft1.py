@@ -427,8 +427,8 @@ class Validator_NFT1(ValidatorGeneric):
             job.add_callback(callback)
         elif self.validation_jobmgr.graph_context is None:
             # FIXME?
-            raise Exception("Graph Context is None, JobManager was killed")
-            #warnings.warn("Graph Context is None, JobManager was killed")
+            #raise Exception("Graph Context is None, JobManager was killed")
+            warnings.warn("Graph Context is None, JobManager was killed")
         else:
             raise Exception("NO JOB!")
             with wallet.lock:
