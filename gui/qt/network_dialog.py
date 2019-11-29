@@ -23,7 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import socket, queue
+import socket, queue, codecs
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -291,6 +291,8 @@ class SlpSearchJobListWidget(QTreeWidget):
         if not item:
             return
         menu = QMenu()
+        menu.addAction(_("Copy Txid"), lambda: self._copy_txid_to_clipboard())
+        menu.addAction(_("Copy Reversed Txid"), lambda: self._copy_txid_to_clipboard(True))
         menu.addAction(_("Refresh List"), lambda: self.update())
         txid = item.data(0, Qt.UserRole)
         if item.data(2, Qt.UserRole) in ['Exited']:
@@ -298,6 +300,12 @@ class SlpSearchJobListWidget(QTreeWidget):
         elif item.data(2, Qt.UserRole) not in ['Exited', 'Completed']:
             menu.addAction(_("Cancel"), lambda: self.cancel_job(txid))
         menu.exec_(self.viewport().mapToGlobal(position))
+
+    def _copy_txid_to_clipboard(self, flip_bytes=False):
+        txid = self.currentItem().data(0, Qt.UserRole)
+        if flip_bytes:
+            txid = codecs.encode(codecs.decode(txid,'hex')[::-1], 'hex').decode()
+        qApp.clipboard().setText(txid)
 
     def restart_job(self, txid):
         job = shared_context.graph_search_mgr.search_jobs.get(txid)
