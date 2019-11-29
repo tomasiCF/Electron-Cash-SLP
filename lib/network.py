@@ -279,6 +279,8 @@ class Network(util.DaemonThread):
         Network.INSTANCE = self # This implicitly should force stale instances to eventually del
         self.start_network(deserialize_server(self.default_server)[2], deserialize_proxy(self.config.get('proxy')))
         self.slp_gs_host = None
+        self.slp_validity_signal = None
+        self.slp_validation_fetch_signal = None
 
     def __del__(self):
         ''' NB: due to Network.INSTANCE keeping the singleton instance alive,

@@ -277,6 +277,14 @@ class SlpSearchJobListWidget(QTreeWidget):
         self.setHeaderLabels([_("Job Id"), _("Txn Count"), _("Search Job Status")])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
+        self.slp_validity_signal = None
+        self.slp_validation_fetch_signal = None
+
+    def on_validity(self, x, y):
+        self.update()
+
+    def on_validation_fetch(self, txid):
+        self.update()
 
     def create_menu(self, position):
         item = self.currentItem()
@@ -316,6 +324,12 @@ class SlpSearchJobListWidget(QTreeWidget):
         self.customContextMenuRequested.emit(pt)
 
     def update(self):
+        if not self.slp_validity_signal and self.parent.network.slp_validity_signal:
+            self.slp_validity_signal = self.parent.network.slp_validity_signal
+            self.slp_validity_signal.connect(self.on_validity, Qt.QueuedConnection)
+        if not self.slp_validation_fetch_signal and self.parent.network.slp_validation_fetch_signal:
+            self.slp_validation_fetch_signal = self.parent.network.slp_validation_fetch_signal
+            self.slp_validation_fetch_signal.connect(self.on_validation_fetch, Qt.QueuedConnection)
         self.clear()
         self.addChild = self.addTopLevelItem
         jobs = shared_context.graph_search_mgr.search_jobs.copy()

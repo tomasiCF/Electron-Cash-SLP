@@ -141,6 +141,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.wallet.use_change = True
             self.wallet.storage.put('use_change', self.wallet.use_change)
         self.network = gui_object.daemon.network
+        self.network.slp_validity_signal = self.slp_validity_signal
+        self.network.slp_validation_fetch_signal = self.slp_validation_fetch_signal
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
         self.contacts = wallet.contacts
