@@ -332,6 +332,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         self.customContextMenuRequested.emit(pt)
 
     def update(self):
+        selected_item_id = self.currentItem().data(0, Qt.UserRole) if self.currentItem() else None
         if not self.slp_validity_signal and self.parent.network.slp_validity_signal:
             self.slp_validity_signal = self.parent.network.slp_validity_signal
             self.slp_validity_signal.connect(self.on_validity, Qt.QueuedConnection)
@@ -360,6 +361,8 @@ class SlpSearchJobListWidget(QTreeWidget):
                 x.setData(0, Qt.UserRole, k)
                 x.setData(2, Qt.UserRole, status)
                 self.addTopLevelItem(x)
+            if selected_item_id and job.root_txid == selected_item_id:
+                self.setCurrentItem(x)
         h = self.header()
         h.setStretchLastSection(True)
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
