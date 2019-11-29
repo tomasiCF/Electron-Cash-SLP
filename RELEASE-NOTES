@@ -141,11 +141,12 @@ Electron Cash - SLP Token Edition
 
 3.5.2 Updates & Features
 -----
-- Added SLP Graph Search to use new c++ server backend
+- Added SLP Graph Search to use new c++ server backend, see tokens tab in Network dialog
 - Updated Burn Tool dialog to allow importing partially signed burn transaction data from a hex or file
 - Improved stability of NFT1 validator with unit tests
 - Patched NFT1 message parser for spec conformance
 - Added "paytomany_slp" command to cli for multi-output SLP sends
+- Add SLP token output values to transaction dialog
 - Remove auto switching address format to SLP format when clicking between tabs
 - Ignore case in seed phrase validation when restoring wallet from seed
 - Various other bug fixes and improvements ported from main Electron Cash
