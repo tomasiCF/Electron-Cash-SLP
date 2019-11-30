@@ -41,7 +41,6 @@ class GraphSearchJob:
         self.search_success = None
         self.job_complete = False
         self.exit_msg = None
-        self.depth_completed = 0
         self.depth_current_query = None
         self.txn_count_progress = 0
         self.gs_response_size = 0
@@ -50,10 +49,11 @@ class GraphSearchJob:
         # ctl
         self.waiting_to_cancel = False
         self.cancel_callback = None
-        self.fetch_retries = 0
 
         # host for graph search
         self.host = self.valjob.network.slp_gs_host
+
+        self.valjob_thread_wakeup = None
 
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
@@ -69,16 +69,22 @@ class GraphSearchJob:
         self.search_success = False
         if self.cancel_callback:
             self.cancel_callback(self)
+        if self.valjob_thread_wakeup:
+            self.valjob_thread_wakeup.set()
 
     def set_success(self):
         self.search_success = True
         self.job_complete = True
+        if self.valjob_thread_wakeup:
+            self.valjob_thread_wakeup.set()
 
     def set_failed(self, reason=None):
         self.search_started = True
         self.search_success = False
         self.job_complete = True
         self.exit_msg = reason
+        if self.valjob_thread_wakeup:
+            self.valjob_thread_wakeup.set()
 
 class SlpGraphSearchManager:
     """
@@ -170,7 +176,8 @@ class SlpGraphSearchManager:
                 if (t - time_last_updated) > 2 and self.emit_ui_update:
                     self.emit_ui_update()
                     time_last_updated = t
-                if job.job_complete:
+                if not job.valjob.running:
+                    job.set_failed('validation job stopped')
                     return
         try:
             dat = json.loads(dat.decode('utf-8'))

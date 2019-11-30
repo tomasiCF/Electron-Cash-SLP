@@ -199,7 +199,7 @@ class GraphContext(PrintError):
             l = []
             nonlocal gs_enable, gs_host
             if gs_enable and gs_host and self.graph_search_mgr:
-                if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys():
+                if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys() and not val_job.graph_search_job:
                     search_job = self.graph_search_mgr.new_search(val_job)
                     val_job.graph_search_job = search_job if search_job else None
             else:

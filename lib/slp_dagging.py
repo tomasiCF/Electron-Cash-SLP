@@ -211,6 +211,7 @@ class ValidationJob:
 
         self.debug = debug
 
+        self.wakeup = threading.Event()
         self.exited = threading.Event()
 
         self._statelock = threading.Lock()
@@ -249,7 +250,7 @@ class ValidationJob:
                 validity = self.graph._nodes.get(self.root_txid, None).validity
             except:
                 validity = 0
-            if self.graph_search_job is not None and (not isinstance(retval, bool) or validity > 1):
+            if self.graph_search_job is not None and (not isinstance(retval, bool) or validity > 1) and self.graph_search_job.job_complete:
                 with self._statelock:
                     self.validitycache[self.root_txid] = 0
                     self.graph_search_job.set_failed('invalid based on graph search data')
@@ -450,8 +451,14 @@ class ValidationJob:
                     self.graph.debug("    (empty)")
 
             txids_gotten = interested_txids.difference(txids_missing)
-            if len(txids_gotten) == 0:
+
+            if len(txids_gotten) == 0 and self.graph_search_job and not self.graph_search_job.job_complete:
+                self.wakeup.clear()
+                self.graph_search_job.valjob_thread_wakeup = self.wakeup
+                self.wakeup.wait()
+            elif len(txids_gotten) == 0:
                 return "missing txes"
+
         raise RuntimeError('loop ended')
 
 
