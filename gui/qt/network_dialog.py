@@ -355,9 +355,10 @@ class SlpSearchJobListWidget(QTreeWidget):
             self.slp_validation_fetch_signal = self.parent.network.slp_validation_fetch_signal
             self.slp_validation_fetch_signal.connect(self.on_validation_fetch, Qt.QueuedConnection)
         self.clear()
-        self.addChild = self.addTopLevelItem
         jobs = shared_context.graph_search_mgr.search_jobs.copy()
         working_item = None
+        completed_items = []
+        other_items = []
         for k, job in jobs.items():
             if len(jobs) > 0:
                 tx_count = str(job.txn_count_progress)
@@ -372,17 +373,32 @@ class SlpSearchJobListWidget(QTreeWidget):
                     status = 'Working...'
                 success = str(job.search_success) if job.search_success else ''
                 exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
+                x = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
+                x.setData(0, Qt.UserRole, k)
+                x.setData(3, Qt.UserRole, status)
                 if status == 'Working...':
-                    working_item = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
+                    working_item = x
+                elif status == "Completed":
+                    completed_items.append(x)
                 else:
-                    x = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
-                    x.setData(0, Qt.UserRole, k)
-                    x.setData(3, Qt.UserRole, status)
-                    self.addTopLevelItem(x)
-                if working_item:
-                    self.insertTopLevelItem(0, working_item)
-            if selected_item_id and job.root_txid == selected_item_id:
-                self.setCurrentItem(x)
+                    other_items.append(x)
+
+        def setCurrentSelectedItem(i):
+            if selected_item_id and i.data(0, Qt.UserRole) == selected_item_id:
+                self.setCurrentItem(i)
+
+        if completed_items:
+            for i in completed_items[::-1]:
+                self.addTopLevelItem(i)
+                setCurrentSelectedItem(i)
+        if other_items:
+            for i in other_items:
+                self.addTopLevelItem(i)
+                setCurrentSelectedItem(i)
+        if working_item:
+            self.insertTopLevelItem(0, working_item)
+            setCurrentSelectedItem(working_item)
+
         h = self.header()
         h.setStretchLastSection(True)
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
