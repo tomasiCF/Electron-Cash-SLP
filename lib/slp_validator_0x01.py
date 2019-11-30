@@ -206,9 +206,6 @@ class GraphContext(PrintError):
                 gs_enable, gs_host = self.get_gs_config()
                 network.slp_gs_host = gs_host
 
-            if wallet.ui_emit_validation_fetch:
-                wallet.ui_emit_validation_fetch(txids)
-
             for txid in txids:
                 txn = SlpGraphSearchManager.tx_cache_get(txid)
                 if txn:
@@ -233,8 +230,6 @@ class GraphContext(PrintError):
             if proxy_enable:
                 graph.finalize_from_proxy(results)
 
-            if wallet.ui_emit_validation_fetch:
-                wallet.ui_emit_validation_fetch(job.root_txid)
             # Do consistency check here
             # XXXXXXX
 

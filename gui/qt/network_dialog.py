@@ -274,16 +274,13 @@ class SlpSearchJobListWidget(QTreeWidget):
         QTreeWidget.__init__(self)
         self.parent = parent
         self.network = parent.network
-        self.setHeaderLabels([_("Job Id"), _("Txn Count"), _("Search Job Status")])
+        self.setHeaderLabels([_("Job Id"), _("Txn Count"), _("Data"), _("Search Status")])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
         self.slp_validity_signal = None
         self.slp_validation_fetch_signal = None
 
-    def on_validity(self, x, y):
-        self.update()
-
-    def on_validation_fetch(self, txid):
+    def on_validation_fetch(self):
         self.update()
 
     def create_menu(self, position):
@@ -295,9 +292,9 @@ class SlpSearchJobListWidget(QTreeWidget):
         menu.addAction(_("Copy Reversed Txid"), lambda: self._copy_txid_to_clipboard(True))
         menu.addAction(_("Refresh List"), lambda: self.update())
         txid = item.data(0, Qt.UserRole)
-        if item.data(2, Qt.UserRole) in ['Exited']:
+        if item.data(3, Qt.UserRole) in ['Exited']:
             menu.addAction(_("Restart Search"), lambda: self.restart_job(txid))
-        elif item.data(2, Qt.UserRole) not in ['Exited', 'Completed']:
+        elif item.data(3, Qt.UserRole) not in ['Exited', 'Completed']:
             menu.addAction(_("Cancel"), lambda: self.cancel_job(txid))
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -331,18 +328,36 @@ class SlpSearchJobListWidget(QTreeWidget):
         pt.setX(50)
         self.customContextMenuRequested.emit(pt)
 
+    @staticmethod
+    def humanbytes(B):
+        'Return the given bytes as a human friendly KB, MB, GB, or TB string'
+        B = float(B)
+        KB = float(1024)
+        MB = float(KB ** 2) # 1,048,576
+        GB = float(KB ** 3) # 1,073,741,824
+        TB = float(KB ** 4) # 1,099,511,627,776
+
+        if B < KB:
+            return '{0} {1}'.format(B,'Bytes' if 0 == B > 1 else 'Byte')
+        elif KB <= B < MB:
+            return '{0:.2f} KB'.format(B/KB)
+        elif MB <= B < GB:
+            return '{0:.2f} MB'.format(B/MB)
+        elif GB <= B < TB:
+            return '{0:.2f} GB'.format(B/GB)
+        elif TB <= B:
+            return '{0:.2f} TB'.format(B/TB)
+
     @rate_limited(1.0, classlevel=True, ts_after=True) # We rate limit the refresh no more than 1 times every second
     def update(self):
         selected_item_id = self.currentItem().data(0, Qt.UserRole) if self.currentItem() else None
-        if not self.slp_validity_signal and self.parent.network.slp_validity_signal:
-            self.slp_validity_signal = self.parent.network.slp_validity_signal
-            self.slp_validity_signal.connect(self.on_validity, Qt.QueuedConnection)
         if not self.slp_validation_fetch_signal and self.parent.network.slp_validation_fetch_signal:
             self.slp_validation_fetch_signal = self.parent.network.slp_validation_fetch_signal
             self.slp_validation_fetch_signal.connect(self.on_validation_fetch, Qt.QueuedConnection)
         self.clear()
         self.addChild = self.addTopLevelItem
         jobs = shared_context.graph_search_mgr.search_jobs.copy()
+        working_item = None
         for k, job in jobs.items():
             if len(jobs) > 0:
                 tx_count = str(job.txn_count_progress)
@@ -355,13 +370,17 @@ class SlpSearchJobListWidget(QTreeWidget):
                     status = 'Stopping...'
                 elif job.search_started:
                     status = 'Working...'
-                progress = str(job.depth_completed) + '/' + str(job.total_depth) if job.total_depth else ''
                 success = str(job.search_success) if job.search_success else ''
                 exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
-                x = QTreeWidgetItem([job.root_txid[:6], tx_count, status + exit_msg])
-                x.setData(0, Qt.UserRole, k)
-                x.setData(2, Qt.UserRole, status)
-                self.addTopLevelItem(x)
+                if status == 'Working...':
+                    working_item = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
+                else:
+                    x = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
+                    x.setData(0, Qt.UserRole, k)
+                    x.setData(3, Qt.UserRole, status)
+                    self.addTopLevelItem(x)
+                if working_item:
+                    self.insertTopLevelItem(0, working_item)
             if selected_item_id and job.root_txid == selected_item_id:
                 self.setCurrentItem(x)
         h = self.header()
@@ -369,6 +388,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
 class SlpServeListWidget(QTreeWidget):
     def __init__(self, parent):

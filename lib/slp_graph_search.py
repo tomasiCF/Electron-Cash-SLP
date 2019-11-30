@@ -44,6 +44,7 @@ class GraphSearchJob:
         self.depth_completed = 0
         self.depth_current_query = None
         self.txn_count_progress = 0
+        self.gs_response_size = 0
         self.last_search_url = '(url empty)'
 
         # ctl
@@ -94,6 +95,8 @@ class SlpGraphSearchManager:
         self.threadname = threadname
         self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname+'/search', daemon=True)
         self.search_thread.start()
+        
+        self.emit_ui_update = None #valjob_ref.network.slp_validation_fetch_signal.emit
 
     def new_search(self, valjob_ref):
         """
@@ -103,6 +106,10 @@ class SlpGraphSearchManager:
         Returns weakref of the new GS job object if new job is created.
         """
         txid = valjob_ref.root_txid
+
+        if self.emit_ui_update is None and valjob_ref.network.slp_validation_fetch_signal:
+            self.emit_ui_update = valjob_ref.network.slp_validation_fetch_signal.emit
+
         with self.lock:
             if txid not in self.search_jobs.keys():
                 job = GraphSearchJob(txid, valjob_ref)
@@ -153,11 +160,23 @@ class SlpGraphSearchManager:
         print('Requesting txid from gs++ (reversed): ' + txid)
 
         query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
-        reqresult = requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, timeout=60)
+        dat = b''
+        time_last_updated = time.clock()
+        with requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, stream=True, timeout=60) as r:
+            for chunk in r.iter_content(chunk_size=10000):
+                job.gs_response_size += len(chunk)
+                dat += chunk
+                t = time.clock()
+                if (t - time_last_updated) > 2 and self.emit_ui_update:
+                    self.emit_ui_update()
+                    time_last_updated = t
+                if job.job_complete:
+                    return
         try:
-            txns = json.loads(reqresult.content.decode('utf-8'))['txdata']
+            dat = json.loads(dat.decode('utf-8'))
+            txns = dat['txdata']
         except:
-            m = json.loads(reqresult.content)
+            m = json.loads(dat)
             if m["error"]:
                 raise Exception(m["error"])
             raise Exception(m)
@@ -166,6 +185,8 @@ class SlpGraphSearchManager:
             tx = Transaction(base64.b64decode(txn).hex())
             SlpGraphSearchManager.tx_cache_put(tx)
         job.set_success()
+        if self.emit_ui_update:
+            self.emit_ui_update()
         print("[SLP Graph Search] job success.")
 
     # This cache stores foreign (non-wallet) tx's we fetched from the network

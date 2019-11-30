@@ -122,7 +122,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     alias_received_signal = pyqtSignal()
     cashaddr_toggled_signal = pyqtSignal()
     slp_validity_signal = pyqtSignal(object, object)
-    slp_validation_fetch_signal = pyqtSignal(object)
+    slp_validation_fetch_signal = pyqtSignal()
     history_updated_signal = pyqtSignal()
     labels_updated_signal = pyqtSignal() # note this signal occurs when an explicit update_labels() call happens. Interested GUIs should also listen for history_updated_signal as well which also indicates labels may have changed.
     on_timer_signal = pyqtSignal()  # functions wanting to be executed from timer_actions should connect to this signal, preferably via Qt.DirectConnection
