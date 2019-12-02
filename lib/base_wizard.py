@@ -249,7 +249,7 @@ class BaseWizard(util.PrintError):
             label = info.label or _("An unnamed {}").format(name)
             descr = "%s [%s, %s]" % (label, name, state)
             choices.append(((name, info), descr))
-            if name != 'ledger':
+            if name not in ['ledger', 'satochip']:
                 disabled_indices.add(i)
         msg = _('Select a device') + ':'
         run_next = self.on_device  # normal flow, there are enabled devices
