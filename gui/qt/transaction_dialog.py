@@ -112,7 +112,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             else:
                 dec = None
                 
-            if dec and isinstance(dec, int):
+            if dec is not None and isinstance(dec, int):
                 if slp_msg.transaction_type == "GENESIS":
                     self.slp_outputs.append(0)
                     mint = slp_msg.op_return_fields['initial_token_mint_quantity']

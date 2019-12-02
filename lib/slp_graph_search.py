@@ -53,8 +53,6 @@ class GraphSearchJob:
         # host for graph search
         self.host = self.valjob.network.slp_gs_host
 
-        self.valjob_thread_wakeup = None
-
     def sched_cancel(self, callback=None, reason='job canceled'):
         self.exit_msg = reason
         if self.job_complete:
@@ -69,22 +67,16 @@ class GraphSearchJob:
         self.search_success = False
         if self.cancel_callback:
             self.cancel_callback(self)
-        if self.valjob_thread_wakeup:
-            self.valjob_thread_wakeup.set()
 
     def set_success(self):
         self.search_success = True
         self.job_complete = True
-        if self.valjob_thread_wakeup:
-            self.valjob_thread_wakeup.set()
 
     def set_failed(self, reason=None):
         self.search_started = True
         self.search_success = False
         self.job_complete = True
         self.exit_msg = reason
-        if self.valjob_thread_wakeup:
-            self.valjob_thread_wakeup.set()
 
 class SlpGraphSearchManager:
     """
@@ -151,6 +143,13 @@ class SlpGraphSearchManager:
                 except Exception as e:
                     print("error in graph search query", e, file=sys.stderr)
                     job.set_failed(str(e))
+                finally:
+                    if job.valjob.wakeup:
+                        job.valjob.wakeup.set()
+                    if self.emit_ui_update is None and job.valjob.network.slp_validation_fetch_signal:
+                        self.emit_ui_update = job.valjob.network.slp_validation_fetch_signal.emit
+                    if self.emit_ui_update:
+                        self.emit_ui_update()
         finally:
             print("[SLP Graph Search] Error: mainloop exited.", file=sys.stderr)
 
@@ -169,7 +168,7 @@ class SlpGraphSearchManager:
         dat = b''
         time_last_updated = time.clock()
         with requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, stream=True, timeout=60) as r:
-            for chunk in r.iter_content(chunk_size=10000):
+            for chunk in r.iter_content(chunk_size=None):
                 job.gs_response_size += len(chunk)
                 dat += chunk
                 t = time.clock()
@@ -178,6 +177,9 @@ class SlpGraphSearchManager:
                     time_last_updated = t
                 if not job.valjob.running:
                     job.set_failed('validation job stopped')
+                    return
+                elif job.waiting_to_cancel:
+                    job._cancel()
                     return
         try:
             dat = json.loads(dat.decode('utf-8'))
@@ -192,8 +194,6 @@ class SlpGraphSearchManager:
             tx = Transaction(base64.b64decode(txn).hex())
             SlpGraphSearchManager.tx_cache_put(tx)
         job.set_success()
-        if self.emit_ui_update:
-            self.emit_ui_update()
         print("[SLP Graph Search] job success.")
 
     # This cache stores foreign (non-wallet) tx's we fetched from the network

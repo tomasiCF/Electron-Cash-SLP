@@ -195,9 +195,11 @@ class GraphContext(PrintError):
                     newres[t] = (True, 3)
             proxyqueue.put(newres)
             
+        first_fetch_complete = False
+
         def fetch_hook(txids, val_job):
             l = []
-            nonlocal gs_enable, gs_host
+            nonlocal gs_enable, gs_host, first_fetch_complete
             if gs_enable and gs_host and self.graph_search_mgr:
                 if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys() and not val_job.graph_search_job:
                     search_job = self.graph_search_mgr.new_search(val_job)
@@ -205,6 +207,10 @@ class GraphContext(PrintError):
             else:
                 gs_enable, gs_host = self.get_gs_config()
                 network.slp_gs_host = gs_host
+
+            if network.slp_validation_fetch_signal and not first_fetch_complete:
+                network.slp_validation_fetch_signal.emit()
+                first_fetch_complete = True
 
             for txid in txids:
                 txn = SlpGraphSearchManager.tx_cache_get(txid)
