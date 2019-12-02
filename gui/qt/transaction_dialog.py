@@ -92,6 +92,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._dl_pct = None
         self._closed = False
         self.tx_hash = self.tx.txid_fast() if self.tx.raw and self.tx.is_complete() else None
+        self.slp_token_id_label = None
         self.tx_height = None
         self.slp_coins_to_burn = slp_coins_to_burn
         self.slp_amt_to_burn = slp_amt_to_burn
@@ -99,32 +100,46 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         # Parse SLP output data
         self.slp_outputs = []
         self.slp_mint_baton_vout = None
+        self.slp_info = None
         try:
             slp_msg = SlpMessage.parseSlpOutputScript(tx.outputs()[0][1])
         except:
             pass
         else:
-            if slp_msg.transaction_type in ["MINT", "SEND"]:
-                slp_info = self.wallet.token_types[slp_msg.op_return_fields['token_id_hex']]
-                dec = slp_info['decimals']
-            elif slp_msg.transaction_type == "GENESIS":
-                dec = slp_msg.op_return_fields['decimals']
+            self.slp_info = slp_msg.op_return_fields
+            self.slp_info['type'] = slp_msg.transaction_type
+            if self.slp_info['type'] == "GENESIS":
+                if self.tx_hash is not None:
+                    wallet_dat = self.wallet.token_types[self.tx_hash]
+                    self.slp_info['token_id_hex'] = self.tx_hash
+                else:
+                    wallet_dat = {}
+                    wallet_dat['decimals'] = slp_msg.op_return_fields['decimals']
+                    wallet_dat['name'] = "Not in wallet"
+                    self.slp_info['token_id_hex'] = "Unknown until transaction is complete"
             else:
-                dec = None
-                
-            if dec is not None and isinstance(dec, int):
-                if slp_msg.transaction_type == "GENESIS":
+                try:
+                    wallet_dat = self.wallet.token_types[slp_msg.op_return_fields['token_id_hex']]
+                except KeyError:
+                    wallet_dat = {}
+                    wallet_dat['decimals'] = "?"
+                    wallet_dat['name'] = "Not in wallet"
+
+            self.slp_info['name'] = wallet_dat['name']
+            dec = wallet_dat['decimals']
+            if isinstance(dec, int):
+                if self.slp_info['type'] == "GENESIS":
                     self.slp_outputs.append(0)
-                    mint = slp_msg.op_return_fields['initial_token_mint_quantity']
+                    mint = self.slp_info['initial_token_mint_quantity']
                     self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
-                    self.slp_mint_baton_vout = slp_msg.op_return_fields['mint_baton_vout']
-                elif slp_msg.transaction_type == "MINT":
+                    self.slp_mint_baton_vout = self.slp_info['mint_baton_vout']
+                elif self.slp_info['type'] == "MINT":
                     self.slp_outputs.append(0)
-                    mint = slp_msg.op_return_fields['additional_token_quantity']
+                    mint = self.slp_info['additional_token_quantity']
                     self.slp_outputs.append(format_satoshis_nofloat(mint, decimal_point=dec, num_zeros=dec))
-                    self.slp_mint_baton_vout = slp_msg.op_return_fields['mint_baton_vout']
-                elif slp_msg.transaction_type == "SEND":
-                    for i, o in enumerate(slp_msg.op_return_fields['token_output']):
+                    self.slp_mint_baton_vout = self.slp_info['mint_baton_vout']
+                elif self.slp_info['type'] == "SEND":
+                    for i, o in enumerate(self.slp_info['token_output']):
                         self.slp_outputs.append(format_satoshis_nofloat(o, decimal_point=dec, num_zeros=dec))
 
         Weak.finalization_print_error(self)  # track object lifecycle
@@ -178,6 +193,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.status_label.linkActivated.connect(open_be_url)
 
         self.add_io(vbox)
+
+        self.add_slp_info(vbox)
 
         self.sign_button = b = QPushButton(_("&Sign"))
         b.clicked.connect(self.sign)
@@ -357,6 +374,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 self.sign_button.setDisabled(True)
                 self.prompt_if_unsaved = True
                 self.saved = False
+                self.set_slp_token_id(self.tx.txid_fast())
             self.update()
             cleanup()
 
@@ -552,14 +570,18 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         box_char = "█"
         self.recv_legend = QLabel("<font color=" + ColorScheme.GREEN.as_color(background=True).name() + ">" + box_char + "</font> = " + _("Receiving Address"))
         self.change_legend = QLabel("<font color=" + ColorScheme.YELLOW.as_color(background=True).name() + ">" + box_char + "</font> = " + _("Change Address"))
+        self.slp_legend = QLabel("<font color=" + ColorScheme.BLUE.as_color(background=True).name() + ">" + box_char + "</font> = " + _("SLP Output"))
         f = self.recv_legend.font(); f.setPointSize(f.pointSize()-1)
         self.recv_legend.setFont(f)
         self.change_legend.setFont(f)
+        self.slp_legend.setFont(f)
         hbox.addStretch(2)
         hbox.addWidget(self.recv_legend)
         hbox.addWidget(self.change_legend)
+        hbox.addWidget(self.slp_legend)
         self.recv_legend.setHidden(True)
         self.change_legend.setHidden(True)
+        self.slp_legend.setHidden(True)
 
         o_text.setOpenLinks(False)  # disable automatic link opening
         o_text.anchorClicked.connect(self._open_internal_link)  # send links to our handler
@@ -577,6 +599,30 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.main_window.cashaddr_toggled_signal.connect(self.update_io)
         self.update_io()
 
+    def add_slp_info(self, vbox):
+        if self.slp_info:
+            hbox = QHBoxLayout()
+            hbox.setContentsMargins(0,0,0,0)
+            vbox.addLayout(hbox)
+
+            logo = QLabel()
+            logo.setPixmap(QPixmap(":icons/slp_logo_hollow.png")) # tab_slp_icon.png").scaledToWidth(30))
+            hbox.addWidget(logo)
+
+            slp_vbox = QVBoxLayout()
+            slp_vbox.addWidget(QLabel(self.slp_info['type']))
+            slp_vbox.addWidget(QLabel(_("Name: ") + self.slp_info['name']))
+            slp_vbox.addStretch()
+            
+            self.slp_token_id_label = QLabel(_("Token ID: ") + self.slp_info['token_id_hex'])
+            slp_vbox.addWidget(self.slp_token_id_label)
+            hbox.addLayout(slp_vbox)
+            hbox.addStretch()
+
+    def set_slp_token_id(self, token_id):
+        self.slp_info['token_id_hex'] = token_id
+        self.slp_token_id_label.setText(_("Token ID: ") + self.slp_info['token_id_hex'])
+
     def update_io(self):
         i_text = self.i_text
         o_text = self.o_text
@@ -590,6 +636,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         rec.setBackground(QBrush(ColorScheme.GREEN.as_color(background=True)))
         chg = QTextCharFormat(lnk)
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(True)))
+        slp = QTextCharFormat()
+        slp.setBackground(QBrush(ColorScheme.BLUE.as_color(True)))
         rec_ct, chg_ct = 0, 0
 
         def text_format(addr):
@@ -663,11 +711,13 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 cursor.insertText(' '*(43 - len(addrstr)), ext)
                 cursor.insertText(format_amount(v), ext)
                 if self.slp_outputs and i > 0 and len(self.slp_outputs) > i:
-                    cursor.insertText(' '*(5), ext)
-                    cursor.insertText("SLP: " + self.slp_outputs[i], ext)
+                    cursor.insertText(' '*(6), ext)
+                    cursor.insertText(self.slp_outputs[i], slp)
+                    self.slp_legend.setHidden(False)
                 if self.slp_mint_baton_vout == i:
-                    cursor.insertText(' '*(5), ext)
-                    cursor.insertText("SLP: MINT BATON", ext)
+                    cursor.insertText(' '*(6), ext)
+                    cursor.insertText("MINT BATON", slp)
+                    self.slp_legend.setHidden(False)
             cursor.insertBlock()
 
         # make the change & receive legends appear only if we used that color
