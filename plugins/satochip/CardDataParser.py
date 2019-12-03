@@ -51,7 +51,8 @@ class CardDataParser:
         # if already initialized, check that authentikey match value retrieved from storage!
         if (self.authentikey_from_storage is not None):
             if  self.authentikey != self.authentikey_from_storage:
-                raise ValueError("Recovered authentikey does not correspond to registered authentikey!")
+                raise ValueError("Recovered authentikey does not correspond to registered authentikey!\n\n" + \
+                                    "Restart Electron Cash and try again.")
 
         return self.authentikey
 
@@ -89,8 +90,8 @@ class CardDataParser:
         signature2= response[(msg2_size+2):(msg2_size+2+sig2_size)]
         authentikey= self.get_pubkey_from_signature(self.authentikey_coordx, msg2, signature2)
         if authentikey != self.authentikey:
-            raise ValueError("Recovered authentikey does not correspond to registered authentikey!")
-
+            raise ValueError("Recovered authentikey does not correspond to registered authentikey!\n\n" + \
+                                "Restart Electron Cash and try again.")
         return (self.pubkey, self.chaincode)
 
     ##############
