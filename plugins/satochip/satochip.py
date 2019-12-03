@@ -652,10 +652,12 @@ class SatochipPlugin(HW_PluginBase):
             wizard.run('confirm_seed', seed, '')
 
     def confirm_seed(self, wizard, seed, passphrase):
-        f = lambda x: self.confirm_passphrase(wizard, seed, passphrase)
-        wizard.confirm_seed_dialog(run_next=f, test=lambda x: x==seed)
+        f = lambda x,skip=False: self.confirm_passphrase(wizard, seed, passphrase, skipped_backup=False)
+        wizard.confirm_seed_dialog(run_next=f, test=lambda x,skip=False: x==seed)
 
-    def confirm_passphrase(self, wizard, seed, passphrase):
+    def confirm_passphrase(self, wizard, seed, passphrase, skipped_backup=False):
+        if skipped_backup:
+            raise Exception("Cannot skip backup with Satochip hardware wallet setup.")
         f = lambda x: self.derive_bip32_seed(seed, x)
         if passphrase:
             title = _('Confirm Seed Extension')
@@ -668,7 +670,7 @@ class SatochipPlugin(HW_PluginBase):
             f('')
 
     def derive_bip32_seed(self, seed, passphrase):
-        self.bip32_seed= Mnemonic('en').mnemonic_to_seed(seed, passphrase)
+        self.bip32_seed = Mnemonic('en').mnemonic_to_seed(seed, passphrase)
 
     #restore from seed
     def restore_from_seed(self, wizard):
@@ -684,8 +686,7 @@ class SatochipPlugin(HW_PluginBase):
             f = lambda passphrase: self.derive_bip39_seed(seed, passphrase)
             wizard.passphrase_dialog(run_next=f) if is_ext else f('')
         elif wizard.seed_type in ['standard', 'segwit']:
-            f = lambda passphrase: self.derive_bip32_seed(seed, passphrase)
-            wizard.passphrase_dialog(run_next=f) if is_ext else f('')
+            raise Exception('Unsupported seed type', wizard.seed_type)
         elif wizard.seed_type == 'old':
             raise Exception('Unsupported seed type', wizard.seed_type)
         elif bitcoin.is_any_2fa_seed_type(wizard.seed_type):
