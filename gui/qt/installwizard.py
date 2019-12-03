@@ -396,7 +396,7 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
         return self.seed_input(title, message, test, options)[:3]
 
     @wizard_dialog
-    def confirm_seed_dialog(self, run_next, test):
+    def confirm_seed_dialog(self, run_next, test, can_skip=True):
         self.app.clipboard().clear()
         title = _('Confirm Seed')
         message = ' '.join([
@@ -404,7 +404,7 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
             _('If you lose your seed, your money will be permanently lost.'),
             _('To make sure that you have properly saved your seed, please retype it here.')
         ])
-        seed, is_bip39, is_ext, was_skipped = self.seed_input(title, message, test, options=None, can_skip=True)
+        seed, is_bip39, is_ext, was_skipped = self.seed_input(title, message, test, options=None, can_skip=can_skip)
         return seed, was_skipped
 
     @wizard_dialog
