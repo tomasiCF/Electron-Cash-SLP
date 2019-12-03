@@ -653,7 +653,7 @@ class SatochipPlugin(HW_PluginBase):
 
     def confirm_seed(self, wizard, seed, passphrase):
         f = lambda x,skip=False: self.confirm_passphrase(wizard, seed, passphrase, skipped_backup=False)
-        wizard.confirm_seed_dialog(run_next=f, test=lambda x,skip=False: x==seed)
+        wizard.confirm_seed_dialog(run_next=f, test=lambda x,skip=False: x==seed, can_skip=False)
 
     def confirm_passphrase(self, wizard, seed, passphrase, skipped_backup=False):
         if skipped_backup:
