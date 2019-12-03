@@ -634,11 +634,10 @@ class SatochipPlugin(HW_PluginBase):
             ('restore_from_seed', _('I already have a seed')),
         ]
         wizard.choice_dialog(title=title, message=message, choices=choices, run_next=wizard.run)
+
     #create seed
     def create_seed(self, wizard):
-        wizard.seed_type = 'standard'
-        wizard.opt_bip39 = False
-        seed = Mnemonic('en').make_seed(wizard.seed_type)
+        seed = Mnemonic('en').make_seed()
         f = lambda x: self.request_passphrase(wizard, seed, x)
         wizard.show_seed_dialog(run_next=f, seed_text=seed)
 
