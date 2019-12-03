@@ -308,6 +308,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         job = shared_context.graph_search_mgr.search_jobs.get(txid)
         if job:
             shared_context.graph_search_mgr.restart_search(job)
+        self.update()
 
     def cancel_job(self, txid):
         job = shared_context.graph_search_mgr.search_jobs.get(txid)
