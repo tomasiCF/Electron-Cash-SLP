@@ -568,9 +568,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         hbox.addWidget(l)
 
         box_char = "█"
-        self.recv_legend = QLabel("<font color=" + ColorScheme.GREEN.as_color(background=True).name() + ">" + box_char + "</font> = " + _("Receiving Address"))
+        self.recv_legend = QLabel("<font color=" + ColorScheme.BLUE.as_color(background=True).name() + ">" + box_char + "</font> = " + _("Receiving Address"))
         self.change_legend = QLabel("<font color=" + ColorScheme.YELLOW.as_color(background=True).name() + ">" + box_char + "</font> = " + _("Change Address"))
-        self.slp_legend = QLabel("<font color=" + ColorScheme.BLUE.as_color(background=True).name() + ">" + box_char + "</font> = " + _("SLP Output"))
+        self.slp_legend = QLabel("<font color=" + ColorScheme.GREEN.as_color(background=True).name() + ">" + box_char + "</font> = " + _("SLP Output"))
         f = self.recv_legend.font(); f.setPointSize(f.pointSize()-1)
         self.recv_legend.setFont(f)
         self.change_legend.setFont(f)
@@ -633,11 +633,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         lnk.setAnchor(True)
         lnk.setUnderlineStyle(QTextCharFormat.SingleUnderline)
         rec = QTextCharFormat(lnk)
-        rec.setBackground(QBrush(ColorScheme.GREEN.as_color(background=True)))
+        rec.setBackground(QBrush(ColorScheme.BLUE.as_color(background=True)))
         chg = QTextCharFormat(lnk)
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(True)))
         slp = QTextCharFormat()
-        slp.setBackground(QBrush(ColorScheme.BLUE.as_color(True)))
+        slp.setBackground(QBrush(ColorScheme.GREEN.as_color(True)))
         rec_ct, chg_ct = 0, 0
 
         def text_format(addr):
