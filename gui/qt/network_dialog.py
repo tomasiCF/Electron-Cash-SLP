@@ -280,7 +280,8 @@ class SlpSearchJobListWidget(QTreeWidget):
         self.slp_validity_signal = None
         self.slp_validation_fetch_signal = None
 
-    def on_validation_fetch(self):
+    def on_validation_fetch(self, total_data_received):
+        # TODO: Update an total bytes received in the UI.
         self.update()
 
     def create_menu(self, position):
@@ -351,6 +352,7 @@ class SlpSearchJobListWidget(QTreeWidget):
 
     @rate_limited(1.0, classlevel=True, ts_after=True) # We rate limit the refresh no more than 1 times every second
     def update(self):
+        self.parent.slp_gs_enable_cb.setChecked(self.parent.config.get('slp_validator_graphsearch_enabled', False))
         selected_item_id = self.currentItem().data(0, Qt.UserRole) if self.currentItem() else None
         if not self.slp_validation_fetch_signal and self.parent.network.slp_validation_fetch_signal:
             self.slp_validation_fetch_signal = self.parent.network.slp_validation_fetch_signal
@@ -373,7 +375,7 @@ class SlpSearchJobListWidget(QTreeWidget):
                 elif job.search_started:
                     status = 'Working...'
                 success = str(job.search_success) if job.search_success else ''
-                exit_msg = ' ('+job.exit_msg+')' if job.exit_msg else ''
+                exit_msg = ' ('+job.exit_msg+')' if job.exit_msg and status != 'Completed' else ''
                 x = QTreeWidgetItem([job.root_txid[:6], tx_count, self.humanbytes(job.gs_response_size), status + exit_msg])
                 x.setData(0, Qt.UserRole, k)
                 x.setData(3, Qt.UserRole, status)
@@ -407,7 +409,7 @@ class SlpSearchJobListWidget(QTreeWidget):
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
-class SlpServeListWidget(QTreeWidget):
+class SlpGsServeListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
@@ -451,10 +453,10 @@ class SlpServeListWidget(QTreeWidget):
     def update(self):
         self.clear()
         self.addChild = self.addTopLevelItem
-        slpdbs = networks.net.SLPDB_SERVERS
-        n_slpdbs = len(slpdbs)
-        for k, items in slpdbs.items():
-            if n_slpdbs > 0:
+        slp_gs_list = networks.net.SLPDB_SERVERS
+        slp_gs_count = len(slp_gs_list)
+        for k, items in slp_gs_list.items():
+            if slp_gs_count > 0:
                 star = ' ◀' if k == self.network.slp_gs_host else ''
                 x = QTreeWidgetItem([k+star]) #, 'NA'])
                 x.setData(0, Qt.UserRole, k)
@@ -620,22 +622,22 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         # SLP Validation Tab
         grid = QGridLayout(slp_tab)
-        self.slpdb_cb = QCheckBox(_('Use Graph Search server (gs++) to speed up validation'))
-        self.slpdb_cb.clicked.connect(self.use_slpdb)
-        self.slpdb_cb.setChecked(config.get('slp_validator_graphsearch_enabled', False))
-        grid.addWidget(self.slpdb_cb, 0, 0, 1, 3)
+        self.slp_gs_enable_cb = QCheckBox(_('Use Graph Search server (gs++) to speed up validation'))
+        self.slp_gs_enable_cb.clicked.connect(self.use_slp_gs)
+        self.slp_gs_enable_cb.setChecked(self.config.get('slp_validator_graphsearch_enabled', False))
+        grid.addWidget(self.slp_gs_enable_cb, 0, 0, 1, 3)
 
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel(_('Server') + ':'))
-        self.slp_server_host = QLineEdit()
-        self.slp_server_host.setFixedWidth(250)
-        self.slp_server_host.editingFinished.connect(lambda: weakSelf() and weakSelf().set_slp_server())
-        hbox.addWidget(self.slp_server_host)
+        self.slp_gs_server_host = QLineEdit()
+        self.slp_gs_server_host.setFixedWidth(250)
+        self.slp_gs_server_host.editingFinished.connect(lambda: weakSelf() and weakSelf().set_slp_server())
+        hbox.addWidget(self.slp_gs_server_host)
         hbox.addStretch(1)
         grid.addLayout(hbox, 1, 0)
 
-        self.slpdb_list_widget = SlpServeListWidget(self)
-        grid.addWidget(self.slpdb_list_widget, 2, 0, 1, 5)
+        self.slp_gs_list_widget = SlpGsServeListWidget(self)
+        grid.addWidget(self.slp_gs_list_widget, 2, 0, 1, 5)
         grid.addWidget(QLabel(_("Current Graph Search Jobs:")), 3, 0)
         self.slp_search_job_list_widget = SlpSearchJobListWidget(self)
         grid.addWidget(self.slp_search_job_list_widget, 4, 0, 1, 5)
@@ -680,12 +682,12 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.fill_in_proxy_settings()
         self.update()
 
-    def use_slpdb(self):
-        if self.slpdb_cb.isChecked():
+    def use_slp_gs(self):
+        if self.slp_gs_enable_cb.isChecked():
             self.config.set_key('slp_validator_graphsearch_enabled', True)
         else:
             self.config.set_key('slp_validator_graphsearch_enabled', False)
-        self.slpdb_list_widget.update()
+        self.slp_gs_list_widget.update()
 
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
@@ -770,8 +772,9 @@ class NetworkChoiceLayout(QObject, PrintError):
             msg = ''
         self.split_label.setText(msg)
         self.nodes_list_widget.update(self.network)
-        self.slpdb_list_widget.update()
-        self.slp_server_host.setText(self.network.slp_gs_host)
+        self.slp_gs_list_widget.update()
+        self.slp_gs_server_host.setText(self.network.slp_gs_host)
+        self.slp_gs_enable_cb.setChecked(self.config.get('slp_validator_graphsearch_enabled', False))
         self.slp_search_job_list_widget.update()
 
     def fill_in_proxy_settings(self):
@@ -863,12 +866,12 @@ class NetworkChoiceLayout(QObject, PrintError):
 
     def set_slp_server(self, server=None):
         if not server:
-            server = str(self.slp_server_host.text())
+            server = str(self.slp_gs_server_host.text())
         else:
-            self.slp_server_host.setText(server)
+            self.slp_gs_server_host.setText(server)
         self.network.slp_gs_host = server
         self.config.set_key('slp_gs_host', self.network.slp_gs_host)
-        self.slpdb_list_widget.update()
+        self.slp_gs_list_widget.update()
 
     def set_proxy(self):
         host, port, protocol, proxy, auto_connect = self.network.get_parameters()

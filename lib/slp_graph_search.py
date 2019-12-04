@@ -94,7 +94,8 @@ class SlpGraphSearchManager:
         self.search_thread = threading.Thread(target=self.mainloop, name=self.threadname+'/search', daemon=True)
         self.search_thread.start()
         
-        self.emit_ui_update = None #valjob_ref.network.slp_validation_fetch_signal.emit
+        self.data_totalizer = 0
+        self.emit_ui_update = None # valjob_ref.network.slp_validation_fetch_signal.emit
 
     def new_search(self, valjob_ref):
         """
@@ -149,7 +150,7 @@ class SlpGraphSearchManager:
                     if self.emit_ui_update is None and job.valjob.network.slp_validation_fetch_signal:
                         self.emit_ui_update = job.valjob.network.slp_validation_fetch_signal.emit
                     if self.emit_ui_update:
-                        self.emit_ui_update()
+                        self.emit_ui_update(self.data_totalizer)
         finally:
             print("[SLP Graph Search] Error: mainloop exited.", file=sys.stderr)
 
@@ -170,10 +171,11 @@ class SlpGraphSearchManager:
         with requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, stream=True, timeout=60) as r:
             for chunk in r.iter_content(chunk_size=None):
                 job.gs_response_size += len(chunk)
+                self.data_totalizer += len(chunk)
                 dat += chunk
                 t = time.clock()
                 if (t - time_last_updated) > 2 and self.emit_ui_update:
-                    self.emit_ui_update()
+                    self.emit_ui_update(self.data_totalizer)
                     time_last_updated = t
                 if not job.valjob.running:
                     job.set_failed('validation job stopped')

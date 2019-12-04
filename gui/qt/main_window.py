@@ -122,7 +122,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     alias_received_signal = pyqtSignal()
     cashaddr_toggled_signal = pyqtSignal()
     slp_validity_signal = pyqtSignal(object, object)
-    slp_validation_fetch_signal = pyqtSignal()
+    slp_validation_fetch_signal = pyqtSignal(int)
     history_updated_signal = pyqtSignal()
     labels_updated_signal = pyqtSignal() # note this signal occurs when an explicit update_labels() call happens. Interested GUIs should also listen for history_updated_signal as well which also indicates labels may have changed.
     on_timer_signal = pyqtSignal()  # functions wanting to be executed from timer_actions should connect to this signal, preferably via Qt.DirectConnection
@@ -451,10 +451,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         run_hook('close_wallet', self.wallet)
 
     _gs_option_shown = False
-    def slp_validation_fetch_slot(self):
+    _high_data_limit = 1048576 * 100 # 100 MB limit
+    _high_data_shown = False
+    def slp_validation_fetch_slot(self, total_bytes_received):
         key = 'slp_validator_graphsearch_enabled'
         key2 = 'slp_validator_gs_did_nag_once_even_if_was_false'
-        val, val2 = self.config.get(key), self.config.get(key2)
+        key3 = 'slp_never_warn_on_high_data'
+        val, val2, val3 = self.config.get(key), self.config.get(key2), self.config.get(key3)
         # This if conditional asks once app-wide. But it only asks if:
         # - "gs enabled" key has never been configured (is None)
         # *or*
@@ -470,7 +473,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 _("Speed up SLP validation using a Graph Search server?"),
                 title=_("SLP Graph Search"),
                 detail_text=_(
-                    "SLP validition can use a Graph Search server, making it"
+                    "SLP validation can use a Graph Search server, making it"
                     " blazingly fast. This does, however, mean that your client"
                     " contacts an additional server on the internet, sharing"
                     " with it a set of txids you are interested in knowing"
@@ -478,7 +481,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     "Some extremely privacy-minded users may opt out of this"
                     " speedy facility in light of that fact, and choose to use"
                     " the older, slower method of simply relying on the"
-                    " ElecronX servers to do SLP token validation.\n\n"
+                    " ElectronX servers to do SLP token validation.\n\n"
                     "If unsure what to answer now, you may always toggle this"
                     " facility on/off from the Network Dialog later."),
                 checkbox_text=_("Don't ask again"))
@@ -488,6 +491,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # set to actual False rather than None to indicate we never
                 # want to be asked.
                 self.config.set_key(key, False)
+        elif (val3 is None or val3 is False) \
+                and total_bytes_received >= ElectrumWindow._high_data_limit \
+                and not ElectrumWindow._high_data_shown:
+            ElectrumWindow._high_data_shown = True
+            res, neverask_chk = self.question(
+            _("SLP Graph Search has downloaded 100 MB in data and will continue to download data. Disabling Graph Search would slow down the amount of data you are downloading."),
+            title=_("High Data Usage"),
+            detail_text=_(
+                "SLP validation can use a Graph Search server, making it"
+                " blazingly fast. This does, however, mean that your client"
+                " uses additional data and bandwidth to download"
+                " all of the transactions it needs to validate your tokens.\n\n"
+                "Disabling Graph Search will reduce the speed of "
+                "If unsure what to answer now, you may always toggle this"
+                " facility on/off from the Network Dialog later."),
+            checkbox_text=_("Don't ask again"))
+            # TODO: This message should also be displayed based on ElectrumX validation data downloaded
+            if res is False:
+                self.config.set_key(key, False)
+            if neverask_chk:
+                # set to actual False rather than None to indicate we never
+                # want to be asked.
+                self.config.set_key(key3, True)
 
     def load_wallet(self):
         self.wallet.thread = TaskThread(self, self.on_error, name = self.wallet.diagnostic_name() + '/Wallet')

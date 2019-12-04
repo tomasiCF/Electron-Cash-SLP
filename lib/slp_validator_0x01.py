@@ -200,16 +200,22 @@ class GraphContext(PrintError):
         def fetch_hook(txids, val_job):
             l = []
             nonlocal gs_enable, gs_host, first_fetch_complete
-            if gs_enable and gs_host and self.graph_search_mgr:
-                if val_job.root_txid not in self.graph_search_mgr.search_jobs.keys() and not val_job.graph_search_job:
+            if gs_enable \
+                and gs_host \
+                and self.graph_search_mgr \
+                and val_job.root_txid not in self.graph_search_mgr.search_jobs.keys() \
+                and not val_job.graph_search_job:
                     search_job = self.graph_search_mgr.new_search(val_job)
                     val_job.graph_search_job = search_job if search_job else None
-            else:
-                gs_enable, gs_host = self.get_gs_config()
-                network.slp_gs_host = gs_host
+            elif not gs_enable and self.graph_search_mgr:
+                for job in self.graph_search_mgr.search_jobs.values():
+                    job.sched_cancel()
+
+            gs_enable, gs_host = self.get_gs_config()
+            network.slp_gs_host = gs_host
 
             if network.slp_validation_fetch_signal and not first_fetch_complete:
-                network.slp_validation_fetch_signal.emit()
+                network.slp_validation_fetch_signal.emit(0)
                 first_fetch_complete = True
 
             for txid in txids:
