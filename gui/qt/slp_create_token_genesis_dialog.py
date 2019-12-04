@@ -148,11 +148,6 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.token_pay_to_e = ButtonsLineEdit()
         self.token_pay_to_e.setFixedWidth(560)
         grid.addWidget(self.token_pay_to_e, row, 1)
-        try:
-            slpAddr = self.wallet.get_unused_address().to_slpaddr()
-            self.token_pay_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
-        except:
-            pass
         row += 1
 
         self.token_fixed_supply_cb = cb = QCheckBox(_('Fixed Supply'))
@@ -186,6 +181,13 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         self.token_baton_to_e.setHidden(True)
         grid.addWidget(self.token_baton_to_e, row, 1)
         row += 1
+
+        try:
+            slpAddr = self.wallet.get_unused_address().to_slpaddr()
+            self.token_pay_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
+            self.token_baton_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
+        except Exception as e:
+            pass
 
         if nft_parent_id: 
             nft_parent_coin = get_nft_parent_coin(nft_parent_id, main_window)

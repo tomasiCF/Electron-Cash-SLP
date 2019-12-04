@@ -104,6 +104,13 @@ class SlpCreateTokenMintDialog(QDialog, MessageBoxMixin, PrintError):
         grid.addWidget(self.token_baton_to_e, row, 1)
         row += 1
 
+        try:
+            slpAddr = self.wallet.get_unused_address().to_slpaddr()
+            self.token_pay_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
+            self.token_baton_to_e.setText(Address.prefix_from_address_string(slpAddr) + ":" + slpAddr)
+        except Exception as e:
+            pass
+
         self.token_fixed_supply_cb = cb = QCheckBox(_('Permanently end issuance'))
         self.token_fixed_supply_cb.setChecked(False)
         grid.addWidget(self.token_fixed_supply_cb, row, 0)
