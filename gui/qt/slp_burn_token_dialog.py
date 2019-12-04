@@ -327,7 +327,7 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                         pass
                 if slp_msg:
                     total_burn_amt -= sum(slp_msg.op_return_fields['token_output'])
-                if total_burn_amt != burn_amt:
+                if total_burn_amt > burn_amt:
                     if slp_msg:
                         self.show_message(_("Amount burned in transaction does not match the amount specified."))
                     else:
