@@ -620,8 +620,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             hbox.addStretch()
 
     def set_slp_token_id(self, token_id):
-        self.slp_info['token_id_hex'] = token_id
-        self.slp_token_id_label.setText(_("Token ID: ") + self.slp_info['token_id_hex'])
+        if self.slp_info and self.slp_info['type'] == "GENESIS":
+            self.slp_info['token_id_hex'] = token_id
+            self.slp_token_id_label.setText(_("Token ID: ") + token_id)
 
     def update_io(self):
         i_text = self.i_text
