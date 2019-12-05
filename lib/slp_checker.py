@@ -98,8 +98,8 @@ class SlpTransactionChecker:
                             total_burn += coin['token_value']
                             continue
                     except KeyError:
-                        raise MissingCoinToBeBurned('Transaction is missing SLP required inputs that were' \
-                                                        + ' for this burn transaction.')
+                        raise MissingCoinToBeBurned('Transaction is missing required SLP inputs that were' \
+                                                        + ' intended to be burned in this transaction.')
                     if total_burn != amt_to_burn:
                         print_error("Burn failed since specified burn amount does not match transaction")
                         raise InvalidBurnAmount('Burn failed since specified burn amount does not match transaction')
