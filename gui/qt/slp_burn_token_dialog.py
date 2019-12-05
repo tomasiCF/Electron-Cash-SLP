@@ -320,7 +320,9 @@ class SlpBurnTokenDialog(QDialog, MessageBoxMixin):
                     slp_txo = None
                     try:
                         for coin in slp_coins:
-                            if coin['prevout_hash'] == prev_out and coin['prevout_n'] == prev_n:
+                            if coin['prevout_hash'] == prev_out \
+                                and coin['prevout_n'] == prev_n \
+                                and coin['token_value'] != "MINT_BATON":
                                 selected_slp_coins.append(coin)
                                 total_burn_amt += coin['token_value']
                     except KeyError:
