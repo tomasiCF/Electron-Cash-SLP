@@ -94,7 +94,7 @@ class SlpTransactionChecker:
                 total_burn = 0
                 for coin in coins_to_burn:
                     try:
-                        if coin['is_in_txn']:
+                        if coin['is_in_txn'] and isinstance(coin['token_value'], int):
                             total_burn += coin['token_value']
                             continue
                     except KeyError:
