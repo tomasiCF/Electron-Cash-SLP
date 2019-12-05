@@ -87,7 +87,7 @@ class SlpTransactionChecker:
                     if not is_burn_allowed:
                         print_error("SLP check failed for non-SLP transaction" \
                                         + " which contains SLP inputs.")
-                        raise NonSlpTransactionHasSlpInputs('Non-SLP transaction contains unspecified SLP inputs.')
+                        raise NonSlpTransactionHasSlpInputs('Transaction contains unspecified SLP inputs (Use the Burn Tool if you want to burn tokens).')
 
             # Check that all coins within 'coins_to_burn' are included in burn transaction
             if coins_to_burn:

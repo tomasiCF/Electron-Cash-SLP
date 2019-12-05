@@ -228,6 +228,12 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
         b.setDefault(True)
         hbox.addWidget(self.tok_doc_button)
 
+        if nft_parent_id:
+            self.import_burn_tx_file_button = EnterButton(_("Import file..."), self.do_process_from_file)
+            self.import_burn_tx_text_button = EnterButton(_("Import hex..."), self.do_process_from_text)
+            hbox.addWidget(self.import_burn_tx_file_button)
+            hbox.addWidget(self.import_burn_tx_text_button)
+
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
         hbox.addWidget(self.preview_button)
 
@@ -268,6 +274,88 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
             self.prepare_nft_parent(preview=True)
             return
         self.create_token(preview=True)
+
+    def read_tx_from_file(self, *, fileName = None):
+        fileName = fileName or self.getOpenFileName(_("Select your transaction file"), "*.txn")
+        if not fileName:
+            return
+        try:
+            with open(fileName, "r", encoding='utf-8') as f:
+                file_content = f.read()
+            file_content = file_content.strip()
+            tx_file_dict = json.loads(str(file_content))
+        except (ValueError, IOError, OSError, json.decoder.JSONDecodeError) as reason:
+            self.show_critical(_("Electron Cash was unable to open your transaction file") + "\n" + str(reason), title=_("Unable to read file or no transaction found"))
+            return
+        tx = self.tx_from_text(file_content)
+        return tx
+
+    def do_process_from_file(self, *, fileName = None):
+        from electroncash.transaction import SerializationError
+        try:
+            tx = self.read_tx_from_file(fileName=fileName)
+            if tx:
+                self.create_token(preview=True, multisig_tx_to_sign=tx)
+        except SerializationError as e:
+            self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
+
+    def tx_from_text(self, txt):
+        from electroncash.transaction import tx_from_str
+        try:
+            txt_tx = tx_from_str(txt)
+            tx = Transaction(txt_tx, sign_schnorr=self.wallet.is_schnorr_enabled())
+            tx.deserialize()
+            if self.wallet:
+                my_coins = self.wallet.get_spendable_coins(None, self.main_window.config)
+                my_outpoints = [vin['prevout_hash'] + ':' + str(vin['prevout_n']) for vin in my_coins]
+                for i, txin in enumerate(tx.inputs()):
+                    outpoint = txin['prevout_hash'] + ':' + str(txin['prevout_n'])
+                    if outpoint in my_outpoints:
+                        my_index = my_outpoints.index(outpoint)
+                        tx._inputs[i]['value'] = my_coins[my_index]['value']
+            return tx
+        except:
+            traceback.print_exc(file=sys.stderr)
+            self.show_critical(_("Electron Cash was unable to parse your transaction"))
+            return    
+    
+    def do_process_from_text(self):
+        from electroncash.transaction import SerializationError
+        text = text_dialog(self, _('Input raw transaction'), _("Transaction:"), _("Load transaction"))
+        if not text:
+            return
+        try:
+            tx = self.tx_from_text(text)
+            if tx:
+                self.create_token(preview=True, multisig_tx_to_sign=tx)
+        except SerializationError as e:
+            self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
+
+    # custom wrappers for getOpenFileName and getSaveFileName, that remember the path selected by the user
+    def getOpenFileName(self, title, filter = ""):
+        return __class__.static_getOpenFileName(title=title, filter=filter, config=self.main_window.config, parent=self)
+
+    def getSaveFileName(self, title, filename, filter = ""):
+        return __class__.static_getSaveFileName(title=title, filename=filename, filter=filter, config=self.main_window.config, parent=self)
+
+    @staticmethod
+    def static_getOpenFileName(*, title, parent=None, config=None, filter=""):
+        userdir = os.path.expanduser('~')
+        directory = config.get('io_dir', userdir) if config else userdir
+        fileName, __ = QFileDialog.getOpenFileName(parent, title, directory, filter)
+        if fileName and directory != os.path.dirname(fileName) and config:
+            config.set_key('io_dir', os.path.dirname(fileName), True)
+        return fileName
+
+    @staticmethod
+    def static_getSaveFileName(*, title, filename, parent=None, config=None, filter=""):
+        userdir = os.path.expanduser('~')
+        directory = config.get('io_dir', userdir) if config else userdir
+        path = os.path.join( directory, filename )
+        fileName, __ = QFileDialog.getSaveFileName(parent, title, path, filter)
+        if fileName and directory != os.path.dirname(fileName) and config:
+            config.set_key('io_dir', os.path.dirname(fileName), True)
+        return fileName
 
     def hash_file(self):
         options = QFileDialog.Options()
@@ -311,7 +399,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         self.show_message("An initial preparation transaction is required before a new NFT can be created. This ensures only 1 parent token is burned in the NFT Genesis transaction.\n\nAfter this is transaction is broadcast you can proceed to fill out the NFT details and then click 'Create NFT'.")
 
-        # IMPORTANT: set wallet.sedn_slpTokenId to None to guard tokens during this transaction
+        # IMPORTANT: set wallet.send_slpTokenId to None to guard tokens during this transaction
         self.main_window.token_type_combo.setCurrentIndex(0)
         assert self.main_window.slp_token_id == None
 
@@ -418,7 +506,7 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
                     
         self.sign_tx_with_password(tx, sign_done, password)
 
-    def create_token(self, preview=False):
+    def create_token(self, preview=False, multisig_tx_to_sign=None):
         token_name = self.token_name_e.text() if self.token_name_e.text() != '' else None
         ticker = self.token_ticker_e.text() if self.token_ticker_e.text() != '' else None
         token_document_url = self.token_url_e.text() if self.token_url_e.text() != '' else None
@@ -478,7 +566,28 @@ class SlpCreateTokenGenesisDialog(QDialog, MessageBoxMixin):
 
         try:
             selected_coin = None
-            if self.nft_parent_id:
+            if self.nft_parent_id and multisig_tx_to_sign:
+                tx = multisig_tx_to_sign
+                parent_txo_hash = multisig_tx_to_sign.inputs()[0]['prevout_hash']
+                parent_txo_n = multisig_tx_to_sign.inputs()[0]['prevout_n']
+                slp_coins = self.wallet.get_slp_utxos(
+                                self.nft_parent_id,
+                                domain=None,
+                                exclude_frozen=True,
+                                confirmed_only=self.main_window.config.get('confirmed_only', False),
+                                slp_include_invalid=False,
+                                slp_include_baton=False
+                                )
+                try:
+                    for coin in slp_coins:
+                        if coin['prevout_hash'] == parent_txo_hash \
+                            and coin['prevout_n'] == parent_txo_n \
+                            and coin['token_value'] != "MINT_BATON":
+                            selected_coin = coin
+                            # total_burn_amt += coin['token_value']
+                except KeyError:
+                    pass
+            elif self.nft_parent_id:
                 selected_coin = get_nft_parent_coin(self.nft_parent_id, self.main_window)
                 if selected_coin:
                     tx = self.main_window.wallet.make_unsigned_transaction(coins,
