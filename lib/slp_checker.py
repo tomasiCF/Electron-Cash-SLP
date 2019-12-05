@@ -126,7 +126,8 @@ class SlpTransactionChecker:
                         except KeyError:
                             pass
                         else:
-                            input_slp_qty += slp_input['qty']
+                            if isinstance(slp_input['qty'], int):
+                                input_slp_qty += slp_input['qty']
                             if slp_input['token_id'] != tid:
                                 print_error("SLP check failed for SEND due to incorrect" \
                                                 + " tokenId in txn input")
