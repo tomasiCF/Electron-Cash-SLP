@@ -121,8 +121,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     network_signal = pyqtSignal(str, object)
     alias_received_signal = pyqtSignal()
     cashaddr_toggled_signal = pyqtSignal()
-    slp_validity_signal = pyqtSignal(object, object)
-    slp_validation_fetch_signal = pyqtSignal(int)
     history_updated_signal = pyqtSignal()
     labels_updated_signal = pyqtSignal() # note this signal occurs when an explicit update_labels() call happens. Interested GUIs should also listen for history_updated_signal as well which also indicates labels may have changed.
     on_timer_signal = pyqtSignal()  # functions wanting to be executed from timer_actions should connect to this signal, preferably via Qt.DirectConnection
@@ -141,8 +139,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.wallet.use_change = True
             self.wallet.storage.put('use_change', self.wallet.use_change)
         self.network = gui_object.daemon.network
-        self.network.slp_validity_signal = self.slp_validity_signal
-        self.network.slp_validation_fetch_signal = self.slp_validation_fetch_signal
+        self.network.slp_validity_signal = self.gui_object.slp_validity_signal
+        self.network.slp_validation_fetch_signal = self.gui_object.slp_validation_fetch_signal
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
         self.contacts = wallet.contacts
@@ -262,7 +260,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.network.register_callback(self.on_history, ['on_history'])
             self.new_fx_quotes_signal.connect(self.on_fx_quotes)
             self.new_fx_history_signal.connect(self.on_fx_history)
-            self.slp_validation_fetch_signal.connect(self.slp_validation_fetch_slot, Qt.QueuedConnection)
+            self.gui_object.slp_validation_fetch_signal.connect(self.slp_validation_fetch_slot, Qt.QueuedConnection)
 
         gui_object.timer.timeout.connect(self.timer_actions)
         self.fetch_alias()
@@ -517,8 +515,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def load_wallet(self):
         self.wallet.thread = TaskThread(self, self.on_error, name = self.wallet.diagnostic_name() + '/Wallet')
-        self.wallet.ui_emit_validity_updated = self.slp_validity_signal.emit
-        self.wallet.ui_emit_validation_fetch = self.slp_validation_fetch_signal.emit
+        self.wallet.ui_emit_validity_updated = self.gui_object.slp_validity_signal.emit
+        self.wallet.ui_emit_validation_fetch = self.gui_object.slp_validation_fetch_signal.emit
         self.update_recently_visited(self.wallet.storage.path)
         # address used to create a dummy transaction and estimate transaction fee
         self.history_list.update()

@@ -51,7 +51,7 @@ class SlpMgt(MyTreeWidget):
 
     def __init__(self, parent):
         MyTreeWidget.__init__(self, parent, self.create_menu, [_('Token ID'), _('Token Name'), _('Dec.'),_('Balance'),_('Mint Baton'), _('Token Type')], 0, [0], deferred_updates=True)
-        self.slp_validity_signal = parent.slp_validity_signal
+        self.slp_validity_signal = parent.gui_object.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
