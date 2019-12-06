@@ -147,6 +147,7 @@ Electron Cash - SLP Token Edition
 - Patched NFT1 message parser for spec conformance based on differential testing results
 - Added "paytomany_slp" command to CLI for multi-output SLP sends
 - Added SLP token output and metadata descriptions in the transaction dialog
+- Added Satochip hardware wallet support (on linux also requires running pcscd daemon)
 - Remove auto-switching address format to SLP format when clicking between tabs
 - Ignore case in seed phrase validation when restoring wallet from seed
 - Various other bug fixes and improvements ported from main Electron Cash

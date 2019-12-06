@@ -87,19 +87,19 @@ class SlpTransactionChecker:
                     if not is_burn_allowed:
                         print_error("SLP check failed for non-SLP transaction" \
                                         + " which contains SLP inputs.")
-                        raise NonSlpTransactionHasSlpInputs('Non-SLP transaction contains unspecified SLP inputs.')
+                        raise NonSlpTransactionHasSlpInputs('Transaction contains unspecified SLP inputs (Use the Burn Tool if you want to burn tokens).')
 
             # Check that all coins within 'coins_to_burn' are included in burn transaction
             if coins_to_burn:
                 total_burn = 0
                 for coin in coins_to_burn:
                     try:
-                        if coin['is_in_txn']:
+                        if coin['is_in_txn'] and isinstance(coin['token_value'], int):
                             total_burn += coin['token_value']
                             continue
                     except KeyError:
-                        raise MissingCoinToBeBurned('Transaction is missing SLP required inputs that were' \
-                                                        + ' for this burn transaction.')
+                        raise MissingCoinToBeBurned('Transaction is missing required SLP inputs that were' \
+                                                        + ' intended to be burned in this transaction.')
                     if total_burn != amt_to_burn:
                         print_error("Burn failed since specified burn amount does not match transaction")
                         raise InvalidBurnAmount('Burn failed since specified burn amount does not match transaction')
@@ -126,7 +126,8 @@ class SlpTransactionChecker:
                         except KeyError:
                             pass
                         else:
-                            input_slp_qty += slp_input['qty']
+                            if isinstance(slp_input['qty'], int):
+                                input_slp_qty += slp_input['qty']
                             if slp_input['token_id'] != tid:
                                 print_error("SLP check failed for SEND due to incorrect" \
                                                 + " tokenId in txn input")

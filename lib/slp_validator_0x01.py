@@ -172,8 +172,6 @@ class GraphContext(PrintError):
         defined before this is called.
         """
         limit_dls, limit_depth, proxy_enable = self.get_validation_config()
-        gs_enable, gs_host = self.get_gs_config()
-        network.slp_gs_host = gs_host
 
         try:
             graph, job_mgr = self.setup_job(tx, reset=reset)
@@ -199,7 +197,12 @@ class GraphContext(PrintError):
 
         def fetch_hook(txids, val_job):
             l = []
-            nonlocal gs_enable, gs_host, first_fetch_complete
+
+            gs_enable, gs_host = self.get_gs_config()
+            network.slp_gs_host = gs_host
+
+            nonlocal first_fetch_complete
+
             if gs_enable \
                 and gs_host \
                 and self.graph_search_mgr \
@@ -210,9 +213,6 @@ class GraphContext(PrintError):
             elif not gs_enable and self.graph_search_mgr:
                 for job in self.graph_search_mgr.search_jobs.values():
                     job.sched_cancel()
-
-            gs_enable, gs_host = self.get_gs_config()
-            network.slp_gs_host = gs_host
 
             if network.slp_validation_fetch_signal and not first_fetch_complete:
                 network.slp_validation_fetch_signal.emit(0)
