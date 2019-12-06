@@ -75,6 +75,14 @@ class ElectrumGui(QObject, PrintError):
     update_available_signal = pyqtSignal(bool)
     shutdown_signal = pyqtSignal()  # signal for requesting an app-wide full shutdown
 
+    # These live here because they need to persist across all wallets
+    # when a wallet is closed the connection will be auto-cleaned for that wallet.
+    # The network object and the validator need to keep references to these
+    # so we let them live here, in this singleton object.
+    slp_validity_signal = pyqtSignal(object, object)
+    slp_validation_fetch_signal = pyqtSignal(int)
+
+
     instance = None
 
     def __init__(self, config, daemon, plugins):

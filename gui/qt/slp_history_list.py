@@ -71,7 +71,7 @@ class HistoryList(MyTreeWidget):
 
     def __init__(self, parent=None):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], 4, deferred_updates=True)
-        self.slp_validity_signal = parent.slp_validity_signal
+        self.slp_validity_signal = parent.gui_object.slp_validity_signal
         self.slp_validity_signal.connect(self.slp_validity_slot, Qt.QueuedConnection)
         self.editable_columns=[]
         self.refresh_headers()
