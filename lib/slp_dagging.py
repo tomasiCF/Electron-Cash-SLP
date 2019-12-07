@@ -252,6 +252,7 @@ class ValidationJob:
                 validity = 0
             if self.graph_search_job is not None \
                 and (not isinstance(retval, bool) or validity > 1) \
+                and retval != 'stopped' \
                 and self.graph_search_job.job_complete \
                 and self.graph_search_job.search_success:
                 with self._statelock:
