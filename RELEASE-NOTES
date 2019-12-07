@@ -151,3 +151,9 @@ Electron Cash - SLP Token Edition
 - Remove auto-switching address format to SLP format when clicking between tabs
 - Ignore case in seed phrase validation when restoring wallet from seed
 - Various other bug fixes and improvements ported from main Electron Cash
+
+3.6.1 Updates
+-----
+- Fixed issues caused by shared pyqtSignal in graph search network dialog
+- Fixed issue with stopping and restarting graph search on closing wallets
+- Ported fix for occational issue related to Satochip hardware wallet
