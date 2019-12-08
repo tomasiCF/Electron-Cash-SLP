@@ -55,7 +55,9 @@ from .transaction import Transaction
 
 
 REQUEST_HEADERS = {'Accept': 'application/bitcoincash-paymentrequest', 'User-Agent': 'Electron-Cash'}
+REQUEST_HEADERS_SLP = {'Accept': 'application/simpleledger-paymentrequest', 'User-Agent': 'Electron-Cash'}
 ACK_HEADERS = {'Content-Type':'application/bitcoincash-payment','Accept':'application/bitcoincash-paymentack','User-Agent':'Electron-Cash'}
+ACK_HEADERS_SLP = {'Content-Type':'application/simpleledger-payment','Accept':'application/simpleledger-paymentack','User-Agent':'Electron-Cash'}
 
 ca_path = requests.certs.where()
 ca_list = None
@@ -94,7 +96,7 @@ def get_payment_request(url):
                 response.raise_for_status()
                 # Guard against `bitcoincash:`-URIs with invalid payment request URLs
                 if "Content-Type" not in response.headers \
-                or response.headers["Content-Type"] != "application/bitcoincash-paymentrequest":
+                or not response.headers["Content-Type"] in ["application/bitcoincash-paymentrequest", "application/simpleledger-paymentrequest"]:
                     error = "payment URL not pointing to a bitcoincash payment request handling server"
                 else:
                     data = response.content
