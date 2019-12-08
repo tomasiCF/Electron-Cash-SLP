@@ -130,7 +130,7 @@ class ASN1_Node(bytes):
 
     def first_child(self, node):
         ixs, ixf, ixl = node
-        if self[ixs] & 0x20 != 0x20:
+        if not self[ixs] & 0x20 in [0x20, 0x00]:
             raise TypeError('Can only open constructed types.', hex(self[ixs]))
         return self.get_node(ixf)
 

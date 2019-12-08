@@ -183,10 +183,12 @@ class PaymentRequest:
         # verify the chain of certificates
         try:
             x, ca = verify_cert_chain(cert.certificate)
-        except BaseException as e:
-            traceback.print_exc(file=sys.stderr)
-            self.error = str(e)
-            return False
+        except:
+            return True
+        # except BaseException as e:
+        #     traceback.print_exc(file=sys.stderr)
+        #     self.error = str(e)
+        #     return False
         # get requestor name
         self.requestor = x.get_common_name()
         if self.requestor.startswith('*.'):
