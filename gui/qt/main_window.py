@@ -494,17 +494,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 and not ElectrumWindow._high_data_shown:
             ElectrumWindow._high_data_shown = True
             res, neverask_chk = self.question(
-            _("SLP Graph Search has downloaded 100 MB in data and will continue to download data. Disabling Graph Search would slow down the amount of data you are downloading."),
-            title=_("High Data Usage"),
-            detail_text=_(
-                "SLP validation can use a Graph Search server, making it"
-                " blazingly fast. This does, however, mean that your client"
-                " uses additional data and bandwidth to download"
-                " all of the transactions it needs to validate your tokens.\n\n"
-                "Disabling Graph Search will reduce the speed of "
-                "If unsure what to answer now, you may always toggle this"
-                " facility on/off from the Network Dialog later."),
-            checkbox_text=_("Don't ask again"))
+                _("SLP Graph Search has downloaded 100 MB in data and will continue to download data."
+                    "Disabling Graph Search would slow down the rate of downloading.\n\n"
+                    "Continue using SLP Graph Search?"),
+                title=_("High Data Usage"),
+                detail_text=_(
+                    "SLP validation can use a Graph Search server, making it"
+                    " blazingly fast. This does, however, mean that your client"
+                    " uses additional data and bandwidth to download"
+                    " all of the transactions it needs to validate your tokens.\n\n"
+                    "Disabling Graph Search will reduce the speed of "
+                    "If unsure what to answer now, you may always toggle this"
+                    " facility on/off from the Network Dialog later."),
+                checkbox_text=_("Don't ask again")
+            )
             # TODO: This message should also be displayed based on ElectrumX validation data downloaded
             if res is False:
                 self.config.set_key(key, False)
