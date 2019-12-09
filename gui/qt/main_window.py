@@ -2944,7 +2944,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.not_enough_funds_slp = False
             self.not_enough_unfrozen_funds_slp = False
             for e in self.slp_send_tab_widgets:
+                try:
+                    e.setFrozen(False)
+                except:
+                    pass
                 e.setDisabled(False)
+            self.slp_max_button.setDisabled(False)
             self.slp_amount_e.setText('')
             self.token_type_combo.setCurrentIndex(0)
             self.on_slptok() # resets parts of the send tab to initial state
