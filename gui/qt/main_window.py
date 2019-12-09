@@ -2279,18 +2279,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if self.payto_e.is_multiline():
                     self.show_error(_("Too many receivers listed.\n\nCurrently this wallet only supports a single SLP token receiver."))
                     return
-                """ Guard against bad address encoding """
-                if not self.payto_e.payto_address:
-                    self.show_error(_("Receiver SLP address is missing."))
-                    return
-                """ Require SLPADDR prefix in 'Pay To' field. """
-                if networks.net.SLPADDR_PREFIX not in self.payto_e.address_string_for_slp_check:
-                    self.show_error(_("Address provided is not in SLP Address format.\n\nThe address should be encoded using 'simpleledger:' or 'slptest:' URI prefix."))
-                    return
                 amt = self.slp_amount_e.get_amount()
                 selected_slp_coins, slp_op_return_msg = SlpCoinChooser.select_coins(self.wallet, self.slp_token_id, amt, self.config)
-                if slp_op_return_msg:
-                    bch_outputs = [ slp_op_return_msg ]
+                if not self.payment_request:
+                    """ Guard against bad address encoding """
+                    if not self.payto_e.payto_address: # and not self.payto_e.text():
+                        self.show_error(_("Receiver SLP address is missing."))
+                        return
+                    """ Require SLPADDR prefix in 'Pay To' field. """
+                    if networks.net.SLPADDR_PREFIX not in self.payto_e.address_string_for_slp_check:
+                        self.show_error(_("Address provided is not in SLP Address format.\n\nThe address should be encoded using 'simpleledger:' or 'slptest:' URI prefix."))
+                        return
+                    if slp_op_return_msg:
+                        bch_outputs = [ slp_op_return_msg ]
             except OPReturnTooLarge as e:
                 self.show_error(str(e))
                 return
@@ -2309,11 +2310,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label = self.message_e.text()
 
         if self.payment_request:
-            if self.slp_token_id:
-                self.show_error('BIP-70 Payment requests are not yet working for SLP tokens.')
-                return
             isInvoice = True
             bch_outputs.extend(self.payment_request.get_outputs())
+            if self.slp_token_id:
+                bch_outputs[0] = slp_op_return_msg
         else:
             errors = self.payto_e.get_errors()
             if errors:
@@ -2482,7 +2482,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         try:
             tx = self.wallet.make_unsigned_transaction(coins, outputs, self.config, fee, mandatory_coins=slp_coins)
         except NotEnoughFunds:
-            self.show_message(_("Insufficient BCH balance"))
+            if self.payment_request:
+                self.show_message(_("Insufficient BCH balance.\n\nPayment request requires a balance of confirmed coins."))
+            else:
+                self.show_message(_("Insufficient BCH balance"))
             return
         except ExcessiveFee:
             self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
@@ -2720,16 +2723,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.show_send_tab()
         self.payto_e.cointext = None
         self.payto_e.is_pr = True
-        for e in [self.payto_e, self.amount_e, self.message_e]:
+        for e in [ self.payto_e, self.amount_e, self.message_e ]:
             e.setFrozen(True)
 
-        # Note: the below loop freezes all SLP widgets if present in the send
-        # tab; redo this when BIP70 supports SLP token sends. -Calin
         for e in self.slp_send_tab_widgets:
-            e.setDisabled(True)
+            try:
+                e.setFrozen(True)
+            except:
+                e.setDisabled(True)
 
-        if self.is_slp_wallet:
-            # force SLP token type to 0 for payment requests
+        if self.is_slp_wallet: 
+            # reset SLP token type to 0
             self.token_type_combo.setCurrentIndex(0)
 
         self.max_button.setDisabled(True)
@@ -2755,8 +2759,42 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payto_e.setGreen()
         else:
             self.payto_e.setExpired()
-        self.payto_e.setText(pr.get_requestor())
-        self.amount_e.setText(format_satoshis_plain(pr.get_amount(), self.decimal_point))
+        # SLP: Check to see if this is an SLP message
+        try:
+            slpmsg = slp.SlpMessage.parseSlpOutputScript(pr.outputs[0][1])
+        except:
+            self.payto_e.setText(pr.get_requestor())
+            self.amount_e.setText(format_satoshis_plain(pr.get_amount(), self.decimal_point))
+        else:
+            self.payto_e.setText(pr.get_slp_requestor())
+            tokenid = slpmsg.op_return_fields['token_id_hex']
+            amount = slpmsg.op_return_fields['token_output'][1]
+            index = 1
+            while index < self.token_type_combo.count():
+                self.token_type_combo.setCurrentIndex(index)
+                if self.token_type_combo.currentData() == tokenid:
+                    break
+                index+=1
+            if index == self.token_type_combo.count():
+                self.token_type_combo.setCurrentIndex(0)
+                from .slp_add_token_dialog import SlpAddTokenDialog
+                def add_token_callback():
+                    index = 1
+                    while index < self.token_type_combo.count():
+                        self.token_type_combo.setCurrentIndex(index)
+                        if self.token_type_combo.currentData() == tokenid:
+                            break
+                        index+=1
+                    self.slp_amount_e.setAmount(amount) # * pow(10, self.slp_amount_e.token_decimals))
+                    self.slp_amount_e.textEdited.emit("")
+                    self.slp_max_button.setDisabled(True)
+                SlpAddTokenDialog(self, token_id_hex = tokenid, token_name=None, allow_overwrite=None, add_callback=add_token_callback)
+                return
+            else:
+                self.slp_amount_e.setAmount(amount) # * pow(10, self.slp_amount_e.token_decimals))
+                self.slp_amount_e.textEdited.emit("")
+                self.slp_max_button.setDisabled(True)
+
         self.message_e.setText(pr.get_memo())
         # signal to set fee
         self.amount_e.textEdited.emit("")

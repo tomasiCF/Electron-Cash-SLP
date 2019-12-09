@@ -251,6 +251,12 @@ class PaymentRequest:
     def get_requestor(self):
         return self.requestor if self.requestor else self.get_address()
 
+    def get_slp_requestor(self):
+        o = self.outputs[1]
+        assert o[0] == TYPE_ADDRESS
+        addr = o[1].to_ui_string()
+        return self.requestor if self.requestor else addr
+
     def get_verify_status(self):
         return self.error if self.requestor else "No Signature"
 
