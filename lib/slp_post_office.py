@@ -6,7 +6,25 @@ import queue
 from .slp import SlpMessage, buildSendOpReturnOutput_V1
 from .slp_coinchooser import SlpCoinChooser
 
+from .transaction import Transaction
+
 class SlpPostOffice:
+
+    @staticmethod
+    def build_slp_txn(coins, slp_output, receiver_output, postoffice_output, change_output):
+        slp_msg = SlpMessage.parseSlpOutputScript(slp_output[1])
+        outputs = [slp_output, receiver_output]
+        if len(slp_msg.op_return_fields["token_output"]) - 1 == 2:
+            outputs.extend([postoffice_output])
+        elif len(slp_msg.op_return_fields["token_output"]) - 1 == 3:
+            outputs.extend([postoffice_output, change_output])
+        tx = Transaction.from_io(coins, outputs)
+        return tx
+
+    @staticmethod
+    def sign_slp_txn(tx):
+        #assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn, amt_to_burn=slp_amt_to_burn)
+        pass
 
     @staticmethod
     def build_slp_msg_for_rates(wallet, config, tokenId, po_data, send_amount):
@@ -43,7 +61,8 @@ class SlpPostOffice:
             total_coin_value = 0
             for coin in coins:
                 total_coin_value += coin["token_value"]
-            change_amt = total_coin_value - send_amount
+                wallet.add_input_info(coin)
+            change_amt = total_coin_value - send_amount - postage_amt
 
             if postage_amt > 0 and change_amt > 0:
                 output_dust_count = 3
@@ -63,18 +82,22 @@ class SlpPostOffice:
 
         if output_dust_count == 1:
             amts = [send_amount]
+            needs_postage = False
         elif output_dust_count == 2 and postage_amt > 0:
             amts = [send_amount, postage_amt]
+            needs_postage = True
         elif output_dust_count == 2 and change_amt > 0:
             amts = [send_amount, change_amt]
+            needs_postage = False
         elif output_dust_count == 3:
             amts = [send_amount, postage_amt, change_amt]
+            needs_postage = True
         else:
             raise Exception("Unhandled exception")
 
         slp_output = buildSendOpReturnOutput_V1(tokenId, amts)
 
-        return coins, slp_output
+        return coins, slp_output, needs_postage
 
     @staticmethod
     def sign_inputs_for_po_server(tx, wallet):
