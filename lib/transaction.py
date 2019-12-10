@@ -980,11 +980,51 @@ class Transaction:
         print_error("is_complete", self.is_complete())
         self.raw = self.serialize()
 
+    def sign_acp(self, keypairs):
+        for i, txin in enumerate(self.inputs()):
+            pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
+            for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
+                if self.is_txin_complete(txin):
+                    # txin is complete
+                    break
+                if pubkey in keypairs:
+                    _pubkey = pubkey
+                    kname = 'pubkey'
+                elif x_pubkey in keypairs:
+                    _pubkey = x_pubkey
+                    kname = 'x_pubkey'
+                else:
+                    continue
+                print_error(f"adding signature for input#{i} sig#{j}; {kname}: {_pubkey} schnorr: {self._sign_schnorr}")
+                sec, compressed = keypairs.get(_pubkey)
+                self._sign_txin_acp(i, j, sec, compressed)
+        print_error("is_complete", self.is_complete())
+        self.raw = self.serialize()
+
     def _sign_txin(self, i, j, sec, compressed):
         '''Note: precondition is self._inputs is valid (ie: tx is already deserialized)'''
         pubkey = public_key_from_private_key(sec, compressed)
         # add signature
         nHashType = 0x00000041 # hardcoded, perhaps should be taken from unsigned input dict
+        pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType)))
+        if self._sign_schnorr:
+            sig = self._schnorr_sign(pubkey, sec, pre_hash)
+        else:
+            sig = self._ecdsa_sign(sec, pre_hash)
+        reason = []
+        if not self.verify_signature(bfh(pubkey), sig, pre_hash, reason=reason):
+            print_error(f"Signature verification failed for input#{i} sig#{j}, reason: {str(reason)}")
+            return None
+        txin = self._inputs[i]
+        txin['signatures'][j] = bh2u(sig + bytes((nHashType & 0xff,)))
+        txin['pubkeys'][j] = pubkey # needed for fd keys
+        return txin
+
+    def _sign_txin_acp(self, i, j, sec, compressed):
+        '''Note: precondition is self._inputs is valid (ie: tx is already deserialized)'''
+        pubkey = public_key_from_private_key(sec, compressed)
+        # add signature
+        nHashType = 0x000000c1 # hardcoded, perhaps should be taken from unsigned input dict
         pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType)))
         if self._sign_schnorr:
             sig = self._schnorr_sign(pubkey, sec, pre_hash)
