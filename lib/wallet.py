@@ -2514,7 +2514,7 @@ class Abstract_Wallet(PrintError):
                 info[addr] = index, sorted_xpubs, self.m if isinstance(self, Multisig_Wallet) else None, self.txin_type
         tx.output_info = info
 
-    def sign_transaction(self, tx, password):
+    def sign_transaction(self, tx, password, *, anyonecanpay=False):
         if self.is_watching_only():
             return
         # add input values for signing
@@ -2526,7 +2526,7 @@ class Abstract_Wallet(PrintError):
         for k in self.get_keystores():
             try:
                 if k.can_sign(tx):
-                    k.sign_transaction(tx, password)
+                    k.sign_transaction(tx, password, anyonecanpay=anyonecanpay)
             except UserCancelled:
                 continue
 

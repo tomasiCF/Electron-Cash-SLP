@@ -27,7 +27,7 @@ class SlpPostOffice:
         pass
 
     @staticmethod
-    def build_slp_msg_for_rates(wallet, config, tokenId, po_data, send_amount):
+    def calculate_postage_and_build_slp_msg(wallet, config, tokenId, po_data, send_amount):
 
         # determine the amount of postage to pay based on the token's rate and number of inputs we will sign
         weight = po_data["weight"]
@@ -54,7 +54,7 @@ class SlpPostOffice:
         while sats_diff_w_fee > 0:
             stamp_count += 1
             coins, _ = SlpCoinChooser.select_coins(wallet, tokenId, (send_amount + (rate * stamp_count)), config)
-            
+
             output_dust_count = 1
             slpmsg_output_size = slpmsg_output_min_size
             postage_amt = rate * stamp_count

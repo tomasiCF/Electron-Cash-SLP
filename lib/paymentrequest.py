@@ -296,8 +296,9 @@ class PaymentRequest:
         paymnt.memo = "Paid using Electron Cash"
         pm = paymnt.SerializeToString()
         payurl = urllib.parse.urlparse(pay_det.payment_url)
+        headers = ACK_HEADERS_SLP if "6a04534c5000" in raw_tx else ACK_HEADERS
         try:
-            r = requests.post(payurl.geturl(), data=pm, headers=ACK_HEADERS, verify=ca_path)
+            r = requests.post(payurl.geturl(), data=pm, headers=headers, verify=ca_path)
         except requests.exceptions.RequestException as e:
             return False, str(e)
         if r.status_code != 200:

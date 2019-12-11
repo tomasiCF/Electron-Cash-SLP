@@ -2497,7 +2497,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         slp_msg = slp.SlpMessage.parseSlpOutputScript(self.payment_request.outputs[0][1])
                         send_amount = slp_msg.op_return_fields["token_output"][1]
                         # TODO make sure there is only 1 output
-                        coins, slp_msg, needs_postage = SlpPostOffice.build_slp_msg_for_rates(self.wallet, self.config, self.slp_token_id, postage, send_amount)
+                        coins, slp_msg, needs_postage = SlpPostOffice.calculate_postage_and_build_slp_msg(self.wallet, self.config, self.slp_token_id, postage, send_amount)
                         change_output = (0, self.slp_get_change_address(), 546)
                         postoffice_output = (0, Address.from_slpaddr_string(postage["address"]), 546)
                         tx = SlpPostOffice.build_slp_txn(coins, slp_msg, outputs[1], postoffice_output, change_output)
@@ -2584,7 +2584,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     @protected
     def sign_tx(self, tx, callback, password, *, slp_coins_to_burn=None, slp_amt_to_burn=None, slp_needs_postage=False):
-        self.sign_tx_with_password(tx, callback, password, slp_coins_to_burn=slp_coins_to_burn, slp_amt_to_burn=slp_amt_to_burn, slp_needs_postage=False)
+        self.sign_tx_with_password(tx, callback, password, slp_coins_to_burn=slp_coins_to_burn, slp_amt_to_burn=slp_amt_to_burn, slp_needs_postage=slp_needs_postage)
 
     def sign_tx_with_password(self, tx, callback, password, *, slp_coins_to_burn=None, slp_amt_to_burn=None, slp_needs_postage=False):
         '''Sign the transaction in a separate thread.  When done, calls
@@ -2608,15 +2608,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             callback(False)
 
         if self.tx_external_keypairs:
-            if slp_needs_postage:
-                task = partial(Transaction.sign_acp, tx, self.tx_external_keypairs)
-            else:
-                task = partial(Transaction.sign, tx, self.tx_external_keypairs)
+            task = partial(Transaction.sign, tx, self.tx_external_keypairs, anyonecanpay=slp_needs_postage)
         else:
-            if slp_needs_postage:
-                task = partial(self.wallet.sign_transaction_acp, tx, password)
-            else:
-                task = partial(self.wallet.sign_transaction, tx, password)
+            task = partial(self.wallet.sign_transaction, tx, password, anyonecanpay=slp_needs_postage)
 
         WaitingDialog(self, _('Signing transaction...'), task,
                       on_signed, on_failed)

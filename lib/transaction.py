@@ -787,8 +787,10 @@ class Transaction:
 
     def serialize_preimage(self, i, nHashType=0x00000041, use_cache = False):
         """ See `.calc_common_sighash` for explanation of use_cache feature """
-        if (nHashType & 0xff) != 0x41:
+        if not (nHashType & 0xff) in [0x41, 0xc1]:
             raise ValueError("other hashtypes not supported; submit a PR to fix this!")
+
+        anyonecanpay = False if (nHashType & 0x80) > 0 else False
 
         nVersion = int_to_hex(self.version, 4)
         nHashType = int_to_hex(nHashType, 4)
@@ -806,7 +808,14 @@ class Transaction:
 
         hashPrevouts, hashSequence, hashOutputs = self.calc_common_sighash(use_cache = use_cache)
 
-        preimage = nVersion + bh2u(hashPrevouts) + bh2u(hashSequence) + outpoint + scriptCode + amount + nSequence + bh2u(hashOutputs) + nLocktime + nHashType
+        if anyonecanpay:
+            hashPrevouts = "0000000000000000000000000000000000000000000000000000000000000000"
+            hashSequence = "0000000000000000000000000000000000000000000000000000000000000000"
+        else:
+            hashPrevouts = bh2u(hashPrevouts)
+            hashSequence = bh2u(hashSequence)
+
+        preimage = nVersion + hashPrevouts + hashSequence + outpoint + scriptCode + amount + nSequence + bh2u(hashOutputs) + nLocktime + nHashType
         return preimage
 
     def serialize(self, estimate_size=False):
@@ -959,7 +968,7 @@ class Transaction:
         return sig
 
 
-    def sign(self, keypairs):
+    def sign(self, keypairs, *, anyonecanpay=False):
         for i, txin in enumerate(self.inputs()):
             pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
             for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
@@ -976,55 +985,17 @@ class Transaction:
                     continue
                 print_error(f"adding signature for input#{i} sig#{j}; {kname}: {_pubkey} schnorr: {self._sign_schnorr}")
                 sec, compressed = keypairs.get(_pubkey)
-                self._sign_txin(i, j, sec, compressed)
+                self._sign_txin(i, j, sec, compressed, anyonecanpay=anyonecanpay)
         print_error("is_complete", self.is_complete())
         self.raw = self.serialize()
 
-    def sign_acp(self, keypairs):
-        for i, txin in enumerate(self.inputs()):
-            pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
-            for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
-                if self.is_txin_complete(txin):
-                    # txin is complete
-                    break
-                if pubkey in keypairs:
-                    _pubkey = pubkey
-                    kname = 'pubkey'
-                elif x_pubkey in keypairs:
-                    _pubkey = x_pubkey
-                    kname = 'x_pubkey'
-                else:
-                    continue
-                print_error(f"adding signature for input#{i} sig#{j}; {kname}: {_pubkey} schnorr: {self._sign_schnorr}")
-                sec, compressed = keypairs.get(_pubkey)
-                self._sign_txin_acp(i, j, sec, compressed)
-        print_error("is_complete", self.is_complete())
-        self.raw = self.serialize()
-
-    def _sign_txin(self, i, j, sec, compressed):
+    def _sign_txin(self, i, j, sec, compressed, *, anyonecanpay=False):
         '''Note: precondition is self._inputs is valid (ie: tx is already deserialized)'''
         pubkey = public_key_from_private_key(sec, compressed)
         # add signature
         nHashType = 0x00000041 # hardcoded, perhaps should be taken from unsigned input dict
-        pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType)))
-        if self._sign_schnorr:
-            sig = self._schnorr_sign(pubkey, sec, pre_hash)
-        else:
-            sig = self._ecdsa_sign(sec, pre_hash)
-        reason = []
-        if not self.verify_signature(bfh(pubkey), sig, pre_hash, reason=reason):
-            print_error(f"Signature verification failed for input#{i} sig#{j}, reason: {str(reason)}")
-            return None
-        txin = self._inputs[i]
-        txin['signatures'][j] = bh2u(sig + bytes((nHashType & 0xff,)))
-        txin['pubkeys'][j] = pubkey # needed for fd keys
-        return txin
-
-    def _sign_txin_acp(self, i, j, sec, compressed):
-        '''Note: precondition is self._inputs is valid (ie: tx is already deserialized)'''
-        pubkey = public_key_from_private_key(sec, compressed)
-        # add signature
-        nHashType = 0x000000c1 # hardcoded, perhaps should be taken from unsigned input dict
+        if anyonecanpay:
+            nHashType += 0x00000080
         pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType)))
         if self._sign_schnorr:
             sig = self._schnorr_sign(pubkey, sec, pre_hash)
