@@ -790,7 +790,7 @@ class Transaction:
         if not (nHashType & 0xff) in [0x41, 0xc1]:
             raise ValueError("other hashtypes not supported; submit a PR to fix this!")
 
-        anyonecanpay = False if (nHashType & 0x80) > 0 else False
+        anyonecanpay = True if (nHashType & 0x80) > 0 else False
 
         nVersion = int_to_hex(self.version, 4)
         nHashType = int_to_hex(nHashType, 4)

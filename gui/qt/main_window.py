@@ -142,7 +142,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.network = gui_object.daemon.network
         self.network.slp_validity_signal = self.gui_object.slp_validity_signal
         self.network.slp_validation_fetch_signal = self.gui_object.slp_validation_fetch_signal
-        self.network.slp_post_office_client = self.gui_object.slp_post_office_client
+        #self.network.slp_post_office_client = self.gui_object.slp_post_office_client
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
         self.contacts = wallet.contacts
