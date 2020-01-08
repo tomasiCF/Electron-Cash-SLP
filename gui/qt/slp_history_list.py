@@ -58,7 +58,7 @@ class HistoryList(MyTreeWidget):
     def slp_validity_slot(self, txid, validity):
         # This gets pinged by the SLP validator when a validation job finishes.
         # (see lib/wallet.py : slp_check_validation() )
-        if validity in (2,3):
+        if validity in (2,3,4):
             # If validator found 'invalid', then we need to update balances,
             # which requires recalculating / refreshing the whole list.
             self.update()
@@ -101,7 +101,7 @@ class HistoryList(MyTreeWidget):
     def on_update(self):
         self.wallet = self.parent.wallet
         h = self.wallet.get_history(self.get_domain())
-        slp_history =self.wallet.get_slp_history()
+        slp_history =self.wallet.get_slp_history(domain=None, validities_considered=(None,0,1,2,3,4))
 
         item = self.currentItem()
         current_tx = item.data(0, Qt.UserRole) if item else None
@@ -168,7 +168,7 @@ class HistoryList(MyTreeWidget):
                 d1,d2 = deltastr.rsplit(dp,1)
                 deltastr += "\u2014"*(9-len(d2)) # \u2014 is long dash
 
-        if unktoken and validity in (None,0,1):
+        if unktoken and validity in (None,0,1,2,3,4):
             # If a token is not in our list of known token_ids, warn the user.
             icon=QIcon(":icons/warning.png")
             icontooltip = _("Unknown token ID")
