@@ -720,6 +720,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 if self.slp_outputs and i > 0 and len(self.slp_outputs) > i:
                     cursor.insertText(' '*(6), ext)
                     cursor.insertText(self.slp_outputs[i], slp)
+                    if self.slp_needs_postage and i == 2:
+                        cursor.insertText(' ', ext)
+                        cursor.insertText("POSTAGE", slp)
                     self.slp_legend.setHidden(False)
                 if self.slp_mint_baton_vout == i:
                     cursor.insertText(' '*(6), ext)
