@@ -2836,6 +2836,7 @@ class Abstract_Wallet(PrintError):
         do_addr_save = False
         with self.lock:
             self.transactions.clear(); self.unverified_tx.clear(); self.verified_tx.clear()
+            self._slp_txo.clear(); self.slpv1_validity.clear(); self.token_types.clear(); self.tx_tokinfo.clear()
             self.clear_history()
             if isinstance(self, Standard_Wallet):
                 # reset the address list to default too, just in case. New synchronizer will pick up the addresses again.
