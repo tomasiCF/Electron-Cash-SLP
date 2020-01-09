@@ -26,29 +26,31 @@ class SlpTransactionChecker:
                         raise Exception('Wallet has not downloaded this transaction')
                     else:
                         try:
-                            slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
+                            input_tx_slp_msg = slp.SlpMessage.parseSlpOutputScript(input_tx.outputs()[0][1])
                         except SlpInvalidOutputMessage:
                             pass
                         except SlpUnsupportedSlpTokenType:
                             raise UnsupportedSlpTokenType('Transaction contains an unsupported SLP' \
                                                             + ' input type')
                         else:
-                            if slp_msg.transaction_type == 'SEND':
-                                if prev_n >= len(slp_msg.op_return_fields['token_output']):
+                            if input_tx_slp_msg.transaction_type == 'SEND':
+                                if prev_n >= len(input_tx_slp_msg.op_return_fields['token_output']):
                                     continue
-                            elif slp_msg.transaction_type in ['GENESIS', 'MINT']:
-                                if slp_msg.op_return_fields['mint_baton_vout'] and \
-                                        prev_n not in [1, slp_msg.op_return_fields['mint_baton_vout']]:
+                                elif input_tx_slp_msg.op_return_fields['token_output'][prev_n] == 0:
                                     continue
-                                elif not slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
+                            elif input_tx_slp_msg.transaction_type in ['GENESIS', 'MINT']:
+                                if input_tx_slp_msg.op_return_fields['mint_baton_vout'] and \
+                                        prev_n not in [1, input_tx_slp_msg.op_return_fields['mint_baton_vout']]:
                                     continue
-                                elif slp_msg.transaction_type == 'MINT' and \
+                                elif not input_tx_slp_msg.op_return_fields['mint_baton_vout'] and prev_n != 1:
+                                    continue
+                                elif input_tx_slp_msg.transaction_type == 'MINT' and \
                                         prev_n == 1 and \
-                                        slp_msg.op_return_fields['additional_token_quantity'] == 0:
+                                        input_tx_slp_msg.op_return_fields['additional_token_quantity'] == 0:
                                     continue
-                                elif slp_msg.transaction_type == 'GENESIS' and \
+                                elif input_tx_slp_msg.transaction_type == 'GENESIS' and \
                                         prev_n == 1 and \
-                                        slp_msg.op_return_fields['initial_token_mint_quantity'] == 0:
+                                        input_tx_slp_msg.op_return_fields['initial_token_mint_quantity'] == 0:
                                     continue
                             try:
                                 with wallet.lock:
@@ -126,6 +128,8 @@ class SlpTransactionChecker:
                         except KeyError:
                             pass
                         else:
+                            if slp_input['qty'] == 0:
+                                continue
                             if isinstance(slp_input['qty'], int):
                                 input_slp_qty += slp_input['qty']
                             if slp_input['token_id'] != tid:
@@ -175,6 +179,8 @@ class SlpTransactionChecker:
                         except KeyError:
                             pass
                         else:
+                            if slp_input['qty'] == 0:
+                                continue
                             if slp_input['qty'] != 'MINT_BATON':
                                 print_error("Non-baton SLP input found in MINT")
                                 raise SlpNonMintInput('MINT transaction contains non-baton SLP input.')
@@ -186,7 +192,6 @@ class SlpTransactionChecker:
             elif slp_msg.transaction_type == 'GENESIS':
                 # raise an Exception if:
                 #   - [ ] NFT Child has quantity that is !== 1
-                #   - [ ] Allow 0x01 or 0x81 qty == 0
                 #   - [ ] NFT Child has minting baton vout specified
                 #   - [ ] NFT Child does not grant exception for burning a coin in vin=0
                 #   - [ ] NFT Child does not have a valid Type 0x81 coin in vin=0
@@ -200,6 +205,8 @@ class SlpTransactionChecker:
                         except KeyError:
                             pass
                         else:
+                            if slp_input['qty'] == 0:
+                                continue
                             is_burn_allowed = False
                             if coins_to_burn:
                                 for c in coins_to_burn:
