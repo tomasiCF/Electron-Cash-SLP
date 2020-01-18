@@ -63,6 +63,7 @@ from .amountedit import AmountEdit, BTCAmountEdit, MyLineEdit, BTCkBEdit, BTCSat
 from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
+from .cashsign_dialog import show_cashsign_verify
 from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
 
@@ -2784,6 +2785,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             self.payment_request_error_signal.emit()
 
+    def show_cashsign_verify(self, cashsign_dict):
+        d = show_cashsign_verify(cashsign_dict, self)
+
     def pay_to_URI(self, URI):
         self.do_clear()
         if not URI:
@@ -2791,7 +2795,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         try:
             out = web.parse_URI(URI, self.on_pr)
         except Exception as e:
-            if 'ms-python' in URI:  # this is needed for visual studio code debugger
+            if 'ms-python' in URI or 'file' in URI:  # this is needed for visual studio code debugger
                 return
             self.show_error(_('Invalid Address URI:') + '\n' + str(e))
             return
@@ -2809,6 +2813,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         message = out.get('message')
         op_return = out.get('op_return')
         op_return_raw = out.get('op_return_raw')
+        cashsign = out.get('cashsign')
+
+        # cashsign UI trigger
+        if cashsign:
+            self.show_cashsign_verify(cashsign)
+            return
 
         # use label as description (not BIP21 compliant)
         if label and not message:

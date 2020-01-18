@@ -152,6 +152,7 @@ def parse_URI(uri, on_pr=None):
         out['address'] = address
 
     amounts = dict()
+    cashsign = dict()
     for key in out:
         if 'amount' in key and key not in amounts:
             if '-' in out[key]:
@@ -171,6 +172,19 @@ def parse_URI(uri, on_pr=None):
                     amounts[tokenid] = { 'amount': amount.real, 'tokenflags': None }
             else:
                 amounts['bch'] = { 'amount': int(amount), 'tokenflags': None }
+        elif 'cashsign' in key:
+            if key == 'cashsign-data':
+                if not out[key].startswith('0x'):
+                    raise Exception("Cashsign data message must hex encoded and start with '0x'.")
+                cashsign['data'] = out[key].replace('0x', '')  # TODO: spec currently requires hex, but this may allow also base64 in future
+            elif key == 'cashsign-type':
+                cashsign['type'] = out[key]
+            elif key == 'cashsign-callbackurl':
+                cashsign['callbackurl'] = out[key]
+    if len(cashsign) > 0:
+        out['cashsign'] = cashsign
+        if address:
+            cashsign['address'] = address
     if 'amount' in out:
         out.pop('amount')
     if len(amounts) > 0:
