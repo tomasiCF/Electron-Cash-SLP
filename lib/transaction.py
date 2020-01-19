@@ -440,7 +440,7 @@ class Transaction:
         self._inputs = None
         self._outputs = None
         self.locktime = 0
-        self.version = 1
+        self.version = 2
         self._sign_schnorr = sign_schnorr
 
         # attribute used by HW wallets to tell the hw keystore about any outputs

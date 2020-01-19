@@ -2120,8 +2120,8 @@ class Abstract_Wallet(PrintError):
             return
 
         # Sort the inputs and outputs deterministically
-        if not mandatory_coins:
-            tx.BIP_LI01_sort()
+        # if not mandatory_coins:
+        #     tx.BIP_LI01_sort()
 
         # Timelock tx to current height.
         locktime = self.get_local_height()
