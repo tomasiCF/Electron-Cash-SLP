@@ -3597,7 +3597,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d.exec_()
 
     @protected
-    def do_sign(self, address, message, signature, password):
+    def do_sign(self, address, message, signature, password, *, callback=None):
         address  = address.text().strip()
         message = message.toPlainText().strip()
         try:
@@ -3623,6 +3623,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         def show_signed_message(sig):
             signature.setText(base64.b64encode(sig).decode('ascii'))
+            if callback:
+                callback()
         self.wallet.thread.add(task, on_success=show_signed_message)
 
     def do_verify(self, address, message, signature):

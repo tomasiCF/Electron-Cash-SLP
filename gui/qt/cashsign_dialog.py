@@ -99,7 +99,8 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
     BROADCAST_COOLDOWN_SECS = 5.0
 
     def __init__(self, cashsign_dict, parent): #, desc, prompt_if_unsaved, window_to_close_on_broadcast=None, *, slp_coins_to_burn=None, slp_amt_to_burn=None):
-        '''cashsign_dict parameter is a dict containing following CashSign protocol keys:
+        '''
+        cashsign_dict parameter is a dict containing following CashSign protocol keys:
         
              required keys:
                 - type  (can be "utf8" or "bytes")
@@ -133,25 +134,31 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
             vbox = QVBoxLayout()
             self.setLayout(vbox)
 
-            message_e = QTextEdit()
+            self.requester_e = requester_e = QLineEdit()
+            requester_e.setText(self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0])
+            vbox.addWidget(QLabel(_('External Requester:')))
+            vbox.addWidget(requester_e)
+
+            self.message_e = message_e = QTextEdit()
             message_e.setAcceptRichText(False)
             import codecs
             msg = codecs.decode(self.cs_data, "hex").decode('utf-8')
             message_e.setText(msg)
-            vbox.addWidget(QLabel(_('Message')))
+            vbox.addWidget(QLabel(_('Message Requester wants you to Sign:')))
             vbox.addWidget(message_e)
 
-            address_e = QLineEdit()
+            self.address_e = address_e = QLineEdit()
             address_e.setText(self.cs_address if self.cs_address else '')
-            vbox.addWidget(QLabel(_('Address')))
+            vbox.addWidget(QLabel(_('Address to sign the message with:')))
             vbox.addWidget(address_e)
 
-            signature_e = QTextEdit()
+            self.signature_e = signature_e = QTextEdit()
             signature_e.setAcceptRichText(False)
-            vbox.addWidget(QLabel(_('Signature')))
+            signature_e.setHidden(True)
+            #vbox.addWidget(QLabel(_('Your message Signature')))
             vbox.addWidget(signature_e)
 
-            self.sign_button = b = QPushButton(_("&Sign"))
+            self.sign_button = b = QPushButton(_("&Sign for Requester"))
             b.clicked.connect(self.sign)
             self.cancel_button = b = CloseButton(self)
 
@@ -472,8 +479,20 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
             cleanup()
 
         self.main_window.push_top_level_window(self)
-        # self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup,
-        #                             slp_coins_to_burn=self.slp_coins_to_burn, slp_amt_to_burn=self.slp_amt_to_burn)
+        if self.cs_type == "utf8":
+            def on_success():
+                import requests
+                def show_success(resp, *args, **kwargs):
+                    self.show_message('Signed message sent to ' + self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0])
+                try:
+                    requests.get(self.cs_callbackurl, params=(('address', self.cs_address), ('payload', self.signature_e.toPlainText())), hooks={'response': show_success})
+                except:
+                    self.show_message("Bad server connection")
+                    pass
+            self.main_window.do_sign(self.address_e, self.message_e, self.signature_e, callback=on_success)
+        elif self.cs_type == "transaction":
+            self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup) #,
+                                        #slp_coins_to_burn=self.slp_coins_to_burn, slp_amt_to_burn=self.slp_amt_to_burn)
 
     def save(self):
         name = 'signed_%s.txn' % (self.tx.txid()[0:8]) if self.tx.is_complete() else 'unsigned.txn'
