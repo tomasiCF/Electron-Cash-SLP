@@ -28,6 +28,7 @@ import copy
 import datetime
 import json
 import time
+import codecs
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -141,10 +142,9 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
 
             self.message_e = message_e = QTextEdit()
             message_e.setAcceptRichText(False)
-            import codecs
             msg = codecs.decode(self.cs_data, "hex").decode('utf-8')
             message_e.setText(msg)
-            vbox.addWidget(QLabel(_('Message Requester wants you to Sign:')))
+            vbox.addWidget(QLabel(_('The requester wants you to sign a message:')))
             vbox.addWidget(message_e)
 
             self.address_e = address_e = QLineEdit()
@@ -480,16 +480,18 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
 
         self.main_window.push_top_level_window(self)
         if self.cs_type == "utf8":
+            host = self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0]
             def on_success():
                 import requests
                 def show_success(resp, *args, **kwargs):
-                    self.show_message('Signed message sent to ' + self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0])
+                    self.show_message('Signed message sent to ' + host)
                 try:
                     requests.get(self.cs_callbackurl, params=(('address', self.cs_address), ('payload', self.signature_e.toPlainText())), hooks={'response': show_success})
                 except:
                     self.show_message("Bad server connection")
                     pass
-            self.main_window.do_sign(self.address_e, self.message_e, self.signature_e, callback=on_success)
+            if self.question(host + " wants you to sign the message:\n\n'" + codecs.decode(self.cs_data, "hex").decode('utf-8') + "'\n\nAre you sure you want to do this?"):
+                self.main_window.do_sign(self.address_e, self.message_e, self.signature_e, callback=on_success)
         elif self.cs_type == "transaction":
             self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup) #,
                                         #slp_coins_to_burn=self.slp_coins_to_burn, slp_amt_to_burn=self.slp_amt_to_burn)

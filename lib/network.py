@@ -856,7 +856,7 @@ class Network(util.DaemonThread):
                 callbacks = self.subscriptions.get(k, [])
 
             # update cache if it's a subscription
-            if method.endswith('.subscribe'):
+            if method and method.endswith('.subscribe'):
                 with self.interface_lock:
                     self.sub_cache[k] = response
             # Response is now in canonical form
