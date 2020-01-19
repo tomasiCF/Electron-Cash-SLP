@@ -486,6 +486,7 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
                 import requests
                 def show_success(resp, *args, **kwargs):
                     self.show_message('Signed message sent to ' + host)
+                    self.close()
                 try:
                     requests.get(self.cs_callbackurl, params=(('address', self.cs_address), ('payload', self.signature_e.toPlainText())), hooks={'response': show_success})
                 except:
@@ -494,13 +495,17 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
                 self.main_window.do_sign(self.address_e, self.message_e, self.signature_e, callback=on_success)
         elif self.cs_type == "txn":
             def cleanup():
-                self.main_window.pop_top_level_window(self)
+                try:
+                    self.main_window.pop_top_level_window(self)
+                except:
+                    pass
 
             def sign_done(success):
                 if success:
                     import requests
                     def show_success(resp, *args, **kwargs):
-                        self.show_message('Signed message sent to ' + host)
+                        self.show_message('Tokens purchased.')
+                        self.close()
                     try:
                         tx_hex = self.tx.serialize()
                         requests.get(self.cs_callbackurl, params={'payload': tx_hex}, hooks={'response': show_success})
@@ -542,85 +547,86 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
         if self._closed:
             # latent timer fire
             return
-        desc = self.desc
-        base_unit = self.main_window.base_unit()
-        format_amount = self.main_window.format_amount
-        tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
-        self.tx_height = height
-        desc = label or desc
-        size = self.tx.estimated_size()
+        if self.cs_type == "txn":
+            desc = self.desc
+            base_unit = self.main_window.base_unit()
+            format_amount = self.main_window.format_amount
+            tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
+            self.tx_height = height
+            desc = label or desc
+            size = self.tx.estimated_size()
 
-        # We enable the broadcast button IFF both of the following hold:
-        # 1. can_broadcast is true (tx has not been seen yet on the network
-        #    and is_complete).
-        # 2. The last time user hit "Broadcast" (and it was successful) was
-        #    more than BROADCAST_COOLDOWN_SECS ago. This second condition
-        #    implements a broadcast cooldown timer which immediately disables
-        #    the "Broadcast" button for a time after a successful broadcast.
-        #    This prevents the user from being able to spam the broadcast
-        #    button. See #1483.
-        self.broadcast_button.setEnabled(can_broadcast
-                                         and time.time() - self.last_broadcast_time
-                                                >= self.BROADCAST_COOLDOWN_SECS)
+            # We enable the broadcast button IFF both of the following hold:
+            # 1. can_broadcast is true (tx has not been seen yet on the network
+            #    and is_complete).
+            # 2. The last time user hit "Broadcast" (and it was successful) was
+            #    more than BROADCAST_COOLDOWN_SECS ago. This second condition
+            #    implements a broadcast cooldown timer which immediately disables
+            #    the "Broadcast" button for a time after a successful broadcast.
+            #    This prevents the user from being able to spam the broadcast
+            #    button. See #1483.
+            self.broadcast_button.setEnabled(can_broadcast
+                                            and time.time() - self.last_broadcast_time
+                                                    >= self.BROADCAST_COOLDOWN_SECS)
 
-        can_sign = not self.tx.is_complete() and \
-            (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs))
-        self.sign_button.setEnabled(can_sign)
-        self.tx_hash_e.setText(tx_hash or _('Unknown'))
-        if fee is None:
-            fee = self.try_calculate_fee()
-        if fee is None:
-            # see if we can grab the fee from the wallet internal cache which
-            # sometimes has fees for tx's not entirely 'is_mine'
-            if self.wallet and self.tx_hash:
-                fee = self.wallet.tx_fees.get(self.tx_hash)
-        if desc is None:
-            self.tx_desc.hide()
-        else:
-            self.tx_desc.setText(_("Description") + ': ' + desc)
-            self.tx_desc.show()
+            can_sign = not self.tx.is_complete() and \
+                (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs))
+            self.sign_button.setEnabled(can_sign)
+            self.tx_hash_e.setText(tx_hash or _('Unknown'))
+            if fee is None:
+                fee = self.try_calculate_fee()
+            if fee is None:
+                # see if we can grab the fee from the wallet internal cache which
+                # sometimes has fees for tx's not entirely 'is_mine'
+                if self.wallet and self.tx_hash:
+                    fee = self.wallet.tx_fees.get(self.tx_hash)
+            if desc is None:
+                self.tx_desc.hide()
+            else:
+                self.tx_desc.setText(_("Description") + ': ' + desc)
+                self.tx_desc.show()
 
-        if self.tx_height is not None and self.tx_height > 0 and tx_hash:
-            status_extra = '&nbsp;&nbsp;( ' + _("Mined in block") + f': <a href="tx:{tx_hash}">{self.tx_height}</a>' + ' )'
-        else:
-            status_extra = ''
+            if self.tx_height is not None and self.tx_height > 0 and tx_hash:
+                status_extra = '&nbsp;&nbsp;( ' + _("Mined in block") + f': <a href="tx:{tx_hash}">{self.tx_height}</a>' + ' )'
+            else:
+                status_extra = ''
 
-        self.status_label.setText(_('Status:') + ' ' + status + status_extra)
+            self.status_label.setText(_('Status:') + ' ' + status + status_extra)
 
-        if timestamp:
-            time_str = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
-            self.date_label.setText(_("Date: {}").format(time_str))
-            self.date_label.show()
-        elif exp_n:
-            text = '%d blocks'%(exp_n) if exp_n > 0 else _('unknown (low fee)')
-            self.date_label.setText(_('Expected confirmation time') + ': ' + text)
-            self.date_label.show()
-        else:
-            self.date_label.hide()
-        if amount is None:
-            amount_str = _("Transaction unrelated to your wallet")
-        elif amount > 0:
-            amount_str = _("Amount received:") + ' %s'% format_amount(amount) + ' ' + base_unit
-        else:
-            amount_str = _("Amount sent:") + ' %s'% format_amount(-amount) + ' ' + base_unit
-        size_str = _("Size: {size} bytes").format(size=size)
-        fee_str = _("Fee") + ": "
-        if fee is not None:
-            fee_str = _("Fee: {fee_amount} {fee_unit} ( {fee_rate} )")
-            fee_str = fee_str.format(fee_amount=format_amount(fee), fee_unit=base_unit,
-                                     fee_rate=self.main_window.format_fee_rate(fee/size*1000))
-            dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
-            if dusty_fee:
-                fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
-        elif self._dl_pct is not None:
-            fee_str = _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
-        else:
-            fee_str += _("unknown")
-        self.amount_label.setText(amount_str)
-        self.fee_label.setText(fee_str)
-        self.size_label.setText(size_str)
-        self.update_io()
-        run_hook('transaction_dialog_update', self)
+            if timestamp:
+                time_str = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
+                self.date_label.setText(_("Date: {}").format(time_str))
+                self.date_label.show()
+            elif exp_n:
+                text = '%d blocks'%(exp_n) if exp_n > 0 else _('unknown (low fee)')
+                self.date_label.setText(_('Expected confirmation time') + ': ' + text)
+                self.date_label.show()
+            else:
+                self.date_label.hide()
+            if amount is None:
+                amount_str = _("Transaction unrelated to your wallet")
+            elif amount > 0:
+                amount_str = _("Amount received:") + ' %s'% format_amount(amount) + ' ' + base_unit
+            else:
+                amount_str = _("Amount sent:") + ' %s'% format_amount(-amount) + ' ' + base_unit
+            size_str = _("Size: {size} bytes").format(size=size)
+            fee_str = _("Fee") + ": "
+            if fee is not None:
+                fee_str = _("Fee: {fee_amount} {fee_unit} ( {fee_rate} )")
+                fee_str = fee_str.format(fee_amount=format_amount(fee), fee_unit=base_unit,
+                                        fee_rate=self.main_window.format_fee_rate(fee/size*1000))
+                dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
+                if dusty_fee:
+                    fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
+            elif self._dl_pct is not None:
+                fee_str = _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
+            else:
+                fee_str += _("unknown")
+            self.amount_label.setText(amount_str)
+            self.fee_label.setText(fee_str)
+            self.size_label.setText(size_str)
+            self.update_io()
+            #run_hook('transaction_dialog_update', self)
 
     def is_fetch_input_data(self):
         return self.main_window.is_fetch_input_data()

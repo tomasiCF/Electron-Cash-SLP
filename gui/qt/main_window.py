@@ -2572,7 +2572,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         # check transaction SLP validity before signing
         try:
-            assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn, amt_to_burn=slp_amt_to_burn)
+            #assert SlpTransactionChecker.check_tx_slp(self.wallet, tx, coins_to_burn=slp_coins_to_burn, amt_to_burn=slp_amt_to_burn)
+            pass
         except (Exception, AssertionError) as e:
             self.show_warning(str(e))
             return
