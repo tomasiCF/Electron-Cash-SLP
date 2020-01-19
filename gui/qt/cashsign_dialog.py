@@ -29,6 +29,7 @@ import datetime
 import json
 import time
 import codecs
+import traceback
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -37,14 +38,15 @@ from PyQt5.QtWidgets import *
 from electroncash import web
 
 from electroncash.address import Address, PublicKey, ScriptOutput
-from electroncash.bitcoin import base_encode
+from electroncash.bitcoin import base_encode, TYPE_ADDRESS, TYPE_SCRIPT
+
 from electroncash.i18n import _, ngettext
 from electroncash.plugins import run_hook
 from electroncash.transaction import Transaction, InputValueMissing
 
 from electroncash.slp_checker import SlpTransactionChecker
 from electroncash.slp import SlpMessage
-from electroncash.util import bfh, Weak, PrintError
+from electroncash.util import bfh, Weak, PrintError, NotEnoughFunds, ExcessiveFee
 from .util import *
 
 from electroncash.util import format_satoshis_nofloat
@@ -104,7 +106,7 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
         cashsign_dict parameter is a dict containing following CashSign protocol keys:
         
              required keys:
-                - type  (can be "utf8" or "bytes")
+                - type  (can be "utf8" or "txn") -- "bytes" type is not implemented
                 - data  (currently must be hex starting with '0x')
             
             optional keys:
@@ -122,13 +124,14 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
         self.cs_type = cashsign_dict['type']
         self.cs_data = cashsign_dict['data']
         self.cs_callbackurl = cashsign_dict['callbackurl']
-        self.cs_address = cashsign_dict['address']
 
         self._closed = False
         self.prompt_if_unsaved = False # prompt_if_unsaved
         self.desc = None
 
         if self.cs_type == 'utf8':
+            self.cs_address = cashsign_dict['address']
+
             self.setMinimumWidth(750)
             self.setWindowTitle(_("CashSign Message"))
 
@@ -170,17 +173,31 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
             hbox.addStretch(1)
             hbox.addLayout(Buttons(*self.buttons))
             vbox.addLayout(hbox)
-        elif self.cs_type == 'transaction':
-            # TODO: This branch is left the same as transaction dialog for now
+        elif self.cs_type == 'txn':
+            _tx = Transaction(self.cs_data)
+            _tx.deserialize()
 
-            # Take a copy; it might get updated in the main window by
-            # e.g. the FX plugin.  If this happens during or after a long
-            # sign operation the signatures are lost.
-            self.tx = copy.deepcopy(tx)
-            self.tx.deserialize()
+            outputs = _tx.outputs()
+            outputs.append((TYPE_ADDRESS, self.wallet.get_unused_addresses()[0], 546))
 
-            self.prompt_if_unsaved = prompt_if_unsaved
-            self.window_to_close_on_broadcast = window_to_close_on_broadcast
+            coins = self.main_window.get_coins()
+            try:
+                self.tx = self.main_window.wallet.make_unsigned_transaction(coins, _tx.outputs(), self.main_window.config, None, None)
+                self.tx._inputs.insert(1, _tx.inputs()[1])
+                self.tx.locktime = 0
+            except NotEnoughFunds:
+                self.show_message(_("Insufficient funds"))
+                return
+            except ExcessiveFee:
+                self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
+                return
+            except BaseException as e:
+                traceback.print_exc(file=sys.stdout)
+                self.show_message(str(e))
+                return
+
+            self.prompt_if_unsaved = False #prompt_if_unsaved
+            self.window_to_close_on_broadcast = None #window_to_close_on_broadcast
 
             self.saved = False
             self.cashaddr_signal_slots = []
@@ -188,8 +205,8 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
             self.tx_hash = self.tx.txid_fast() if self.tx.raw and self.tx.is_complete() else None
             self.slp_token_id_label = None
             self.tx_height = None
-            self.slp_coins_to_burn = slp_coins_to_burn
-            self.slp_amt_to_burn = slp_amt_to_burn
+            self.slp_coins_to_burn = None #slp_coins_to_burn
+            self.slp_amt_to_burn = None #slp_amt_to_burn
             
             self.parse_slp_outputs()
 
@@ -247,7 +264,7 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
 
             self.add_slp_info(vbox)
 
-            self.sign_button = b = QPushButton(_("&Sign"))
+            self.sign_button = b = QPushButton(_("&Sign for Requester"))
             b.clicked.connect(self.sign)
 
             self.broadcast_button = b = QPushButton(_("&Broadcast"))
@@ -268,7 +285,7 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
                                           callback=lambda: weakSelfRef() and weakSelfRef().show_message(_("Transaction raw hex copied to clipboard.")))
 
             # Action buttons
-            self.buttons = [self.sign_button, self.broadcast_button, self.cancel_button]
+            self.buttons = [self.sign_button, self.cancel_button]
             # Transaction sharing buttons
             self.sharing_buttons = [self.copy_button, self.qr_button, self.save_button]
 
@@ -457,30 +474,14 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
         text = bfh(str(self.tx))
         text = base_encode(text, base=43)
         try:
-            self.main_window.show_qrcode(text, _('Transaction'), parent=self)
+            self.main_window.show_qrcode(text, _('CashSign Transaction'), parent=self)
         except Exception as e:
             self.show_message(str(e))
 
     def sign(self):
-        def cleanup():
-            self.main_window.pop_top_level_window(self)
-
-        def sign_done(success):
-            if success:
-                self.sign_button.setDisabled(True)
-                # self.prompt_if_unsaved = True
-                # self.saved = False
-                # self.set_slp_token_id(self.tx.txid_fast())
-
-                # TODO: make callback to requesting d-app
-                # self.cs_callbackurl
-
-            self.update()
-            cleanup()
-
         self.main_window.push_top_level_window(self)
+        host = self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0]
         if self.cs_type == "utf8":
-            host = self.cs_callbackurl.replace('https://', '').replace('http://', '').split('/')[0]
             def on_success():
                 import requests
                 def show_success(resp, *args, **kwargs):
@@ -488,13 +489,28 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
                 try:
                     requests.get(self.cs_callbackurl, params=(('address', self.cs_address), ('payload', self.signature_e.toPlainText())), hooks={'response': show_success})
                 except:
-                    self.show_message("Bad server connection")
-                    pass
+                    self.show_message("Server is offline")
             if self.question(host + " wants you to sign the message:\n\n'" + codecs.decode(self.cs_data, "hex").decode('utf-8') + "'\n\nAre you sure you want to do this?"):
                 self.main_window.do_sign(self.address_e, self.message_e, self.signature_e, callback=on_success)
-        elif self.cs_type == "transaction":
-            self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup) #,
-                                        #slp_coins_to_burn=self.slp_coins_to_burn, slp_amt_to_burn=self.slp_amt_to_burn)
+        elif self.cs_type == "txn":
+            def cleanup():
+                self.main_window.pop_top_level_window(self)
+
+            def sign_done(success):
+                if success:
+                    import requests
+                    def show_success(resp, *args, **kwargs):
+                        self.show_message('Signed message sent to ' + host)
+                    try:
+                        tx_hex = self.tx.serialize()
+                        requests.get(self.cs_callbackurl, params={'payload': tx_hex}, hooks={'response': show_success})
+                    except Exception as e:
+                        self.show_message("Server is offline" + e.message)
+                self.update()
+                cleanup()
+
+            if self.question("You are purchasing 21 Vires for 0.0001 BCH from "+ host +".\n\n Sign and continue?"):
+                self.main_window.sign_tx(self.tx, sign_done, on_pw_cancel=cleanup)
 
     def save(self):
         name = 'signed_%s.txn' % (self.tx.txid()[0:8]) if self.tx.is_complete() else 'unsigned.txn'
@@ -526,85 +542,85 @@ class CashSignDialog(QDialog, MessageBoxMixin, PrintError):
         if self._closed:
             # latent timer fire
             return
-        # desc = self.desc
-        # base_unit = self.main_window.base_unit()
-        # format_amount = self.main_window.format_amount
-        # tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
-        # self.tx_height = height
-        # desc = label or desc
-        # size = self.tx.estimated_size()
+        desc = self.desc
+        base_unit = self.main_window.base_unit()
+        format_amount = self.main_window.format_amount
+        tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
+        self.tx_height = height
+        desc = label or desc
+        size = self.tx.estimated_size()
 
-        # # We enable the broadcast button IFF both of the following hold:
-        # # 1. can_broadcast is true (tx has not been seen yet on the network
-        # #    and is_complete).
-        # # 2. The last time user hit "Broadcast" (and it was successful) was
-        # #    more than BROADCAST_COOLDOWN_SECS ago. This second condition
-        # #    implements a broadcast cooldown timer which immediately disables
-        # #    the "Broadcast" button for a time after a successful broadcast.
-        # #    This prevents the user from being able to spam the broadcast
-        # #    button. See #1483.
-        # self.broadcast_button.setEnabled(can_broadcast
-        #                                  and time.time() - self.last_broadcast_time
-        #                                         >= self.BROADCAST_COOLDOWN_SECS)
+        # We enable the broadcast button IFF both of the following hold:
+        # 1. can_broadcast is true (tx has not been seen yet on the network
+        #    and is_complete).
+        # 2. The last time user hit "Broadcast" (and it was successful) was
+        #    more than BROADCAST_COOLDOWN_SECS ago. This second condition
+        #    implements a broadcast cooldown timer which immediately disables
+        #    the "Broadcast" button for a time after a successful broadcast.
+        #    This prevents the user from being able to spam the broadcast
+        #    button. See #1483.
+        self.broadcast_button.setEnabled(can_broadcast
+                                         and time.time() - self.last_broadcast_time
+                                                >= self.BROADCAST_COOLDOWN_SECS)
 
-        # can_sign = not self.tx.is_complete() and \
-        #     (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs))
-        # self.sign_button.setEnabled(can_sign)
-        # self.tx_hash_e.setText(tx_hash or _('Unknown'))
-        # if fee is None:
-        #     fee = self.try_calculate_fee()
-        # if fee is None:
-        #     # see if we can grab the fee from the wallet internal cache which
-        #     # sometimes has fees for tx's not entirely 'is_mine'
-        #     if self.wallet and self.tx_hash:
-        #         fee = self.wallet.tx_fees.get(self.tx_hash)
-        # if desc is None:
-        #     self.tx_desc.hide()
-        # else:
-        #     self.tx_desc.setText(_("Description") + ': ' + desc)
-        #     self.tx_desc.show()
+        can_sign = not self.tx.is_complete() and \
+            (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs))
+        self.sign_button.setEnabled(can_sign)
+        self.tx_hash_e.setText(tx_hash or _('Unknown'))
+        if fee is None:
+            fee = self.try_calculate_fee()
+        if fee is None:
+            # see if we can grab the fee from the wallet internal cache which
+            # sometimes has fees for tx's not entirely 'is_mine'
+            if self.wallet and self.tx_hash:
+                fee = self.wallet.tx_fees.get(self.tx_hash)
+        if desc is None:
+            self.tx_desc.hide()
+        else:
+            self.tx_desc.setText(_("Description") + ': ' + desc)
+            self.tx_desc.show()
 
-        # if self.tx_height is not None and self.tx_height > 0 and tx_hash:
-        #     status_extra = '&nbsp;&nbsp;( ' + _("Mined in block") + f': <a href="tx:{tx_hash}">{self.tx_height}</a>' + ' )'
-        # else:
-        #     status_extra = ''
+        if self.tx_height is not None and self.tx_height > 0 and tx_hash:
+            status_extra = '&nbsp;&nbsp;( ' + _("Mined in block") + f': <a href="tx:{tx_hash}">{self.tx_height}</a>' + ' )'
+        else:
+            status_extra = ''
 
-        # self.status_label.setText(_('Status:') + ' ' + status + status_extra)
+        self.status_label.setText(_('Status:') + ' ' + status + status_extra)
 
-        # if timestamp:
-        #     time_str = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
-        #     self.date_label.setText(_("Date: {}").format(time_str))
-        #     self.date_label.show()
-        # elif exp_n:
-        #     text = '%d blocks'%(exp_n) if exp_n > 0 else _('unknown (low fee)')
-        #     self.date_label.setText(_('Expected confirmation time') + ': ' + text)
-        #     self.date_label.show()
-        # else:
-        #     self.date_label.hide()
-        # if amount is None:
-        #     amount_str = _("Transaction unrelated to your wallet")
-        # elif amount > 0:
-        #     amount_str = _("Amount received:") + ' %s'% format_amount(amount) + ' ' + base_unit
-        # else:
-        #     amount_str = _("Amount sent:") + ' %s'% format_amount(-amount) + ' ' + base_unit
-        # size_str = _("Size: {size} bytes").format(size=size)
-        # fee_str = _("Fee") + ": "
-        # if fee is not None:
-        #     fee_str = _("Fee: {fee_amount} {fee_unit} ( {fee_rate} )")
-        #     fee_str = fee_str.format(fee_amount=format_amount(fee), fee_unit=base_unit,
-        #                              fee_rate=self.main_window.format_fee_rate(fee/size*1000))
-        #     dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
-        #     if dusty_fee:
-        #         fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
-        # elif self._dl_pct is not None:
-        #     fee_str = _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
-        # else:
-        #     fee_str += _("unknown")
-        # self.amount_label.setText(amount_str)
-        # self.fee_label.setText(fee_str)
-        # self.size_label.setText(size_str)
-        # self.update_io()
-        # run_hook('transaction_dialog_update', self)
+        if timestamp:
+            time_str = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
+            self.date_label.setText(_("Date: {}").format(time_str))
+            self.date_label.show()
+        elif exp_n:
+            text = '%d blocks'%(exp_n) if exp_n > 0 else _('unknown (low fee)')
+            self.date_label.setText(_('Expected confirmation time') + ': ' + text)
+            self.date_label.show()
+        else:
+            self.date_label.hide()
+        if amount is None:
+            amount_str = _("Transaction unrelated to your wallet")
+        elif amount > 0:
+            amount_str = _("Amount received:") + ' %s'% format_amount(amount) + ' ' + base_unit
+        else:
+            amount_str = _("Amount sent:") + ' %s'% format_amount(-amount) + ' ' + base_unit
+        size_str = _("Size: {size} bytes").format(size=size)
+        fee_str = _("Fee") + ": "
+        if fee is not None:
+            fee_str = _("Fee: {fee_amount} {fee_unit} ( {fee_rate} )")
+            fee_str = fee_str.format(fee_amount=format_amount(fee), fee_unit=base_unit,
+                                     fee_rate=self.main_window.format_fee_rate(fee/size*1000))
+            dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
+            if dusty_fee:
+                fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
+        elif self._dl_pct is not None:
+            fee_str = _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
+        else:
+            fee_str += _("unknown")
+        self.amount_label.setText(amount_str)
+        self.fee_label.setText(fee_str)
+        self.size_label.setText(size_str)
+        self.update_io()
+        run_hook('transaction_dialog_update', self)
 
     def is_fetch_input_data(self):
         return self.main_window.is_fetch_input_data()
