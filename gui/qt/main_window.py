@@ -2304,7 +2304,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.show_error(str(e))
                 return
 
-        isInvoice= False
+        isInvoice = False
 
         if self.payment_request and self.payment_request.has_expired():
             self.show_error(_('Payment request has expired'))
@@ -2383,7 +2383,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             except OPReturnError as e:
                 self.show_error(str(e))
                 return
-
 
         if not bch_outputs:
             self.show_error(_('Enter receiver address (No BCH outputs).'))
