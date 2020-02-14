@@ -97,7 +97,9 @@ class SlpGraphSearchManager:
         self.data_totalizer = 0
         self.emit_ui_update = None # valjob_ref.network.slp_validation_fetch_signal.emit
 
-    def new_search(self, valjob_ref):
+        self.gs_cache_d = {}
+
+    def new_search(self, valjob_ref, gs_cache=None):
         """
         Starts a new thread to fetch GS metadata for a job.
         Depending on the metadata results the job may end up being added to the GS queue.
@@ -110,6 +112,8 @@ class SlpGraphSearchManager:
             self.emit_ui_update = valjob_ref.network.slp_validation_fetch_signal.emit
 
         with self.lock:
+            if gs_cache:
+                self.gs_cache_d[valjob_ref.graph.validator.token_id_hex] = gs_cache
             if txid not in self.search_jobs.keys():
                 job = GraphSearchJob(txid, valjob_ref)
                 self.search_jobs[txid] = job
@@ -162,10 +166,11 @@ class SlpGraphSearchManager:
             job.set_failed('validation finished')
             return
         print('Requesting txid from gs++: ' + job.root_txid)
-        txid = codecs.encode(codecs.decode(job.root_txid,'hex')[::-1], 'hex').decode()
+        txid = codecs.encode(codecs.decode(job.root_txid, 'hex')[::-1], 'hex').decode()
         print('Requesting txid from gs++ (reversed): ' + txid)
 
-        query_json = { "txid": txid } # TODO: handle 'validity_cache' exclusion from graph search (NOTE: this will impact total dl count)
+        exclude_txids = self.gs_cache_d.get(job.valjob.graph.validator.token_id_hex, [])
+        query_json = {"txid": txid, "exclude_txids": exclude_txids}
         dat = b''
         time_last_updated = time.clock()
         with requests.post(job.valjob.network.slp_gs_host + "/v1/graphsearch/graphsearch", json=query_json, stream=True, timeout=60) as r:

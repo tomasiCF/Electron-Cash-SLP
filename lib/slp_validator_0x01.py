@@ -195,6 +195,17 @@ class GraphContext(PrintError):
             
         first_fetch_complete = False
 
+        # get 10 most recent valid SLP txid for this token
+        try:
+            gs_cache = [[key, wallet.verified_tx[key][0]] for key in wallet.slpv1_validity.keys() \
+                if wallet.tx_tokinfo[key]["token_id"] == graph.validator.token_id_hex and wallet.slpv1_validity[key] == 1]
+            from operator import itemgetter
+            import codecs
+            gs_cache = [codecs.encode(codecs.decode(item[0], 'hex')[::-1], 'hex').decode()
+                            for item in sorted(gs_cache, key=itemgetter(1), reverse=True)][:10]
+        except KeyError:
+            gs_cache = []
+
         def fetch_hook(txids, val_job):
             l = []
 
@@ -202,6 +213,7 @@ class GraphContext(PrintError):
             network.slp_gs_host = gs_host
 
             nonlocal first_fetch_complete
+            nonlocal gs_cache
 
             if gs_enable \
                 and gs_host \
@@ -211,7 +223,7 @@ class GraphContext(PrintError):
                         and self.graph_search_mgr.search_jobs[val_job.root_txid].job_complete \
                         and not self.graph_search_mgr.search_jobs[val_job.root_txid].search_success:
                             self.graph_search_mgr.search_jobs.pop(val_job.root_txid)
-                    search_job = self.graph_search_mgr.new_search(val_job)
+                    search_job = self.graph_search_mgr.new_search(val_job, gs_cache.copy())
                     val_job.graph_search_job = search_job if search_job else None
             elif not gs_enable and self.graph_search_mgr:
                 for job in self.graph_search_mgr.search_jobs.values():
@@ -253,7 +265,6 @@ class GraphContext(PrintError):
                 val = n.validity
                 if val != 0:
                     wallet.slpv1_validity[t] = val
-
 
         job = ValidationJob(graph, txid, network,
                             fetch_hook=fetch_hook,
